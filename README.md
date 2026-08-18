@@ -1,77 +1,78 @@
-# Base44 Project
+# IABT — Interactive App Builder Tool
 
-Use this repository to run and edit the app locally, then publish changes back through Base44.
+IABT is an AI-assisted SaaS app builder running on Base44. It preserves the original IABT AppDefinition workflow while replacing the localhost-only Express runtime with Base44 authentication, owner-scoped cloud entities, backend functions, and hosting.
 
-Any change pushed to the repo will also be reflected in the Base44 Builder.
+Live app: https://crazy-creator-flow-hub.base44.app
 
-## Prerequisites
+## What works
 
-1. Clone the repository using the project's Git URL.
-2. Navigate to the project directory.
-3. Install dependencies: `npm install`.
-4. Install the Base44 CLI: `npm install -g base44@latest`.
+- Authenticated Base44 project dashboard
+- Cloud create, load, save, rename, duplicate, delete, and search
+- Recovery of unsaved local drafts
+- User-controlled migration of legacy `iabt.projectsIndex` projects without deleting local originals
+- Multi-page visual editor with page add, rename, duplicate, delete, and reorder
+- Text, Input, Button, and ScannerInput components
+- Component selection, inspector editing, deletion, reorder, undo, and redo
+- Page routing and live phone/tablet preview
+- Keyboard-wedge barcode/QR scanning; Enter dispatches a bubbling `iabt:scan` event
+- AI AppDefinition generation through a protected, rate-limited Base44 function
+- JSON import/export
+- Standalone HTML, static multi-page HTML ZIP, React source, and runnable Vite/React ZIP exports
+- Browser-generated ZIPs with no temporary server filesystem
+- Responsive desktop/mobile editor
 
-See the [Base44 CLI docs](https://docs.base44.com/developers/references/cli/get-started/overview) if you want to run Base44 commands directly.
+## Architecture
 
-## Run Locally
+- React + Vite frontend
+- Base44 SDK and Vite plugin
+- Base44 authentication
+- Owner-scoped `Project` and `AiUsage` entities
+- Deno backend function at `base44/functions/generate-app/entry.ts`
+- AppDefinition schema version 1.0
+- Local draft recovery plus Base44 cloud persistence
 
-Run the full local development environment from the project root:
+The AI function uses `OPENAI_API_KEY` and the OpenAI Responses API when that secret is configured. Without it, the function falls back to Base44 managed AI, so generation remains usable.
 
-```bash
-base44 dev
+## Local development
+
+1. Install dependencies: `npm install`
+2. Run the Base44 development environment: `npx base44 dev`
+3. Or run the frontend against the hosted backend: `npm run dev`
+
+For frontend-only development, create `.env.local`:
+
+```
+VITE_BASE44_APP_ID=6a849bcd3e04d068553b4af7
+VITE_BASE44_APP_BASE_URL=https://crazy-creator-flow-hub.base44.app
 ```
 
-`base44 dev` starts the local Base44 development backend and, when this app is configured for it, also starts the frontend dev server for you. Use the frontend URL printed by the command.
+Never place an OpenAI key in a `VITE_*` variable or frontend file.
 
-For example, when the Base44 project config includes a `serveCommand`, `base44 dev` can launch the frontend too:
+## Verification
 
-```json5
-{
-  "site": {
-    "serveCommand": "npm run dev"
-  }
-}
+Run:
+
+```
+npm run verify
 ```
 
-In a Base44 project this lives in `base44/config.jsonc`.
+This runs lint, JavaScript project validation, and the production Vite build. Export verification should also generate both ZIP targets and build the exported React project.
 
-## Run Only The Frontend
+## Base44 setup
 
-If you only want to work on the frontend against the hosted Base44 backend, run:
+- Enable the intended authentication providers in the Base44 dashboard.
+- Optional: add `OPENAI_API_KEY` and `OPENAI_MODEL` through Base44 backend secrets.
+- Publish only after `npm run verify` passes.
+- The generated public address is already available at the live app URL above.
 
-```bash
-npm run dev
-```
+## Domain
 
-Open the local URL printed by Vite.
+The candidate custom domain is `iabt.insuredspending.org`. No DNS change is included or authorized by this repository.
 
-## Use The Hosted Backend
+## Historical baseline
 
-For frontend-only development, create or update `.env.local` in the project root:
+The immutable Legacy Baseline v1.0 remains a separate recovery artifact. Do not overwrite it with this Base44-native implementation.
 
-```bash
-VITE_BASE44_APP_ID=your_app_id
-VITE_BASE44_APP_BASE_URL=https://your-app.base44.app
-```
+## GitHub
 
-`VITE_BASE44_APP_ID` identifies the Base44 app.
-
-`VITE_BASE44_APP_BASE_URL` tells the Base44 Vite plugin where to send local `/api` requests. Point it at your deployed Base44 app URL when you want the local frontend to use the hosted backend.
-
-When you use `base44 dev`, the command injects the local Base44 values for you, so `.env.local` is mainly needed for frontend-only workflows.
-
-## Publish Your Changes
-
-After pushing your changes to git, open the Base44 dashboard and publish the app:
-
-```bash
-base44 dashboard open
-```
-
-## Docs & Support
-
-Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
-
-Base44 CLI command reference: [https://docs.base44.com/developers/references/cli/commands/introduction](https://docs.base44.com/developers/references/cli/commands/introduction)
-
-Support: [https://app.base44.com/support](https://app.base44.com/support)
+The repository includes a GitHub Actions verification workflow. Connect one canonical repository to this Base44 app and protect `main` after the first successful workflow run.
