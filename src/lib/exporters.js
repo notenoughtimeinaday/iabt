@@ -1,4 +1,84 @@
-import JSZip from "jszip";
+const encoder = new TextEncoder();
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function concatBytes(parts) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.length;
+  }
+  return output;
+}
+
+function zipBlob(entries) {
+  const localParts = [];
+  const centralParts = [];
+  let localOffset = 0;
+  const now = new Date();
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | Math.floor(now.getSeconds() / 2);
+  const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+
+  for (const [path, content] of entries) {
+    const name = encoder.encode(path.replace(/\\/g, "/"));
+    const data = content instanceof Uint8Array ? content : encoder.encode(String(content));
+    const checksum = crc32(data);
+
+    const localHeader = new Uint8Array(30);
+    const localView = new DataView(localHeader.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0x0800, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, dosTime, true);
+    localView.setUint16(12, dosDate, true);
+    localView.setUint32(14, checksum, true);
+    localView.setUint32(18, data.length, true);
+    localView.setUint32(22, data.length, true);
+    localView.setUint16(26, name.length, true);
+
+    const centralHeader = new Uint8Array(46);
+    const centralView = new DataView(centralHeader.buffer);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0x0800, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, dosTime, true);
+    centralView.setUint16(14, dosDate, true);
+    centralView.setUint32(16, checksum, true);
+    centralView.setUint32(20, data.length, true);
+    centralView.setUint32(24, data.length, true);
+    centralView.setUint16(28, name.length, true);
+    centralView.setUint32(42, localOffset, true);
+
+    localParts.push(localHeader, name, data);
+    centralParts.push(centralHeader, name);
+    localOffset += localHeader.length + name.length + data.length;
+  }
+
+  const central = concatBytes(centralParts);
+  const end = new Uint8Array(22);
+  const endView = new DataView(end.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, entries.length, true);
+  endView.setUint16(10, entries.length, true);
+  endView.setUint32(12, central.length, true);
+  endView.setUint32(16, localOffset, true);
+
+  return new Blob([...localParts, central, end], { type: "application/zip" });
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -206,12 +286,10 @@ export function downloadStandaloneHtml(definition) {
 }
 
 export async function downloadStaticZip(definition) {
-  const zip = new JSZip();
-  const root = zip.folder(safeName(definition.app.name) + "-html");
+  const folder = safeName(definition.app.name) + "-html/";
   const files = buildStaticFiles(definition);
-  Object.entries(files).forEach(([name, value]) => root.file(name, value));
-  const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
-  downloadBlob(blob, safeName(definition.app.name) + "-html.zip");
+  const entries = Object.entries(files).map(([name, value]) => [folder + name, value]);
+  downloadBlob(zipBlob(entries), safeName(definition.app.name) + "-html.zip");
 }
 
 export function downloadReactSource(definition) {
@@ -221,8 +299,7 @@ export function downloadReactSource(definition) {
 
 export async function downloadReactZip(definition) {
   const name = safeName(definition.app.name);
-  const zip = new JSZip();
-  const root = zip.folder(name + "-react");
+  const folder = name + "-react/";
   const packageJson = {
     name,
     private: true,
@@ -232,13 +309,14 @@ export async function downloadReactZip(definition) {
     dependencies: { "@vitejs/plugin-react": "^4.3.4", vite: "^6.1.0", react: "^18.3.1", "react-dom": "^18.3.1" },
     devDependencies: {},
   };
-  root.file("package.json", JSON.stringify(packageJson, null, 2));
-  root.file("index.html", '<!doctype html><html><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>' + escapeHtml(definition.app.name) + '</title></head><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>');
-  root.file("vite.config.js", "import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\nexport default defineConfig({ plugins: [react()] });\n");
-  root.file("src/main.jsx", "import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App.jsx';\nReactDOM.createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);\n");
-  root.file("src/App.jsx", reactSource(definition));
-  root.file("src/styles.css", sharedCss(definition.theme) + "\n.iabt-nav button{border:0;cursor:pointer}\n");
-  root.file("README.md", "# " + definition.app.name + "\n\nGenerated by IABT.\n\nRun npm install, then npm run dev.\n");
-  const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
-  downloadBlob(blob, name + "-react.zip");
+  const entries = [
+    [folder + "package.json", JSON.stringify(packageJson, null, 2)],
+    [folder + "index.html", '<!doctype html><html><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>' + escapeHtml(definition.app.name) + '</title></head><body><div id="root"></div><script type="module" src="/src/main.jsx"></script></body></html>'],
+    [folder + "vite.config.js", "import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\nexport default defineConfig({ plugins: [react()] });\n"],
+    [folder + "src/main.jsx", "import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport App from './App.jsx';\nReactDOM.createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);\n"],
+    [folder + "src/App.jsx", reactSource(definition)],
+    [folder + "src/styles.css", sharedCss(definition.theme) + "\n.iabt-nav button{border:0;cursor:pointer}\n"],
+    [folder + "README.md", "# " + definition.app.name + "\n\nGenerated by IABT.\n\nRun npm install, then npm run dev.\n"],
+  ];
+  downloadBlob(zipBlob(entries), name + "-react.zip");
 }
