@@ -1,163 +1,274 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Sparkles, FolderOpen } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import ProjectCard from "@/components/ProjectCard";
-import ProjectForm from "@/components/ProjectForm";
+import { useAuth } from "@/lib/AuthContext";
+import {
+  ArrowRight,
+  Cloud,
+  Code2,
+  Copy,
+  FolderOpen,
+  LayoutTemplate,
+  Loader2,
+  LogOut,
+  Plus,
+  Search,
+  Sparkles,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import {
+  cloneValue,
+  createDefaultAppDefinition,
+  createId,
+  normalizeAppDefinition,
+} from "@/lib/appDefinition";
 
 export default function Home() {
-  const [projects, setProjects] = useState([]);
-  const [assets, setAssets] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, logout } = useAuth();
+  const importRef = useRef(null);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
+  const [query, setQuery] = useState("");
 
-  const load = async () => {
+  async function load() {
     setLoading(true);
     try {
-      const [ps, as] = await Promise.all([
-        base44.entities.Project.list("-updated_date", 200),
-        base44.entities.Asset.list("-updated_date", 500),
-      ]);
-      setProjects(ps);
-      setAssets(as);
+      const records = await base44.entities.Project.list("-updated_date", 250);
+      setProjects(records);
+    } catch (error) {
+      toast({ title: "Could not load projects", description: error.message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  useEffect(() => { load(); }, []);
-
-  const assetCountByProject = useMemo(() => {
-    const map = {};
-    for (const a of assets) map[a.project_id] = (map[a.project_id] || 0) + 1;
-    return map;
-  }, [assets]);
+  useEffect(() => {
+    load();
+  }, []);
 
   const filtered = useMemo(() => {
-    return projects.filter((p) => {
-      const matchesQuery = p.title.toLowerCase().includes(query.toLowerCase()) || (p.description || "").toLowerCase().includes(query.toLowerCase());
-      const matchesStatus = statusFilter === "all" || p.status === statusFilter;
-      return matchesQuery && matchesStatus;
+    const term = query.trim().toLowerCase();
+    if (!term) return projects;
+    return projects.filter((project) => {
+      return String(project.title || "").toLowerCase().includes(term) ||
+        String(project.description || "").toLowerCase().includes(term);
     });
-  }, [projects, query, statusFilter]);
+  }, [projects, query]);
 
-  const handleSubmit = async (data) => {
+  async function createProject() {
+    const title = window.prompt("Name your SaaS app", "My SaaS App");
+    if (!title?.trim()) return;
+    setWorking(true);
     try {
-      if (editing) {
-        await base44.entities.Project.update(editing.id, data);
-        toast({ title: "Creation updated" });
-      } else {
-        await base44.entities.Project.create(data);
-        toast({ title: "Creation created" });
-      }
-      setEditing(null);
-      load();
-    } catch (err) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      const definition = createDefaultAppDefinition(title.trim());
+      const project = await base44.entities.Project.create({
+        title: definition.app.name,
+        description: definition.app.description,
+        category: "SaaS",
+        status: "draft",
+        color: definition.theme.primary,
+        tags: [],
+        schema_version: definition.schemaVersion,
+        app_definition: definition,
+        last_opened_at: new Date().toISOString(),
+      });
+      navigate("/projects/" + project.id);
+    } catch (error) {
+      toast({ title: "Project creation failed", description: error.message, variant: "destructive" });
+    } finally {
+      setWorking(false);
     }
-  };
+  }
 
-  const handleDelete = async (project) => {
-    if (!confirm(`Delete "${project.title}" and all its files?`)) return;
+  async function renameProject(project) {
+    const title = window.prompt("Rename project", project.title);
+    if (!title?.trim()) return;
     try {
-      const projectAssets = assets.filter((a) => a.project_id === project.id);
-      if (projectAssets.length) await base44.entities.Asset.deleteMany({ project_id: project.id });
+      const definition = normalizeAppDefinition(project.app_definition, title.trim());
+      definition.app.name = title.trim().slice(0, 100);
+      await base44.entities.Project.update(project.id, {
+        title: definition.app.name,
+        app_definition: definition,
+      });
+      toast({ title: "Project renamed" });
+      load();
+    } catch (error) {
+      toast({ title: "Rename failed", description: error.message, variant: "destructive" });
+    }
+  }
+
+  async function duplicateProject(project) {
+    setWorking(true);
+    try {
+      const definition = cloneValue(normalizeAppDefinition(project.app_definition, project.title));
+      definition.app.name = project.title + " Copy";
+      definition.pages = definition.pages.map((page) => ({
+        ...page,
+        id: createId("page"),
+        components: page.components.map((component) => ({ ...component, id: createId("component") })),
+      }));
+      const duplicate = await base44.entities.Project.create({
+        title: definition.app.name,
+        description: definition.app.description,
+        category: project.category || "SaaS",
+        status: "draft",
+        color: definition.theme.primary,
+        tags: project.tags || [],
+        schema_version: definition.schemaVersion,
+        app_definition: definition,
+        last_opened_at: new Date().toISOString(),
+      });
+      toast({ title: "Project duplicated" });
+      navigate("/projects/" + duplicate.id);
+    } catch (error) {
+      toast({ title: "Duplicate failed", description: error.message, variant: "destructive" });
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function deleteProject(project) {
+    if (!window.confirm('Delete "' + project.title + '"? This cannot be undone.')) return;
+    try {
       await base44.entities.Project.delete(project.id);
-      toast({ title: "Creation deleted" });
-      load();
-    } catch (err) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      localStorage.removeItem("iabt.cloudDraft." + project.id);
+      setProjects((current) => current.filter((item) => item.id !== project.id));
+      toast({ title: "Project deleted" });
+    } catch (error) {
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
     }
-  };
+  }
 
-  const stats = useMemo(() => ({
-    total: projects.length,
-    active: projects.filter((p) => p.status === "in_progress").length,
-    complete: projects.filter((p) => p.status === "complete").length,
-    files: assets.length,
-  }), [projects, assets]);
+  async function importProject(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setWorking(true);
+    try {
+      if (file.size > 2_000_000) throw new Error("The JSON file is too large.");
+      const raw = JSON.parse(await file.text());
+      const definition = normalizeAppDefinition(raw, file.name.replace(/\.json$/i, ""));
+      const project = await base44.entities.Project.create({
+        title: definition.app.name,
+        description: definition.app.description,
+        category: "SaaS",
+        status: "draft",
+        color: definition.theme.primary,
+        tags: ["imported"],
+        schema_version: definition.schemaVersion,
+        app_definition: definition,
+        last_opened_at: new Date().toISOString(),
+      });
+      toast({ title: "IABT project imported" });
+      navigate("/projects/" + project.id);
+    } catch (error) {
+      toast({ title: "Import failed", description: error.message, variant: "destructive" });
+    } finally {
+      setWorking(false);
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50/50 to-background">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10">
-        <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-10">
+    <div className="iabt-home">
+      <header className="iabt-home-nav">
+        <div className="iabt-home-brand">
+          <div className="iabt-mark">IA</div>
+          <div><strong>IABT</strong><span>Interactive App Builder Tool</span></div>
+        </div>
+        <div className="iabt-home-user">
+          <span>{user?.full_name || user?.email || "Builder"}</span>
+          <Button variant="ghost" size="sm" onClick={() => logout(true)}><LogOut className="h-4 w-4 mr-1" /> Sign out</Button>
+        </div>
+      </header>
+
+      <main className="iabt-home-main">
+        <section className="iabt-hero">
           <div>
-            <div className="flex items-center gap-2 text-primary mb-2">
-              <Sparkles className="h-4 w-4" />
-              <span className="text-xs font-medium uppercase tracking-wider">Creative Workspace</span>
+            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> AI-assisted SaaS construction</p>
+            <h1>Build the app behind your next idea.</h1>
+            <p>Design pages, wire navigation, test scanner workflows, save projects to the cloud, and export production-ready HTML or React.</p>
+            <div className="iabt-hero-actions">
+              <Button size="lg" onClick={createProject} disabled={working}>
+                {working ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+                New app
+              </Button>
+              <input ref={importRef} type="file" hidden accept=".json,application/json" onChange={importProject} />
+              <Button size="lg" variant="outline" onClick={() => importRef.current?.click()} disabled={working}>
+                <Upload className="h-4 w-4 mr-2" /> Import IABT JSON
+              </Button>
             </div>
-            <h1 className="font-heading text-4xl sm:text-5xl font-bold tracking-tight">My Creations</h1>
-            <p className="text-muted-foreground mt-2">Organize, develop, and export your creative work — all in one place.</p>
           </div>
-          <Button onClick={() => { setEditing(null); setFormOpen(true); }} size="lg" className="shadow-sm">
-            <Plus className="h-4 w-4 mr-2" /> New Creation
-          </Button>
-        </header>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
-          {[
-            { label: "Total Creations", value: stats.total, icon: FolderOpen },
-            { label: "In Progress", value: stats.active, icon: Sparkles },
-            { label: "Completed", value: stats.complete, icon: Sparkles },
-            { label: "Files Stored", value: stats.files, icon: FolderOpen },
-          ].map((s) => (
-            <div key={s.label} className="rounded-xl border border-border/60 bg-card p-4">
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">{s.label}</p>
-              <p className="text-2xl font-heading font-semibold mt-1">{s.value}</p>
+          <div className="iabt-hero-visual" aria-hidden="true">
+            <div className="iabt-orbit orbit-one" />
+            <div className="iabt-orbit orbit-two" />
+            <div className="iabt-hero-card">
+              <Code2 />
+              <strong>Prompt → AppDefinition</strong>
+              <span>Pages · components · routing · exports</span>
             </div>
-          ))}
-        </div>
-
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search creations..." value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9" />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="sm:w-48"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="idea">Idea</SelectItem>
-              <SelectItem value="in_progress">In Progress</SelectItem>
-              <SelectItem value="review">Review</SelectItem>
-              <SelectItem value="complete">Complete</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        </section>
 
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[1, 2, 3].map((i) => <div key={i} className="h-40 rounded-xl bg-muted animate-pulse" />)}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-20">
-            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-              <FolderOpen className="h-8 w-8 text-muted-foreground" />
+        <section className="iabt-projects">
+          <div className="iabt-projects-heading">
+            <div>
+              <p className="iabt-eyebrow"><Cloud className="h-4 w-4" /> Base44 cloud workspace</p>
+              <h2>Your app projects</h2>
             </div>
-            <h3 className="font-heading text-lg font-semibold">{query || statusFilter !== "all" ? "No matches found" : "Start your first creation"}</h3>
-            <p className="text-muted-foreground text-sm mt-1 mb-4">{query || statusFilter !== "all" ? "Try a different search or filter." : "Create a project to organize your files and ideas."}</p>
-            {!query && statusFilter === "all" && (
-              <Button onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4 mr-2" /> New Creation</Button>
-            )}
+            <div className="iabt-search">
+              <Search className="h-4 w-4" />
+              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search projects" />
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((p) => (
-              <ProjectCard key={p.id} project={p} assetCount={assetCountByProject[p.id] || 0} onEdit={(proj) => { setEditing(proj); setFormOpen(true); }} onDelete={handleDelete} />
-            ))}
-          </div>
-        )}
-      </div>
 
-      <ProjectForm open={formOpen} onOpenChange={setFormOpen} onSubmit={handleSubmit} initial={editing} />
+          {loading ? (
+            <div className="iabt-project-loading"><Loader2 className="h-7 w-7 animate-spin" /> Loading projects…</div>
+          ) : filtered.length === 0 ? (
+            <div className="iabt-project-empty">
+              <div><FolderOpen /></div>
+              <h3>{query ? "No projects match that search" : "Create your first SaaS app"}</h3>
+              <p>{query ? "Try a different name or clear the search." : "Your AppDefinition, pages, components, and settings will be stored in Base44."}</p>
+              {!query && <Button onClick={createProject}><Plus className="h-4 w-4 mr-2" /> New app</Button>}
+            </div>
+          ) : (
+            <div className="iabt-project-grid">
+              {filtered.map((project) => {
+                const definition = normalizeAppDefinition(project.app_definition, project.title);
+                return (
+                  <article key={project.id} className="iabt-project-card">
+                    <button type="button" className="iabt-project-open" onClick={() => navigate("/projects/" + project.id)}>
+                      <div className="iabt-project-icon" style={{ background: definition.theme.primary }}><LayoutTemplate /></div>
+                      <div>
+                        <span className="iabt-project-status">{project.status || "draft"}</span>
+                        <h3>{project.title}</h3>
+                        <p>{project.description || "No description yet."}</p>
+                      </div>
+                      <dl>
+                        <div><dt>Pages</dt><dd>{definition.pages.length}</dd></div>
+                        <div><dt>Components</dt><dd>{definition.pages.reduce((sum, page) => sum + page.components.length, 0)}</dd></div>
+                        <div><dt>Updated</dt><dd>{project.updated_date ? new Date(project.updated_date).toLocaleDateString() : "Today"}</dd></div>
+                      </dl>
+                      <span className="iabt-open-link">Open builder <ArrowRight /></span>
+                    </button>
+                    <div className="iabt-project-actions">
+                      <button type="button" onClick={() => renameProject(project)}>Rename</button>
+                      <button type="button" onClick={() => duplicateProject(project)}><Copy /> Duplicate</button>
+                      <button type="button" className="is-danger" onClick={() => deleteProject(project)}><Trash2 /> Delete</button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </main>
     </div>
   );
 }
