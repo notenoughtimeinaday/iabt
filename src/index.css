@@ -239,6 +239,38 @@
   padding-top: 62px;
 }
 
+.iabt-legacy-banner {
+  margin-bottom: 26px;
+  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid rgba(124, 58, 237, 0.22);
+  border-radius: 18px;
+  background: linear-gradient(120deg, #f5f1ff, #ffffff);
+  box-shadow: 0 14px 36px rgba(78, 52, 140, 0.08);
+}
+
+.iabt-legacy-banner .iabt-project-icon {
+  margin: 0;
+}
+
+.iabt-legacy-banner > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.iabt-legacy-banner strong {
+  font-size: 13px;
+}
+
+.iabt-legacy-banner span {
+  color: #73798b;
+  font-size: 11px;
+}
+
 .iabt-projects-heading {
   margin-bottom: 24px;
   display: flex;
@@ -498,6 +530,43 @@
   display: flex;
   align-items: center;
   gap: 11px;
+}
+
+.iabt-history-actions {
+  padding: 3px;
+  display: flex;
+  gap: 2px;
+  border: 1px solid #e0e3ec;
+  border-radius: 9px;
+  background: #f8f9fc;
+}
+
+.iabt-history-actions button {
+  width: 30px;
+  height: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #62687a;
+  cursor: pointer;
+}
+
+.iabt-history-actions button:hover:not(:disabled) {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.iabt-history-actions button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.iabt-history-actions svg {
+  width: 14px;
+  height: 14px;
 }
 
 .iabt-brand-row h1 {
@@ -1197,6 +1266,15 @@
   .iabt-home-user > span,
   .iabt-home-brand span {
     display: none;
+  }
+
+  .iabt-legacy-banner {
+    grid-template-columns: auto 1fr;
+  }
+
+  .iabt-legacy-banner > button {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .iabt-home-main {
