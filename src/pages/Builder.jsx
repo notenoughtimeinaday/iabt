@@ -20,12 +20,14 @@ import {
   MousePointerClick,
   Package,
   Plus,
+  Redo2,
   Save,
   ScanLine,
   Smartphone,
   Sparkles,
   Trash2,
   Type,
+  Undo2,
   Upload,
 } from "lucide-react";
 import {
@@ -140,6 +142,8 @@ export default function Builder() {
   const [aiProvider, setAiProvider] = useState("");
   const [device, setDevice] = useState("phone");
   const [lastScan, setLastScan] = useState("");
+  const [history, setHistory] = useState([]);
+  const [future, setFuture] = useState([]);
 
   useEffect(() => {
     let active = true;
@@ -166,6 +170,8 @@ export default function Builder() {
         setSelectedPageId(initial.pages[0]?.id || null);
         setPreviewRoute(initial.pages[0]?.route || "/");
         setDirty(recovered);
+        setHistory([]);
+        setFuture([]);
         if (recovered) toast({ title: "Local draft recovered", description: "Save to cloud when you are ready." });
         base44.entities.Project.update(id, { last_opened_at: new Date().toISOString() }).catch(() => {});
       } catch (error) {
@@ -209,7 +215,11 @@ export default function Builder() {
     [definition, previewRoute, selectedPage],
   );
 
-  function commit(next) {
+  function commit(next, recordHistory = true) {
+    if (recordHistory && definition) {
+      setHistory((current) => [...current.slice(-49), cloneValue(definition)]);
+      setFuture([]);
+    }
     const normalized = normalizeAppDefinition(next, next?.app?.name || project?.title);
     setDefinition(normalized);
     setDirty(true);
@@ -226,6 +236,22 @@ export default function Builder() {
     const next = cloneValue(definition);
     mutator(next);
     commit(next);
+  }
+
+  function undo() {
+    const previous = history.at(-1);
+    if (!previous) return;
+    setFuture((current) => [cloneValue(definition), ...current].slice(0, 50));
+    setHistory((current) => current.slice(0, -1));
+    commit(previous, false);
+  }
+
+  function redo() {
+    const next = future[0];
+    if (!next) return;
+    setHistory((current) => [...current.slice(-49), cloneValue(definition)]);
+    setFuture((current) => current.slice(1));
+    commit(next, false);
   }
 
   function selectPage(page) {
@@ -474,6 +500,10 @@ export default function Builder() {
           </div>
         </div>
         <div className="iabt-top-actions">
+          <div className="iabt-history-actions">
+            <button type="button" onClick={undo} disabled={!history.length} title="Undo"><Undo2 /></button>
+            <button type="button" onClick={redo} disabled={!future.length} title="Redo"><Redo2 /></button>
+          </div>
           <span className={"iabt-save-state " + (dirty ? "is-dirty" : "")}>
             {dirty ? "Local draft" : <><Check className="h-3.5 w-3.5" /> Cloud saved</>}
           </span>
