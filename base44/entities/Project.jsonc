@@ -1,0 +1,56 @@
+{
+  "name": "Project",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "title": "Title"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "category": {
+      "type": "string",
+      "title": "Category",
+      "enum": [
+        "Writing",
+        "Design",
+        "Code",
+        "Research",
+        "Music",
+        "Video",
+        "Other"
+      ],
+      "default": "Other"
+    },
+    "status": {
+      "type": "string",
+      "title": "Status",
+      "enum": [
+        "idea",
+        "in_progress",
+        "review",
+        "complete",
+        "archived"
+      ],
+      "default": "idea"
+    },
+    "color": {
+      "type": "string",
+      "title": "Color",
+      "default": "#6366f1"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "default": []
+    }
+  },
+  "required": [
+    "title"
+  ]
+}

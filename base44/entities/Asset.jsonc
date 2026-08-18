@@ -1,0 +1,53 @@
+{
+  "name": "Asset",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "title": "Name"
+    },
+    "project_id": {
+      "type": "string",
+      "title": "Project ID"
+    },
+    "file_url": {
+      "type": "string",
+      "title": "File URL"
+    },
+    "file_type": {
+      "type": "string",
+      "title": "File Type"
+    },
+    "mime_type": {
+      "type": "string",
+      "title": "MIME Type"
+    },
+    "size_bytes": {
+      "type": "number",
+      "title": "Size (bytes)"
+    },
+    "kind": {
+      "type": "string",
+      "title": "Kind",
+      "enum": [
+        "document",
+        "image",
+        "audio",
+        "video",
+        "archive",
+        "code",
+        "data",
+        "other"
+      ],
+      "default": "other"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "name",
+    "project_id"
+  ]
+}
