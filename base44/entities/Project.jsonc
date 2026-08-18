@@ -4,53 +4,102 @@
   "properties": {
     "title": {
       "type": "string",
-      "title": "Title"
+      "title": "Project name",
+      "maxLength": 100
     },
     "description": {
       "type": "string",
-      "title": "Description"
+      "title": "Description",
+      "maxLength": 500
     },
     "category": {
       "type": "string",
-      "title": "Category",
       "enum": [
-        "Writing",
-        "Design",
-        "Code",
-        "Research",
-        "Music",
-        "Video",
+        "SaaS",
+        "Commerce",
+        "Operations",
+        "Finance",
+        "Healthcare",
+        "Education",
         "Other"
       ],
-      "default": "Other"
+      "default": "SaaS"
     },
     "status": {
       "type": "string",
-      "title": "Status",
       "enum": [
-        "idea",
+        "draft",
         "in_progress",
-        "review",
-        "complete",
+        "ready",
         "archived"
       ],
-      "default": "idea"
+      "default": "draft"
     },
     "color": {
       "type": "string",
-      "title": "Color",
-      "default": "#6366f1"
+      "default": "#7c3aed"
     },
     "tags": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "title": "Tags",
       "default": []
+    },
+    "schema_version": {
+      "type": "string",
+      "default": "1.0"
+    },
+    "app_definition": {
+      "type": "object",
+      "description": "Canonical IABT AppDefinition"
+    },
+    "last_opened_at": {
+      "type": "string",
+      "format": "date-time"
     }
   },
   "required": [
-    "title"
-  ]
+    "title",
+    "app_definition"
+  ],
+  "rls": {
+    "create": true,
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
 }
