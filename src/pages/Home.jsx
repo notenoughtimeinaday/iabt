@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import {
+  ArchiveRestore,
   ArrowRight,
   Cloud,
   Code2,
@@ -26,6 +27,7 @@ import {
   createId,
   normalizeAppDefinition,
 } from "@/lib/appDefinition";
+import { legacyTag, readLegacyProjects } from "@/lib/legacyProjects";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -36,12 +38,15 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [query, setQuery] = useState("");
+  const [legacyProjects, setLegacyProjects] = useState([]);
 
   async function load() {
     setLoading(true);
     try {
       const records = await base44.entities.Project.list("-updated_date", 250);
       setProjects(records);
+      const importedTags = new Set(records.flatMap((project) => project.tags || []).filter((tag) => String(tag).startsWith("legacy:")));
+      setLegacyProjects(readLegacyProjects().filter((item) => !importedTags.has(legacyTag(item.legacyId))));
     } catch (error) {
       toast({ title: "Could not load projects", description: error.message, variant: "destructive" });
     } finally {
@@ -175,6 +180,31 @@ export default function Home() {
     }
   }
 
+  async function migrateLegacyProjects() {
+    if (!legacyProjects.length) return;
+    setWorking(true);
+    try {
+      const records = legacyProjects.map((item) => ({
+        title: item.definition.app.name || item.name,
+        description: item.definition.app.description,
+        category: "SaaS",
+        status: "draft",
+        color: item.definition.theme.primary,
+        tags: ["imported", legacyTag(item.legacyId)],
+        schema_version: item.definition.schemaVersion,
+        app_definition: item.definition,
+        last_opened_at: new Date().toISOString(),
+      }));
+      await base44.entities.Project.bulkCreate(records);
+      toast({ title: "Legacy projects imported", description: records.length + " project" + (records.length === 1 ? "" : "s") + " copied to Base44. Local originals were kept." });
+      await load();
+    } catch (error) {
+      toast({ title: "Legacy import failed", description: error.message, variant: "destructive" });
+    } finally {
+      setWorking(false);
+    }
+  }
+
   return (
     <div className="iabt-home">
       <header className="iabt-home-nav">
@@ -217,6 +247,19 @@ export default function Home() {
         </section>
 
         <section className="iabt-projects">
+          {legacyProjects.length > 0 && (
+            <div className="iabt-legacy-banner">
+              <div className="iabt-project-icon"><ArchiveRestore /></div>
+              <div>
+                <strong>{legacyProjects.length} legacy IABT project{legacyProjects.length === 1 ? "" : "s"} found on this computer</strong>
+                <span>Copy them into Base44 cloud storage. Your original local projects will remain untouched.</span>
+              </div>
+              <Button variant="outline" onClick={migrateLegacyProjects} disabled={working}>
+                {working ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Cloud className="h-4 w-4 mr-2" />}
+                Import to cloud
+              </Button>
+            </div>
+          )}
           <div className="iabt-projects-heading">
             <div>
               <p className="iabt-eyebrow"><Cloud className="h-4 w-4" /> Base44 cloud workspace</p>
