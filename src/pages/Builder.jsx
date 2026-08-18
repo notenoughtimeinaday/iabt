@@ -65,7 +65,7 @@ function componentName(component) {
   return component.props?.label || "Scanner";
 }
 
-function PreviewComponent({ component, selected, onSelect, onNavigate, onScan }) {
+function PreviewComponent({ component, pageId, componentIndex, selected, onSelect, onNavigate, onScan }) {
   const props = component.props || {};
   const className = "iabt-preview-component" + (selected ? " is-selected" : "");
 
@@ -98,7 +98,17 @@ function PreviewComponent({ component, selected, onSelect, onNavigate, onScan })
             event.preventDefault();
             const code = event.currentTarget.value.trim();
             if (!code) return;
-            window.dispatchEvent(new CustomEvent("iabt:scan", { detail: { code, source: "ScannerInput" } }));
+            event.currentTarget.dispatchEvent(new CustomEvent("iabt:scan", {
+              bubbles: true,
+              detail: {
+                code,
+                value: code,
+                source: "ScannerInput",
+                componentId: component.id,
+                pageId,
+                componentIndex,
+              },
+            }));
             onScan(code);
             event.currentTarget.select();
           }}
@@ -623,10 +633,12 @@ export default function Builder() {
                 <p className="iabt-preview-kicker">{definition.app.name}</p>
                 <h2>{previewPage?.name}</h2>
                 <div className="iabt-preview-stack">
-                  {previewPage?.components.map((component) => (
+                  {previewPage?.components.map((component, componentIndex) => (
                     <PreviewComponent
                       key={component.id}
                       component={component}
+                      pageId={previewPage.id}
+                      componentIndex={componentIndex}
                       selected={selectedPage.id === previewPage.id && selectedComponentId === component.id}
                       onSelect={() => {
                         setSelectedPageId(previewPage.id);
