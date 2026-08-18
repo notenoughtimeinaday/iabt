@@ -124,8 +124,8 @@ function componentMarkup(component, routeToFile = null) {
   if (component.type === "ScannerInput") {
     return (
       '<label class="iabt-scanner"><span>' + escapeHtml(props.label || "Scan code") +
-      '</span><input class="iabt-input" type="text" autocomplete="off" data-scanner ' +
-      'placeholder="Scan or type a code, then press Enter" /></label>'
+      '</span><input class="iabt-input" type="text" autocomplete="off" data-scanner data-component-id="' +
+      escapeHtml(component.id || "") + '" placeholder="Scan or type a code, then press Enter" /></label>'
     );
   }
   if (component.type === "Button") {
@@ -170,7 +170,7 @@ function scannerScript() {
     "event.preventDefault();",
     "var code=input.value.trim();",
     "if(!code)return;",
-    "window.dispatchEvent(new CustomEvent('iabt:scan',{detail:{code:code,source:'ScannerInput'}}));",
+    "input.dispatchEvent(new CustomEvent('iabt:scan',{bubbles:true,detail:{code:code,value:code,source:'ScannerInput',componentId:input.dataset.componentId||null}}));",
     "var status=document.querySelector('[data-scan-status]');",
     "if(status)status.textContent='Last scan: '+code;",
     "input.select();",
@@ -260,7 +260,7 @@ function reactSource(definition) {
     "  const props = component.props || {};",
     "  if (component.type === 'Text') return <p className=\"iabt-text\">{props.value}</p>;",
     "  if (component.type === 'Input') return <input className=\"iabt-input\" placeholder={props.placeholder} />;",
-    "  if (component.type === 'ScannerInput') return <label className=\"iabt-scanner\"><span>{props.label}</span><input className=\"iabt-input\" placeholder=\"Scan or type a code, then press Enter\" onKeyDown={(event) => { if (event.key === 'Enter' && event.currentTarget.value.trim()) { const code = event.currentTarget.value.trim(); window.dispatchEvent(new CustomEvent('iabt:scan', { detail: { code, source: 'ScannerInput' } })); event.currentTarget.select(); } }} /></label>;",
+    "  if (component.type === 'ScannerInput') return <label className=\"iabt-scanner\"><span>{props.label}</span><input className=\"iabt-input\" data-component-id={component.id} placeholder=\"Scan or type a code, then press Enter\" onKeyDown={(event) => { if (event.key === 'Enter' && event.currentTarget.value.trim()) { const code = event.currentTarget.value.trim(); event.currentTarget.dispatchEvent(new CustomEvent('iabt:scan', { bubbles: true, detail: { code, value: code, source: 'ScannerInput', componentId: component.id } })); event.currentTarget.select(); } }} /></label>;",
     "  if (component.type === 'Button') return <button className=\"iabt-button\" onClick={() => props.to && navigate(props.to)}>{props.label}</button>;",
     "  return null;",
     "}",
