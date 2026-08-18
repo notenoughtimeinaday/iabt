@@ -46,17 +46,32 @@ function uniqueRoute(route, used) {
 
 function normalizeComponent(component, index) {
   const raw = component && typeof component === "object" ? component : {};
-  const type = COMPONENT_TYPES.includes(raw.type) ? raw.type : "Text";
+  const legacyTypeMap = {
+    input: "Input",
+    button: "Button",
+    scanner: "ScannerInput",
+    Scanner: "ScannerInput",
+    navbar: "Text",
+    hero: "Text",
+    heading: "Text",
+    text: "Text",
+    card: "Text",
+    stats: "Text",
+    table: "Text",
+    footer: "Text",
+  };
+  const type = COMPONENT_TYPES.includes(raw.type) ? raw.type : (legacyTypeMap[raw.type] || "Text");
   const props = raw.props && typeof raw.props === "object" ? raw.props : {};
+  const legacyContent = raw.content ?? raw.value ?? raw.label;
   const normalized = { id: String(raw.id || createId("component")), type, props: {} };
 
-  if (type === "Text") normalized.props.value = String(props.value ?? props.label ?? "Text block");
-  if (type === "Input") normalized.props.placeholder = String(props.placeholder ?? props.label ?? "Enter a value");
+  if (type === "Text") normalized.props.value = String(props.value ?? props.label ?? legacyContent ?? "Text block");
+  if (type === "Input") normalized.props.placeholder = String(props.placeholder ?? props.label ?? legacyContent ?? "Enter a value");
   if (type === "Button") {
-    normalized.props.label = String(props.label ?? props.value ?? "Continue");
+    normalized.props.label = String(props.label ?? props.value ?? legacyContent ?? "Continue");
     if (props.to) normalized.props.to = normalizeRoute(props.to, "page-" + (index + 1));
   }
-  if (type === "ScannerInput") normalized.props.label = String(props.label ?? "Scan barcode or QR code");
+  if (type === "ScannerInput") normalized.props.label = String(props.label ?? legacyContent ?? "Scan barcode or QR code");
 
   return normalized;
 }
@@ -64,7 +79,8 @@ function normalizeComponent(component, index) {
 function normalizePage(page, index, usedRoutes) {
   const raw = page && typeof page === "object" ? page : {};
   const name = String(raw.name || raw.title || (index === 0 ? "Home" : "Page " + (index + 1))).slice(0, 80);
-  const route = uniqueRoute(index === 0 && !raw.route ? "/" : normalizeRoute(raw.route, name), usedRoutes);
+  const rawRoute = raw.route ?? raw.path;
+  const route = uniqueRoute(index === 0 && !rawRoute ? "/" : normalizeRoute(rawRoute, name), usedRoutes);
   const components = Array.isArray(raw.components)
     ? raw.components.slice(0, 60).map(normalizeComponent)
     : [];
@@ -132,7 +148,7 @@ export function normalizeAppDefinition(input, fallbackName = "Untitled SaaS") {
       description: String(appSource.description || source.description || fallback.app.description).slice(0, 500),
     },
     theme: {
-      primary: /^#[0-9a-f]{6}$/i.test(themeSource.primary || "") ? themeSource.primary : DEFAULT_THEME.primary,
+      primary: /^#[0-9a-f]{6}$/i.test(themeSource.primary || themeSource.accent || "") ? (themeSource.primary || themeSource.accent) : DEFAULT_THEME.primary,
       background: /^#[0-9a-f]{6}$/i.test(themeSource.background || "") ? themeSource.background : DEFAULT_THEME.background,
       surface: /^#[0-9a-f]{6}$/i.test(themeSource.surface || "") ? themeSource.surface : DEFAULT_THEME.surface,
       text: /^#[0-9a-f]{6}$/i.test(themeSource.text || "") ? themeSource.text : DEFAULT_THEME.text,
