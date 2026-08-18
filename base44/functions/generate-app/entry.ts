@@ -156,7 +156,12 @@ Deno.serve(async (req) => {
     }
 
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    let user;
+    try {
+      user = await base44.auth.me();
+    } catch {
+      return Response.json({ error: "Authentication required." }, { status: 401 });
+    }
     if (!user) return Response.json({ error: "Authentication required." }, { status: 401 });
 
     const body = await req.json();
