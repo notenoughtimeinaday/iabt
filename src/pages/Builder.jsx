@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ConfirmActionDialog, NameDialog } from "@/components/ActionDialogs";
+import BillingDialog from "@/components/BillingDialog";
 import { useToast } from "@/components/ui/use-toast";
 import {
   ArrowLeft,
@@ -14,6 +15,7 @@ import {
   Cloud,
   Code2,
   Copy,
+  CreditCard,
   Download,
   FileJson,
   Loader2,
@@ -158,14 +160,21 @@ export default function Builder() {
   const [future, setFuture] = useState([]);
   const [pageDialog, setPageDialog] = useState(null);
   const [pageDeleteTarget, setPageDeleteTarget] = useState(null);
+  const [entitlement, setEntitlement] = useState(null);
+  const [billingOpen, setBillingOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
     async function loadProject() {
       setLoading(true);
       try {
-        const remote = await base44.entities.Project.get(id);
+        const [remote, entitlementResponse] = await Promise.all([
+          base44.entities.Project.get(id),
+          base44.functions.invoke("get-account-entitlement", {}),
+        ]);
         if (!active) return;
+        const entitlementPayload = entitlementResponse?.data || entitlementResponse;
+        setEntitlement(entitlementPayload?.entitlement || null);
         const remoteDefinition = normalizeAppDefinition(remote.app_definition, remote.title);
         let initial = remoteDefinition;
         let recovered = false;
@@ -477,7 +486,17 @@ export default function Builder() {
     }
   }
 
-  async function runExport(label, action) {
+  async function runExport(label, action, requiredEntitlement) {
+    if (requiredEntitlement && !entitlement?.[requiredEntitlement]) {
+      setBillingOpen(true);
+      toast({
+        title: label + " requires a larger plan",
+        description: requiredEntitlement === "react_export_enabled"
+          ? "React exports are included with Pro and Agency."
+          : "Static ZIP exports are included with Builder, Pro, and Agency.",
+      });
+      return;
+    }
     setExportBusy(true);
     try {
       await action(definition);
@@ -519,6 +538,9 @@ export default function Builder() {
           <span className={"iabt-save-state " + (dirty ? "is-dirty" : "")}>
             {dirty ? "Local draft" : <><Check className="h-3.5 w-3.5" /> Cloud saved</>}
           </span>
+          <Button variant="outline" onClick={() => setBillingOpen(true)}>
+            <CreditCard className="h-4 w-4 mr-1" /> {entitlement?.plan || "free"}
+          </Button>
           <Button onClick={saveCloud} disabled={saving || !dirty}>
             {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
             Save
@@ -549,7 +571,7 @@ export default function Builder() {
         {aiProvider && (
           <small>
             Provider: {aiProvider}
-            {aiUsage && ` · ${aiUsage.plan} plan · ${aiUsage.remaining} generations left this hour`}
+            {aiUsage && ` · ${aiUsage.plan} plan · ${aiUsage.monthly_remaining} included generations left this month · ${aiUsage.bonus_remaining} bonus`}
           </small>
         )}
       </section>
@@ -603,9 +625,9 @@ export default function Builder() {
               <button type="button" onClick={() => importRef.current?.click()}><Upload /> Import JSON</button>
               <button type="button" onClick={() => runExport("AppDefinition", downloadDefinitionJson)}><FileJson /> JSON</button>
               <button type="button" onClick={() => runExport("Standalone HTML", downloadStandaloneHtml)}><Download /> HTML</button>
-              <button type="button" onClick={() => runExport("Static HTML ZIP", downloadStaticZip)}><Package /> HTML ZIP</button>
-              <button type="button" onClick={() => runExport("React source", downloadReactSource)}><Code2 /> React</button>
-              <button type="button" onClick={() => runExport("React project ZIP", downloadReactZip)}><Package /> React ZIP</button>
+              <button type="button" onClick={() => runExport("Static HTML ZIP", downloadStaticZip, "static_zip_export_enabled")}><Package /> HTML ZIP</button>
+              <button type="button" onClick={() => runExport("React source", downloadReactSource, "react_export_enabled")}><Code2 /> React</button>
+              <button type="button" onClick={() => runExport("React project ZIP", downloadReactZip, "react_export_enabled")}><Package /> React ZIP</button>
             </div>
             {exportBusy && <p className="iabt-inline-status"><Loader2 className="animate-spin" /> Preparing download…</p>}
           </section>
@@ -770,6 +792,12 @@ export default function Builder() {
           </section>
         </aside>
       </div>
+
+      <BillingDialog
+        open={billingOpen}
+        onOpenChange={setBillingOpen}
+        entitlement={entitlement}
+      />
 
       <NameDialog
         open={Boolean(pageDialog)}
