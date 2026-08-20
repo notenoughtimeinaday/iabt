@@ -15,7 +15,8 @@
       "enum": [
         "free",
         "builder",
-        "pro"
+        "pro",
+        "agency"
       ],
       "default": "free"
     },
@@ -58,15 +59,44 @@
       "minimum": 1,
       "default": 5
     },
+    "ai_monthly_limit": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10,
+      "description": "Included AI generations per UTC calendar month"
+    },
+    "bonus_ai_credits": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Purchased generation credits; consumed after the monthly allowance"
+    },
     "project_limit": {
       "type": "integer",
       "minimum": 0,
-      "default": 3,
+      "default": 1,
       "description": "0 means unlimited"
+    },
+    "static_zip_export_enabled": {
+      "type": "boolean",
+      "default": false
     },
     "react_export_enabled": {
       "type": "boolean",
       "default": false
+    },
+    "commercial_use_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "white_label_exports_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "team_seat_limit": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
     },
     "notes": {
       "type": "string"
