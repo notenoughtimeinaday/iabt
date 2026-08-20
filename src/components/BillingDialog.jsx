@@ -10,30 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-
-const PLANS = [
-  {
-    id: "free",
-    name: "Free",
-    eyebrow: "Explore",
-    description: "Start building and validate your SaaS idea.",
-    features: ["5 AI generations per hour", "Up to 3 cloud projects", "HTML and JSON exports"],
-  },
-  {
-    id: "builder",
-    name: "Builder",
-    eyebrow: "Build consistently",
-    description: "For serious makers shipping multiple applications.",
-    features: ["30 AI generations per hour", "Up to 25 cloud projects", "HTML, ZIP, React and React ZIP"],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    eyebrow: "Scale your studio",
-    description: "For high-volume creation and a growing app portfolio.",
-    features: ["100 AI generations per hour", "Unlimited cloud projects", "All production export formats"],
-  },
-];
+import { AI_CREDIT_PACK, IABT_PLANS } from "@/lib/pricing";
 
 export default function BillingDialog({ open, onOpenChange, entitlement }) {
   const { toast } = useToast();
@@ -56,6 +33,26 @@ export default function BillingDialog({ open, onOpenChange, entitlement }) {
       const message = error.response?.data?.error || error.message || "Checkout could not be started.";
       toast({
         title: "Stripe test checkout is not ready",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setBusyPlan("");
+    }
+  }
+
+  async function startCreditCheckout() {
+    setBusyPlan("credits");
+    try {
+      const response = await base44.functions.invoke("stripe-create-credit-checkout", {});
+      const payload = response?.data || response;
+      if (payload?.error) throw new Error(payload.error);
+      if (!payload?.url) throw new Error("Stripe did not return a checkout link.");
+      window.location.assign(payload.url);
+    } catch (error) {
+      const message = error.response?.data?.error || error.message || "Credit checkout could not be started.";
+      toast({
+        title: "Stripe test credit checkout is not ready",
         description: message,
         variant: "destructive",
       });
@@ -100,7 +97,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement }) {
         </div>
 
         <div className="iabt-plan-grid">
-          {PLANS.map((plan) => {
+          {IABT_PLANS.map((plan) => {
             const isCurrent = currentPlan === plan.id;
             const isFeatured = plan.id === "builder";
             const cardClassName =
@@ -114,6 +111,10 @@ export default function BillingDialog({ open, onOpenChange, entitlement }) {
                   {isCurrent && <strong>Current plan</strong>}
                 </div>
                 <h3>{plan.name}</h3>
+                <div className="iabt-plan-price">
+                  <strong>{plan.monthlyPrice ? `$${plan.monthlyPrice}` : "$0"}</strong>
+                  <span>/ month</span>
+                </div>
                 <p>{plan.description}</p>
                 <ul>
                   {plan.features.map((feature) => (
@@ -153,8 +154,20 @@ export default function BillingDialog({ open, onOpenChange, entitlement }) {
           })}
         </div>
 
+        <div className="iabt-credit-pack">
+          <div>
+            <span className="iabt-credit-pack-kicker">Flexible AI capacity</span>
+            <strong>{AI_CREDIT_PACK.credits} extra AI generations for {"$" + AI_CREDIT_PACK.price}</strong>
+            <p>One-time credit packs never expire and are used only after the plan's monthly allowance.</p>
+          </div>
+          <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan)}>
+            {busyPlan === "credits" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Try credit-pack checkout
+          </Button>
+        </div>
+
         <p className="iabt-billing-note">
-          Test mode uses Stripe test cards only. Real charges remain disabled until live pricing and live credentials are explicitly approved.
+          All checkout routes are locked to Stripe test mode. Test cards cannot create real charges. Live billing remains disabled until pricing, policies, taxes, support, and production credentials are explicitly approved.
         </p>
       </DialogContent>
     </Dialog>
