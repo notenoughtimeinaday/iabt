@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk";
 import { secrets } from "base44:runtime";
 import {
+  AI_CREDIT_PACK_SIZE,
   getPlanDefaults,
   getPlanForPriceId,
   IABT_APP_ID,
@@ -152,8 +153,14 @@ async function upsertSubscriptionEntitlement(base44, subscription) {
     current_period_end: data.current_period_end || existing?.current_period_end,
     cancel_at_period_end: data.cancel_at_period_end,
     ai_hourly_limit: defaults.ai_hourly_limit,
+    ai_monthly_limit: defaults.ai_monthly_limit,
+    bonus_ai_credits: Number(existing?.bonus_ai_credits || 0),
     project_limit: defaults.project_limit,
+    static_zip_export_enabled: defaults.static_zip_export_enabled,
     react_export_enabled: defaults.react_export_enabled,
+    commercial_use_enabled: defaults.commercial_use_enabled,
+    white_label_exports_enabled: defaults.white_label_exports_enabled,
+    team_seat_limit: defaults.team_seat_limit,
   };
 
   if (existing) {
@@ -179,6 +186,64 @@ function invoiceSubscriptionId(invoice) {
     stringId(invoice?.parent?.subscription_details?.subscription) ||
     stringId(invoice?.subscription_details?.subscription)
   );
+}
+
+async function grantAiCreditPack(base44, eventId, eventType, session) {
+  const metadata = session?.metadata || {};
+  if (metadata.base44_app_id !== IABT_APP_ID || metadata.product_type !== "ai_credit_pack") {
+    throw new Error("Credit checkout does not belong to this IABT app.");
+  }
+  if (session?.payment_status !== "paid") {
+    throw new Error("AI credit checkout is not paid.");
+  }
+
+  const service = base44.asServiceRole;
+  const processed = await service.entities.BillingEvent.filter({ event_id: eventId }, "-created_date", 1);
+  if (processed?.[0]) return;
+
+  const userId = String(metadata.user_id || session?.client_reference_id || "").trim();
+  const userEmail = String(metadata.user_email || session?.customer_details?.email || "").trim();
+  if (!userId || !userEmail) {
+    throw new Error("AI credit checkout is missing the authenticated IABT user identity.");
+  }
+
+  const eventRecord = await service.entities.BillingEvent.create({
+    event_id: eventId,
+    event_type: eventType,
+    user_id: userId,
+    user_email: userEmail,
+    product_type: "ai_credit_pack",
+    credits_granted: 0,
+    processed_at: new Date().toISOString(),
+  });
+
+  try {
+    const existing = await findEntitlement(service, { user_id: userId, user_email: userEmail });
+    if (existing) {
+      await service.entities.AccountEntitlement.update(existing.id, {
+        bonus_ai_credits: Number(existing.bonus_ai_credits || 0) + AI_CREDIT_PACK_SIZE,
+      });
+    } else {
+      const defaults = getPlanDefaults("free");
+      await service.entities.AccountEntitlement.create({
+        user_id: userId,
+        user_email: userEmail,
+        plan: "free",
+        status: "active",
+        billing_provider: "none",
+        ...defaults,
+        bonus_ai_credits: AI_CREDIT_PACK_SIZE,
+        notes: "Created by verified Stripe AI credit-pack webhook",
+      });
+    }
+    await service.entities.BillingEvent.update(eventRecord.id, {
+      credits_granted: AI_CREDIT_PACK_SIZE,
+      processed_at: new Date().toISOString(),
+    });
+  } catch (error) {
+    await service.entities.BillingEvent.delete(eventRecord.id).catch(() => {});
+    throw error;
+  }
 }
 
 export default async function(req: Request): Promise<Response> {
@@ -211,7 +276,11 @@ export default async function(req: Request): Promise<Response> {
       if (data?.metadata?.base44_app_id !== IABT_APP_ID) {
         throw new Error("Checkout session does not belong to this IABT app.");
       }
-      await processSubscriptionId(base44, stringId(data.subscription));
+      if (data?.metadata?.product_type === "ai_credit_pack") {
+        await grantAiCreditPack(base44, String(event.id || ""), type, data);
+      } else {
+        await processSubscriptionId(base44, stringId(data.subscription));
+      }
     } else if (
       type === "customer.subscription.created" ||
       type === "customer.subscription.updated" ||
