@@ -1,0 +1,17 @@
+{
+  "name": "IABT — Interactive App Builder Tool",
+  "short_name": "IABT",
+  "description": "AI-assisted SaaS application builder.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8fc",
+  "theme_color": "#6d28d9",
+  "icons": [
+    {
+      "src": "/iabt-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
