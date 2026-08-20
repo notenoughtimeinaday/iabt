@@ -447,7 +447,8 @@ export default function Builder() {
       setAiProvider(payload.provider || "AI");
       toast({ title: "App flow generated", description: generated.pages.length + " pages are ready to edit." });
     } catch (error) {
-      toast({ title: "AI generation failed", description: error.message, variant: "destructive" });
+      const message = error.response?.data?.error || error.message || "AI generation failed.";
+      toast({ title: "AI generation failed", description: message, variant: "destructive" });
     } finally {
       setAiBusy(false);
     }
