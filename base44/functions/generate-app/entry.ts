@@ -149,6 +149,17 @@ async function generateWithOpenAI(apiKey: string, prompt: string) {
   return JSON.parse(outputText);
 }
 
+function parseGeneratedText(value: unknown) {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenced?.[1] || trimmed).trim();
+  const start = candidate.indexOf("{");
+  const end = candidate.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error("AI returned text without a JSON app definition.");
+  return JSON.parse(candidate.slice(start, end + 1));
+}
+
 Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") {
@@ -194,13 +205,15 @@ Deno.serve(async (req) => {
 
     if (!generated) {
       try {
-        generated = await base44.asServiceRole.integrations.Core.InvokeLLM({
+        generated = parseGeneratedText(await base44.asServiceRole.integrations.Core.InvokeLLM({
           prompt:
             "Design an IABT SaaS application from this request:\n\n" +
             fullPrompt +
-            "\n\nUse only Text, Input, Button, and ScannerInput components. Button routes must match generated page routes.",
-          response_json_schema: responseSchema,
-        });
+            "\n\nReturn exactly one JSON object and no markdown. Use this shape: " +
+            "{\"app\":{\"name\":\"App name\",\"description\":\"Purpose\"},\"pages\":[{\"name\":\"Page name\",\"route\":\"/route\",\"layout\":\"column\",\"components\":[{\"type\":\"Text\",\"props\":{\"value\":\"Text\"}}]}]}. " +
+            "Use only Text(value), Input(placeholder), Button(label and optional to), and ScannerInput(label) components. " +
+            "Button routes must exactly match generated page routes. Create one to eight concise pages.",
+        }));
         provider = apiKey ? "base44-managed-ai-fallback" : "base44-managed-ai";
       } catch (error) {
         const managedError = error instanceof Error ? error.message : String(error);
