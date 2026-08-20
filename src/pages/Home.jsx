@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ConfirmActionDialog, NameDialog } from "@/components/ActionDialogs";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import {
@@ -39,6 +40,8 @@ export default function Home() {
   const [working, setWorking] = useState(false);
   const [query, setQuery] = useState("");
   const [legacyProjects, setLegacyProjects] = useState([]);
+  const [nameDialog, setNameDialog] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -67,12 +70,10 @@ export default function Home() {
     });
   }, [projects, query]);
 
-  async function createProject() {
-    const title = window.prompt("Name your SaaS app", "My SaaS App");
-    if (!title?.trim()) return;
+  async function createProject(title) {
     setWorking(true);
     try {
-      const definition = createDefaultAppDefinition(title.trim());
+      const definition = createDefaultAppDefinition(title);
       const project = await base44.entities.Project.create({
         title: definition.app.name,
         description: definition.app.description,
@@ -84,6 +85,7 @@ export default function Home() {
         app_definition: definition,
         last_opened_at: new Date().toISOString(),
       });
+      setNameDialog(null);
       navigate("/projects/" + project.id);
     } catch (error) {
       toast({ title: "Project creation failed", description: error.message, variant: "destructive" });
@@ -92,20 +94,22 @@ export default function Home() {
     }
   }
 
-  async function renameProject(project) {
-    const title = window.prompt("Rename project", project.title);
-    if (!title?.trim()) return;
+  async function renameProject(project, title) {
+    setWorking(true);
     try {
-      const definition = normalizeAppDefinition(project.app_definition, title.trim());
-      definition.app.name = title.trim().slice(0, 100);
+      const definition = normalizeAppDefinition(project.app_definition, title);
+      definition.app.name = title.slice(0, 100);
       await base44.entities.Project.update(project.id, {
         title: definition.app.name,
         app_definition: definition,
       });
+      setNameDialog(null);
       toast({ title: "Project renamed" });
-      load();
+      await load();
     } catch (error) {
       toast({ title: "Rename failed", description: error.message, variant: "destructive" });
+    } finally {
+      setWorking(false);
     }
   }
 
@@ -140,14 +144,17 @@ export default function Home() {
   }
 
   async function deleteProject(project) {
-    if (!window.confirm('Delete "' + project.title + '"? This cannot be undone.')) return;
+    setWorking(true);
     try {
       await base44.entities.Project.delete(project.id);
       localStorage.removeItem("iabt.cloudDraft." + project.id);
       setProjects((current) => current.filter((item) => item.id !== project.id));
+      setDeleteTarget(null);
       toast({ title: "Project deleted" });
     } catch (error) {
       toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+    } finally {
+      setWorking(false);
     }
   }
 
@@ -225,7 +232,7 @@ export default function Home() {
             <h1>Build the app behind your next idea.</h1>
             <p>Design pages, wire navigation, test scanner workflows, save projects to the cloud, and export production-ready HTML or React.</p>
             <div className="iabt-hero-actions">
-              <Button size="lg" onClick={createProject} disabled={working}>
+              <Button size="lg" onClick={() => setNameDialog({ mode: "create" })} disabled={working}>
                 {working ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
                 New app
               </Button>
@@ -278,7 +285,7 @@ export default function Home() {
               <div><FolderOpen /></div>
               <h3>{query ? "No projects match that search" : "Create your first SaaS app"}</h3>
               <p>{query ? "Try a different name or clear the search." : "Your AppDefinition, pages, components, and settings will be stored in Base44."}</p>
-              {!query && <Button onClick={createProject}><Plus className="h-4 w-4 mr-2" /> New app</Button>}
+              {!query && <Button onClick={() => setNameDialog({ mode: "create" })}><Plus className="h-4 w-4 mr-2" /> New app</Button>}
             </div>
           ) : (
             <div className="iabt-project-grid">
@@ -301,9 +308,9 @@ export default function Home() {
                       <span className="iabt-open-link">Open builder <ArrowRight /></span>
                     </button>
                     <div className="iabt-project-actions">
-                      <button type="button" onClick={() => renameProject(project)}>Rename</button>
+                      <button type="button" onClick={() => setNameDialog({ mode: "rename", project })}>Rename</button>
                       <button type="button" onClick={() => duplicateProject(project)}><Copy /> Duplicate</button>
-                      <button type="button" className="is-danger" onClick={() => deleteProject(project)}><Trash2 /> Delete</button>
+                      <button type="button" className="is-danger" onClick={() => setDeleteTarget(project)}><Trash2 /> Delete</button>
                     </div>
                   </article>
                 );
@@ -312,6 +319,34 @@ export default function Home() {
           )}
         </section>
       </main>
+
+      <NameDialog
+        open={Boolean(nameDialog)}
+        onOpenChange={(open) => { if (!open && !working) setNameDialog(null); }}
+        title={nameDialog?.mode === "rename" ? "Rename project" : "Create a new app"}
+        description={nameDialog?.mode === "rename"
+          ? "Choose a clear, memorable name for this app project."
+          : "Start with a project name. You can refine the app name and description inside the builder."}
+        label="App name"
+        initialValue={nameDialog?.mode === "rename" ? nameDialog.project?.title || "" : "My SaaS App"}
+        placeholder="Customer portal, inventory app, booking platform…"
+        submitLabel={nameDialog?.mode === "rename" ? "Save name" : "Create app"}
+        busy={working}
+        maxLength={100}
+        onSubmit={(value) => nameDialog?.mode === "rename"
+          ? renameProject(nameDialog.project, value)
+          : createProject(value)}
+      />
+
+      <ConfirmActionDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => { if (!open && !working) setDeleteTarget(null); }}
+        title="Delete this project?"
+        description={deleteTarget ? `“${deleteTarget.title}” and its cloud AppDefinition will be permanently removed. Export it first if you may need it later.` : ""}
+        confirmLabel="Delete project"
+        busy={working}
+        onConfirm={() => deleteTarget && deleteProject(deleteTarget)}
+      />
     </div>
   );
 }
