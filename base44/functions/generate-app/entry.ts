@@ -194,7 +194,7 @@ Deno.serve(async (req) => {
 
     if (!generated) {
       try {
-        generated = await base44.integrations.Core.InvokeLLM({
+        generated = await base44.asServiceRole.integrations.Core.InvokeLLM({
           prompt:
             "Design an IABT SaaS application from this request:\n\n" +
             fullPrompt +
