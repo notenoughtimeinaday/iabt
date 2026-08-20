@@ -1242,8 +1242,8 @@
 }
 
 .iabt-billing-dialog {
-  width: min(980px, calc(100vw - 28px));
-  max-width: 980px;
+  width: min(1180px, calc(100vw - 28px));
+  max-width: 1180px;
   max-height: 90vh;
   overflow-y: auto;
   padding: clamp(22px, 4vw, 36px);
@@ -1318,7 +1318,7 @@
 
 .iabt-plan-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -1372,8 +1372,27 @@
   letter-spacing: -0.04em;
 }
 
+.iabt-plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin: -2px 0 10px;
+}
+
+.iabt-plan-price strong {
+  color: #241c42;
+  font-size: 1.55rem;
+  letter-spacing: -0.04em;
+}
+
+.iabt-plan-price span {
+  color: #7b8192;
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .iabt-plan-card > p {
-  min-height: 48px;
+  min-height: 58px;
   color: #6b7280;
   font-size: 13px;
   line-height: 1.5;
@@ -1406,8 +1425,44 @@
   color: #7c3aed;
 }
 
+.iabt-credit-pack {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(124, 58, 237, 0.22);
+  border-radius: 16px;
+  background: linear-gradient(120deg, #f7f3ff, #ffffff);
+}
+
+.iabt-credit-pack > div {
+  display: grid;
+  gap: 4px;
+}
+
+.iabt-credit-pack-kicker {
+  color: #7c3aed;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.iabt-credit-pack strong {
+  color: #241c42;
+  font-size: 15px;
+}
+
+.iabt-credit-pack p {
+  color: #687087;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .iabt-billing-note {
-  margin: 18px 0 0;
+  margin: 14px 0 0;
   padding: 12px 14px;
   border-radius: 12px;
   background: #f1f3f8;
@@ -1417,6 +1472,10 @@
 }
 
 @media (max-width: 1180px) {
+  .iabt-plan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .iabt-project-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1452,6 +1511,11 @@
 
   .iabt-plan-card {
     min-height: 0;
+  }
+
+  .iabt-credit-pack {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .iabt-home-nav {
