@@ -151,6 +151,7 @@ export default function Builder() {
   const [prompt, setPrompt] = useState("");
   const [aiMode, setAiMode] = useState("replace");
   const [aiProvider, setAiProvider] = useState("");
+  const [aiUsage, setAiUsage] = useState(null);
   const [device, setDevice] = useState("phone");
   const [lastScan, setLastScan] = useState("");
   const [history, setHistory] = useState([]);
@@ -405,6 +406,7 @@ export default function Builder() {
     }
     setAiBusy(true);
     setAiProvider("");
+    setAiUsage(null);
     try {
       const response = await base44.functions.invoke("generate-app", {
         prompt: prompt.trim(),
@@ -445,6 +447,7 @@ export default function Builder() {
       setSelectedComponentId(null);
       setPreviewRoute(generated.pages[0]?.route || "/");
       setAiProvider(payload.provider || "AI");
+      setAiUsage(payload.usage ? { ...payload.usage, plan: payload.entitlement?.plan || "free" } : null);
       toast({ title: "App flow generated", description: generated.pages.length + " pages are ready to edit." });
     } catch (error) {
       const message = error.response?.data?.error || error.message || "AI generation failed.";
@@ -543,7 +546,12 @@ export default function Builder() {
           {aiBusy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
           Generate
         </Button>
-        {aiProvider && <small>Provider: {aiProvider}</small>}
+        {aiProvider && (
+          <small>
+            Provider: {aiProvider}
+            {aiUsage && ` · ${aiUsage.plan} plan · ${aiUsage.remaining} generations left this hour`}
+          </small>
+        )}
       </section>
 
       <div className="iabt-workspace">
