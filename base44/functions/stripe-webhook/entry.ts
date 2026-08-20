@@ -1,19 +1,40 @@
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.40";
+import { createClientFromRequest } from "npm:@base44/sdk";
 import { secrets } from "base44:runtime";
-import { getPlanDefaults, mapStripeStatus, stripeGet } from "../../shared/stripe.ts";
+import {
+  getPlanDefaults,
+  getPlanForPriceId,
+  IABT_APP_ID,
+  mapStripeStatus,
+  stripeGet,
+} from "../../shared/stripe.ts";
+
+function secureEqualHex(left, right) {
+  if (!left || !right || left.length !== right.length) return false;
+  let diff = 0;
+  for (let i = 0; i < left.length; i++) {
+    diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  }
+  return diff === 0;
+}
 
 async function verifyStripeSignature(payload, signatureHeader, secret) {
-  const parts = {};
-  for (const part of signatureHeader.split(",")) {
-    const [key, value] = part.split("=");
-    parts[key] = value;
+  const values = {};
+  for (const part of String(signatureHeader || "").split(",")) {
+    const separator = part.indexOf("=");
+    if (separator < 1) continue;
+    const key = part.slice(0, separator).trim();
+    const value = part.slice(separator + 1).trim();
+    values[key] = [...(values[key] || []), value];
   }
-  const timestamp = parts["t"];
-  const signature = parts["v1"];
-  if (!timestamp || !signature) throw new Error("Invalid Stripe signature header.");
 
-  const age = Math.floor(Date.now() / 1000) - parseInt(timestamp, 10);
-  if (age > 300) throw new Error("Stripe webhook timestamp outside tolerance.");
+  const timestamp = Number(values.t?.[0]);
+  const signatures = values.v1 || [];
+  if (!Number.isFinite(timestamp) || !signatures.length) {
+    throw new Error("Invalid Stripe signature header.");
+  }
+  if (Math.abs(Math.floor(Date.now() / 1000) - timestamp) > 300) {
+    throw new Error("Stripe webhook timestamp outside tolerance.");
+  }
 
   const signedPayload = timestamp + "." + payload;
   const key = await crypto.subtle.importKey(
@@ -23,54 +44,113 @@ async function verifyStripeSignature(payload, signatureHeader, secret) {
     false,
     ["sign"],
   );
-  const expectedBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signedPayload));
-  const expected = Array.from(new Uint8Array(expectedBuf))
-    .map((b) => b.toString(16).padStart(2, "0"))
+  const expectedBuffer = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(signedPayload),
+  );
+  const expected = Array.from(new Uint8Array(expectedBuffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 
-  if (expected.length !== signature.length) throw new Error("Signature length mismatch.");
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) {
-    diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  if (!signatures.some((signature) => secureEqualHex(expected, signature))) {
+    throw new Error("Signature verification failed.");
   }
-  if (diff !== 0) throw new Error("Signature verification failed.");
-
   return JSON.parse(payload);
 }
 
-async function findEntitlement(service, { email, subscriptionId, customerId }) {
-  if (email) {
-    const byEmail = await service.entities.AccountEntitlement.filter({ user_email: email }, "-updated_date", 5);
-    if (byEmail?.[0]) return byEmail[0];
+function stringId(value) {
+  if (typeof value === "string") return value;
+  return value?.id ? String(value.id) : "";
+}
+
+function subscriptionPeriodEnd(subscription) {
+  const direct = Number(subscription?.current_period_end || 0);
+  if (direct) return new Date(direct * 1000).toISOString();
+  const itemEnds = (subscription?.items?.data || [])
+    .map((item) => Number(item?.current_period_end || 0))
+    .filter(Boolean);
+  return itemEnds.length ? new Date(Math.max(...itemEnds) * 1000).toISOString() : null;
+}
+
+function subscriptionPriceId(subscription) {
+  return String(subscription?.items?.data?.[0]?.price?.id || "");
+}
+
+function subscriptionMetadata(subscription) {
+  const metadata = subscription?.metadata || {};
+  if (metadata.base44_app_id !== IABT_APP_ID) {
+    throw new Error("Stripe event does not belong to this IABT app.");
   }
-  if (subscriptionId) {
-    const bySub = await service.entities.AccountEntitlement.filter({ provider_subscription_id: subscriptionId }, "-updated_date", 5);
-    if (bySub?.[0]) return bySub[0];
-  }
-  if (customerId) {
-    const byCust = await service.entities.AccountEntitlement.filter({ provider_customer_id: customerId }, "-updated_date", 5);
-    if (byCust?.[0]) return byCust[0];
+  return metadata;
+}
+
+async function findEntitlement(service, data) {
+  const lookups = [
+    ["provider_subscription_id", data.provider_subscription_id],
+    ["provider_customer_id", data.provider_customer_id],
+    ["user_id", data.user_id],
+    ["user_email", data.user_email],
+  ];
+  for (const [field, value] of lookups) {
+    if (!value) continue;
+    const records = await service.entities.AccountEntitlement.filter(
+      { [field]: value },
+      "-updated_date",
+      1,
+    );
+    if (records?.[0]) return records[0];
   }
   return null;
 }
 
-async function upsertEntitlement(base44, data) {
-  const service = base44.asServiceRole;
-  const existing = await findEntitlement(service, {
-    email: data.user_email,
-    subscriptionId: data.provider_subscription_id,
-    customerId: data.provider_customer_id,
-  });
-  const defaults = getPlanDefaults(data.plan || (existing?.plan) || "free");
+async function upsertSubscriptionEntitlement(base44, subscription) {
+  const metadata = subscriptionMetadata(subscription);
+  const priceId = subscriptionPriceId(subscription);
+  const paidPlan = getPlanForPriceId(priceId);
+  if (!paidPlan) {
+    throw new Error("Stripe subscription price is not configured for an IABT plan.");
+  }
 
+  const status = mapStripeStatus(subscription.status);
+  const active = status === "active" || status === "trialing";
+  const plan = active || status === "past_due" ? paidPlan : "free";
+  const customerId = stringId(subscription.customer);
+  let email = String(metadata.user_email || "").trim();
+
+  if (!email && customerId) {
+    const customer = await stripeGet("/customers/" + encodeURIComponent(customerId));
+    email = String(customer?.email || "").trim();
+  }
+
+  const data = {
+    user_id: String(metadata.user_id || "").trim(),
+    user_email: email,
+    plan,
+    status,
+    provider_customer_id: customerId,
+    provider_subscription_id: String(subscription.id || "").trim(),
+    current_period_end: subscriptionPeriodEnd(subscription),
+    cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
+  };
+
+  const service = base44.asServiceRole;
+  const existing = await findEntitlement(service, data);
+  if (!existing && (!data.user_id || !data.user_email)) {
+    throw new Error("Stripe subscription is missing the authenticated IABT user identity.");
+  }
+
+  const defaults = getPlanDefaults(plan);
   const fields = {
-    plan: data.plan || existing?.plan || "free",
-    status: data.status || existing?.status || "active",
+    user_id: data.user_id || existing?.user_id,
+    user_email: data.user_email || existing?.user_email,
+    plan,
+    status,
     billing_provider: "stripe",
     provider_customer_id: data.provider_customer_id || existing?.provider_customer_id,
     provider_subscription_id: data.provider_subscription_id || existing?.provider_subscription_id,
     current_period_end: data.current_period_end || existing?.current_period_end,
-    cancel_at_period_end: data.cancel_at_period_end ?? existing?.cancel_at_period_end ?? false,
+    cancel_at_period_end: data.cancel_at_period_end,
     ai_hourly_limit: defaults.ai_hourly_limit,
     project_limit: defaults.project_limit,
     react_export_enabled: defaults.react_export_enabled,
@@ -80,130 +160,71 @@ async function upsertEntitlement(base44, data) {
     return service.entities.AccountEntitlement.update(existing.id, fields);
   }
   return service.entities.AccountEntitlement.create({
-    user_id: data.user_id || data.user_email,
-    user_email: data.user_email,
     ...fields,
-    notes: "Created by Stripe webhook",
+    notes: "Created by verified Stripe webhook",
   });
 }
 
-async function downgradeToFree(base44, subscriptionId) {
-  const service = base44.asServiceRole;
-  const records = await service.entities.AccountEntitlement.filter(
-    { provider_subscription_id: subscriptionId },
-    "-updated_date",
-    5,
+async function processSubscriptionId(base44, subscriptionId) {
+  if (!subscriptionId) return;
+  const subscription = await stripeGet(
+    "/subscriptions/" + encodeURIComponent(subscriptionId) + "?expand[]=items.data.price",
   );
-  if (!records?.[0]) return;
-  await service.entities.AccountEntitlement.update(records[0].id, {
-    status: "canceled",
-    plan: "free",
-    cancel_at_period_end: false,
-    ai_hourly_limit: 5,
-    project_limit: 3,
-    react_export_enabled: false,
-  });
+  await upsertSubscriptionEntitlement(base44, subscription);
 }
 
-async function setSubscriptionStatus(base44, subscriptionId, patch) {
-  const service = base44.asServiceRole;
-  const records = await service.entities.AccountEntitlement.filter(
-    { provider_subscription_id: subscriptionId },
-    "-updated_date",
-    5,
+function invoiceSubscriptionId(invoice) {
+  return (
+    stringId(invoice?.subscription) ||
+    stringId(invoice?.parent?.subscription_details?.subscription) ||
+    stringId(invoice?.subscription_details?.subscription)
   );
-  if (!records?.[0]) return;
-  await service.entities.AccountEntitlement.update(records[0].id, patch);
-}
-
-function isoFromTimestamp(ts) {
-  if (!ts) return null;
-  return new Date(ts * 1000).toISOString();
 }
 
 export default async function(req: Request): Promise<Response> {
-  // Create the base44 client up front (reads request headers) before signature validation.
-  const base44 = createClientFromRequest(req);
   try {
     if (req.method !== "POST") {
       return Response.json({ error: "Method not allowed." }, { status: 405 });
     }
 
-    const secret = secrets.get("STRIPE_WEBHOOK_SECRET");
-    if (!secret) {
-      console.error("stripe-webhook: STRIPE_WEBHOOK_SECRET not configured");
+    const secret = String(secrets.get("STRIPE_WEBHOOK_SECRET") || "").trim();
+    if (!secret.startsWith("whsec_")) {
+      console.error("stripe-webhook: signing secret not configured");
       return Response.json({ error: "Webhook not configured." }, { status: 500 });
     }
 
     const rawBody = await req.text();
     const signatureHeader = req.headers.get("Stripe-Signature") || "";
-
     let event;
     try {
       event = await verifyStripeSignature(rawBody, signatureHeader, secret);
-    } catch (err) {
-      console.error("stripe-webhook signature verification failed:", err?.message || err);
+    } catch (error) {
+      console.error("stripe-webhook signature verification failed:", error?.message || error);
       return Response.json({ error: "Invalid signature." }, { status: 400 });
     }
 
-    const type = event.type;
-    const data = event.data?.object || {};
-    console.log("stripe-webhook received:", type);
+    const base44 = createClientFromRequest(req);
+    const type = String(event?.type || "");
+    const data = event?.data?.object || {};
 
     if (type === "checkout.session.completed") {
-      const plan = data.metadata?.plan || "free";
-      const email = data.metadata?.user_email || data.customer_email || data.customer_details?.email;
-      const userId = data.metadata?.user_id || null;
-      await upsertEntitlement(base44, {
-        user_id: userId,
-        user_email: email,
-        plan,
-        status: "active",
-        provider_customer_id: data.customer,
-        provider_subscription_id: data.subscription,
-        current_period_end: isoFromTimestamp(data.current_period_end),
-        cancel_at_period_end: false,
-      });
-    } else if (type === "customer.subscription.created" || type === "customer.subscription.updated") {
-      const plan = data.metadata?.plan || "builder";
-      const customerId = data.customer;
-      let email = data.metadata?.user_email || null;
-      if (!email && customerId) {
-        try {
-          const customer = await stripeGet("/customers/" + customerId);
-          email = customer?.email || null;
-        } catch (err) {
-          console.error("stripe-webhook: failed to fetch customer:", err?.message || err);
-        }
+      if (data?.metadata?.base44_app_id !== IABT_APP_ID) {
+        throw new Error("Checkout session does not belong to this IABT app.");
       }
-      await upsertEntitlement(base44, {
-        user_id: data.metadata?.user_id || null,
-        user_email: email,
-        plan,
-        status: mapStripeStatus(data.status),
-        provider_customer_id: customerId,
-        provider_subscription_id: data.id,
-        current_period_end: isoFromTimestamp(data.current_period_end),
-        cancel_at_period_end: data.cancel_at_period_end ?? false,
-      });
-    } else if (type === "customer.subscription.deleted") {
-      await downgradeToFree(base44, data.id);
-    } else if (type === "invoice.paid") {
-      if (data.subscription) {
-        await setSubscriptionStatus(base44, data.subscription, {
-          status: "active",
-          current_period_end: isoFromTimestamp(data.period_end),
-        });
-      }
-    } else if (type === "invoice.payment_failed") {
-      if (data.subscription) {
-        await setSubscriptionStatus(base44, data.subscription, { status: "past_due" });
-      }
+      await processSubscriptionId(base44, stringId(data.subscription));
+    } else if (
+      type === "customer.subscription.created" ||
+      type === "customer.subscription.updated" ||
+      type === "customer.subscription.deleted"
+    ) {
+      await upsertSubscriptionEntitlement(base44, data);
+    } else if (type === "invoice.paid" || type === "invoice.payment_failed") {
+      await processSubscriptionId(base44, invoiceSubscriptionId(data));
     }
 
     return Response.json({ received: true, type });
   } catch (error) {
     console.error("stripe-webhook error:", error?.message || error);
-    return Response.json({ error: error?.message || "Webhook handler failed." }, { status: 500 });
+    return Response.json({ error: "Webhook processing failed." }, { status: 500 });
   }
 }
