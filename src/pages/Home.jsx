@@ -40,14 +40,21 @@ export default function Home() {
   const [working, setWorking] = useState(false);
   const [query, setQuery] = useState("");
   const [legacyProjects, setLegacyProjects] = useState([]);
+  const [entitlement, setEntitlement] = useState(null);
   const [nameDialog, setNameDialog] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   async function load() {
     setLoading(true);
     try {
-      const records = await base44.entities.Project.list("-updated_date", 250);
+      const [records, entitlements] = await Promise.all([
+        base44.entities.Project.list("-updated_date", 250),
+        user?.id
+          ? base44.entities.AccountEntitlement.filter({ user_id: user.id }, "-updated_date", 1)
+          : Promise.resolve([]),
+      ]);
       setProjects(records);
+      setEntitlement(entitlements?.[0] || null);
       const importedTags = new Set(records.flatMap((project) => project.tags || []).filter((tag) => String(tag).startsWith("legacy:")));
       setLegacyProjects(readLegacyProjects().filter((item) => !importedTags.has(legacyTag(item.legacyId))));
     } catch (error) {
@@ -59,7 +66,7 @@ export default function Home() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [user?.id]);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -220,6 +227,7 @@ export default function Home() {
           <div><strong>IABT</strong><span>Interactive App Builder Tool</span></div>
         </div>
         <div className="iabt-home-user">
+          {entitlement && <span className="iabt-plan-badge">{entitlement.plan} plan</span>}
           <span>{user?.full_name || user?.email || "Builder"}</span>
           <Button variant="ghost" size="sm" onClick={() => logout(true)}><LogOut className="h-4 w-4 mr-1" /> Sign out</Button>
         </div>
