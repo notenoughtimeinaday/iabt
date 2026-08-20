@@ -2,16 +2,27 @@
 
 ## Secrets
 
-- Store `OPENAI_API_KEY` and other credentials only in Base44 backend secrets.
-- Never commit `.env`, `.env.local`, Base44 tokens, or `base44/.app.jsonc`.
+- Store `OPENAI_API_KEY`, Stripe credentials, price IDs, and webhook secrets only in Base44 backend secrets.
+- Never commit `.env`, `.env.local`, Base44 tokens, Stripe keys, webhook signing secrets, or `base44/.app.jsonc`.
 - Never expose backend secrets through `VITE_*` variables.
+- IABT billing is code-locked to Stripe test secret keys until an explicitly reviewed live-billing release.
 
 ## Data access
 
-Project and AI-usage records use owner-scoped row-level security. The AI generation function requires an authenticated Base44 user and enforces an hourly per-user request limit.
+Project and AI-usage records use owner-scoped row-level security. Account entitlements are readable by their owner and managed through administrator or verified backend workflows. The AI generation function requires an authenticated Base44 user and enforces an hourly per-user request limit.
+
+## Billing
+
+- Checkout and Customer Portal functions require a signed-in Base44 user.
+- Checkout selects price IDs from backend secrets; callers cannot submit arbitrary Stripe prices.
+- Customer identity is taken from Base44 authentication and stored entitlement data.
+- Redirects are constrained to known IABT origins.
+- Webhook signatures use HMAC verification, constant-time comparison, and a five-minute timestamp tolerance.
+- Webhook plan assignment is derived from configured Stripe price IDs, not client-supplied plan names.
+- Invalid or cross-app Stripe events are rejected.
 
 ## Generated apps
 
-IABT escapes user-authored content before placing it into HTML exports. Generated applications do not contain the IABT OpenAI key or Base44 service credentials.
+IABT escapes user-authored content before placing it into HTML exports. Generated applications do not contain the IABT OpenAI key, Stripe credentials, or Base44 service credentials.
 
-Report suspected vulnerabilities privately to the repository owner. Do not include credentials, tokens, personal project data, or private exports in a public issue.
+Report suspected vulnerabilities privately to the repository owner. Do not include credentials, tokens, personal project data, billing data, or private exports in a public issue.
