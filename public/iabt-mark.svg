@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">IABT</title>
+  <defs>
+    <linearGradient id="g" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#g)"/>
+  <path d="M18 17h7v30h-7zM30 17h11.5c7 0 11.5 3.5 11.5 9 0 3.4-1.8 6.1-4.8 7.4 3.8 1.2 5.8 4.2 5.8 7.8 0 6.3-5 9.8-12.4 9.8H30V17Zm11.2 13.2c3 0 4.7-1.2 4.7-3.5s-1.7-3.4-4.7-3.4h-4.1v6.9h4.1Zm.6 14.5c3.3 0 5.1-1.4 5.1-4.1 0-2.6-1.8-4-5.1-4h-4.7v8.1h4.7Z" fill="white"/>
+</svg>
