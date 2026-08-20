@@ -268,6 +268,11 @@ export default async function(req: Request): Promise<Response> {
       return Response.json({ error: "Invalid signature." }, { status: 400 });
     }
 
+    if (event?.livemode) {
+      console.error("stripe-webhook: live-mode event rejected by test-only billing lock");
+      return Response.json({ error: "Live Stripe events are disabled." }, { status: 400 });
+    }
+
     const base44 = createClientFromRequest(req);
     const type = String(event?.type || "");
     const data = event?.data?.object || {};
