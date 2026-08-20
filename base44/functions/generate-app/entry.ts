@@ -2,9 +2,46 @@ import { createClientFromRequest } from "npm:@base44/sdk";
 
 const COMPONENT_TYPES = ["Text", "Input", "Button", "ScannerInput"];
 const PLAN_DEFAULTS = {
-  free: { ai_hourly_limit: 5, project_limit: 3, react_export_enabled: false },
-  builder: { ai_hourly_limit: 30, project_limit: 25, react_export_enabled: true },
-  pro: { ai_hourly_limit: 100, project_limit: 0, react_export_enabled: true },
+  free: {
+    ai_hourly_limit: 5,
+    ai_monthly_limit: 10,
+    project_limit: 1,
+    static_zip_export_enabled: false,
+    react_export_enabled: false,
+    commercial_use_enabled: false,
+    white_label_exports_enabled: false,
+    team_seat_limit: 1,
+  },
+  builder: {
+    ai_hourly_limit: 30,
+    ai_monthly_limit: 100,
+    project_limit: 5,
+    static_zip_export_enabled: true,
+    react_export_enabled: false,
+    commercial_use_enabled: false,
+    white_label_exports_enabled: false,
+    team_seat_limit: 1,
+  },
+  pro: {
+    ai_hourly_limit: 100,
+    ai_monthly_limit: 500,
+    project_limit: 25,
+    static_zip_export_enabled: true,
+    react_export_enabled: true,
+    commercial_use_enabled: true,
+    white_label_exports_enabled: false,
+    team_seat_limit: 1,
+  },
+  agency: {
+    ai_hourly_limit: 200,
+    ai_monthly_limit: 2000,
+    project_limit: 0,
+    static_zip_export_enabled: true,
+    react_export_enabled: true,
+    commercial_use_enabled: true,
+    white_label_exports_enabled: true,
+    team_seat_limit: 5,
+  },
 };
 
 const componentSchema = {
@@ -97,8 +134,14 @@ async function getOrCreateEntitlement(base44: any, user: any) {
   if (current) {
     const isActive = ["active", "trialing"].includes(String(current.status));
     const activePlan = isActive ? String(current.plan || "free") : "free";
-    if (isActive) return { ...planDefaults(activePlan), ...current, plan: activePlan };
-    return { ...current, ...planDefaults("free"), plan: "free" };
+    if (isActive) {
+      const defaults = planDefaults(activePlan);
+      const foundingAdmin = user.role === "admin" && current.billing_provider === "none";
+      return foundingAdmin
+        ? { ...defaults, ...current, plan: activePlan }
+        : { ...current, ...defaults, bonus_ai_credits: Number(current.bonus_ai_credits || 0), plan: activePlan };
+    }
+    return { ...current, ...planDefaults("free"), bonus_ai_credits: Number(current.bonus_ai_credits || 0), plan: "free" };
   }
 
   const plan = user.role === "admin" ? "pro" : "free";
@@ -109,33 +152,16 @@ async function getOrCreateEntitlement(base44: any, user: any) {
     plan,
     status: "active",
     billing_provider: "none",
+    ...defaults,
     ai_hourly_limit: user.role === "admin" ? 200 : defaults.ai_hourly_limit,
-    project_limit: defaults.project_limit,
-    react_export_enabled: defaults.react_export_enabled,
+    project_limit: user.role === "admin" ? 0 : defaults.project_limit,
+    bonus_ai_credits: 0,
     notes: user.role === "admin" ? "Founding administrator entitlement" : "Default free entitlement",
   });
 }
 
-async function enforceRateLimit(base44: any, entitlement: any) {
-  const now = new Date();
-  const windowKey = now.toISOString().slice(0, 13);
-  const limit = Math.max(1, Number(entitlement.ai_hourly_limit || planDefaults(entitlement.plan).ai_hourly_limit));
-  const records = await base44.entities.AiUsage.filter({ window_key: windowKey }, "-updated_date", 1);
-  const current = records?.[0];
-  const used = Number(current?.request_count || 0);
-
-  if (used >= limit) {
-    throw new Response(
-      JSON.stringify({
-        error: "Hourly AI generation limit reached. Try again after the hour changes.",
-        plan: entitlement.plan,
-        limit,
-      }),
-      { status: 429, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
-  const nextUsed = used + 1;
+async function incrementUsageBucket(base44: any, key: string, current: any, now: Date) {
+  const nextUsed = Number(current?.request_count || 0) + 1;
   if (current) {
     await base44.entities.AiUsage.update(current.id, {
       request_count: nextUsed,
@@ -143,13 +169,76 @@ async function enforceRateLimit(base44: any, entitlement: any) {
     });
   } else {
     await base44.entities.AiUsage.create({
-      window_key: windowKey,
+      window_key: key,
       request_count: nextUsed,
       last_request_at: now.toISOString(),
     });
   }
+  return nextUsed;
+}
 
-  return { limit, used: nextUsed, remaining: Math.max(0, limit - nextUsed) };
+async function enforceRateLimit(base44: any, entitlement: any) {
+  const now = new Date();
+  const defaults = planDefaults(entitlement.plan);
+  const hourlyKey = "hour:" + now.toISOString().slice(0, 13);
+  const monthlyKey = "month:" + now.toISOString().slice(0, 7);
+  const hourlyLimit = Math.max(1, Number(entitlement.ai_hourly_limit || defaults.ai_hourly_limit));
+  const monthlyLimit = Math.max(1, Number(entitlement.ai_monthly_limit || defaults.ai_monthly_limit));
+  const bonusCredits = Math.max(0, Number(entitlement.bonus_ai_credits || 0));
+
+  const [hourlyRecords, monthlyRecords] = await Promise.all([
+    base44.entities.AiUsage.filter({ window_key: hourlyKey }, "-updated_date", 1),
+    base44.entities.AiUsage.filter({ window_key: monthlyKey }, "-updated_date", 1),
+  ]);
+  const hourly = hourlyRecords?.[0];
+  const monthly = monthlyRecords?.[0];
+  const hourlyUsed = Number(hourly?.request_count || 0);
+  const monthlyUsed = Number(monthly?.request_count || 0);
+
+  if (hourlyUsed >= hourlyLimit) {
+    throw new Response(
+      JSON.stringify({
+        error: "Hourly AI safety limit reached. Try again after the hour changes.",
+        plan: entitlement.plan,
+        limit: hourlyLimit,
+      }),
+      { status: 429, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const useBonusCredit = monthlyUsed >= monthlyLimit;
+  if (useBonusCredit && bonusCredits < 1) {
+    throw new Response(
+      JSON.stringify({
+        error: "Monthly AI generation allowance reached. Upgrade your plan or add an AI credit pack.",
+        plan: entitlement.plan,
+        limit: monthlyLimit,
+        bonus_remaining: bonusCredits,
+      }),
+      { status: 429, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (useBonusCredit) {
+    await base44.asServiceRole.entities.AccountEntitlement.update(entitlement.id, {
+      bonus_ai_credits: bonusCredits - 1,
+    });
+  }
+
+  const [nextHourlyUsed, nextMonthlyUsed] = await Promise.all([
+    incrementUsageBucket(base44, hourlyKey, hourly, now),
+    incrementUsageBucket(base44, monthlyKey, monthly, now),
+  ]);
+
+  return {
+    limit: hourlyLimit,
+    used: nextHourlyUsed,
+    remaining: Math.max(0, hourlyLimit - nextHourlyUsed),
+    monthly_limit: monthlyLimit,
+    monthly_used: nextMonthlyUsed,
+    monthly_remaining: Math.max(0, monthlyLimit - nextMonthlyUsed),
+    bonus_remaining: useBonusCredit ? bonusCredits - 1 : bonusCredits,
+  };
 }
 
 async function generateWithOpenAI(apiKey: string, prompt: string) {
@@ -279,7 +368,13 @@ Deno.serve(async (req) => {
         plan: entitlement.plan,
         status: entitlement.status,
         project_limit: entitlement.project_limit,
+        static_zip_export_enabled: entitlement.static_zip_export_enabled,
         react_export_enabled: entitlement.react_export_enabled,
+        commercial_use_enabled: entitlement.commercial_use_enabled,
+        white_label_exports_enabled: entitlement.white_label_exports_enabled,
+        team_seat_limit: entitlement.team_seat_limit,
+        ai_monthly_limit: entitlement.ai_monthly_limit,
+        bonus_ai_credits: entitlement.bonus_ai_credits,
       },
       usage,
       app: result.app,
