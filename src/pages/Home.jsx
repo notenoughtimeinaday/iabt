@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmActionDialog, NameDialog } from "@/components/ActionDialogs";
+import BillingDialog from "@/components/BillingDialog";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import {
@@ -12,6 +13,7 @@ import {
   Cloud,
   Code2,
   Copy,
+  CreditCard,
   FolderOpen,
   LayoutTemplate,
   Loader2,
@@ -41,6 +43,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [legacyProjects, setLegacyProjects] = useState([]);
   const [entitlement, setEntitlement] = useState(null);
+  const [billingOpen, setBillingOpen] = useState(false);
   const [nameDialog, setNameDialog] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
@@ -67,6 +70,21 @@ export default function Home() {
   useEffect(() => {
     load();
   }, [user?.id]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const billing = url.searchParams.get("billing");
+    if (!billing) return;
+    if (billing === "success") {
+      toast({ title: "Stripe test checkout completed", description: "Your plan will update after the verified webhook is processed." });
+    } else if (billing === "canceled") {
+      toast({ title: "Checkout canceled", description: "No changes were made to your plan." });
+    }
+    url.searchParams.delete("billing");
+    url.searchParams.delete("session_id");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    load();
+  }, []);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -228,6 +246,9 @@ export default function Home() {
         </div>
         <div className="iabt-home-user">
           {entitlement && <span className="iabt-plan-badge">{entitlement.plan} plan</span>}
+          <Button variant="outline" size="sm" onClick={() => setBillingOpen(true)}>
+            <CreditCard className="h-4 w-4 mr-1" /> Plans & billing
+          </Button>
           <span>{user?.full_name || user?.email || "Builder"}</span>
           <Button variant="ghost" size="sm" onClick={() => logout(true)}><LogOut className="h-4 w-4 mr-1" /> Sign out</Button>
         </div>
@@ -327,6 +348,12 @@ export default function Home() {
           )}
         </section>
       </main>
+
+      <BillingDialog
+        open={billingOpen}
+        onOpenChange={setBillingOpen}
+        entitlement={entitlement}
+      />
 
       <NameDialog
         open={Boolean(nameDialog)}
