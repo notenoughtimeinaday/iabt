@@ -1,4 +1,5 @@
-import { stripePost, stripeGet, newIdempotencyKey } from "../../shared/stripe.ts";
+import { createClientFromRequest } from "npm:@base44/sdk";
+import { getAppOrigin, newIdempotencyKey, stripePost } from "../../shared/stripe.ts";
 
 export default async function(req: Request): Promise<Response> {
   try {
@@ -6,33 +7,35 @@ export default async function(req: Request): Promise<Response> {
       return Response.json({ error: "Method not allowed." }, { status: 405 });
     }
 
-    const body = await req.json().catch(() => ({}));
-    const customerId = body?.customer_id ? String(body.customer_id).trim() : null;
-    const customerEmail = body?.customer_email ? String(body.customer_email).trim() : null;
-    const returnUrl = String(body?.return_url || "").trim();
+    const base44 = createClientFromRequest(req);
+    let user;
+    try {
+      user = await base44.auth.me();
+    } catch {
+      return Response.json({ error: "Authentication required." }, { status: 401 });
+    }
+    if (!user?.id) {
+      return Response.json({ error: "Authentication required." }, { status: 401 });
+    }
 
-    if (!returnUrl || !/^https?:\/\//.test(returnUrl)) {
-      return Response.json({ error: "A valid return_url is required." }, { status: 400 });
-    }
-    if (!customerId && !customerEmail) {
-      return Response.json({ error: "Either customer_id or customer_email is required." }, { status: 400 });
-    }
-
-    let resolvedCustomerId = customerId;
-    if (!resolvedCustomerId && customerEmail) {
-      const list = await stripeGet("/customers?email=" + encodeURIComponent(customerEmail) + "&limit=1");
-      resolvedCustomerId = list?.data?.[0]?.id || null;
-    }
-    if (!resolvedCustomerId) {
-      return Response.json({ error: "No Stripe customer found. Subscribe to a plan first." }, { status: 404 });
+    const records = await base44.asServiceRole.entities.AccountEntitlement.filter(
+      { user_id: user.id },
+      "-updated_date",
+      1,
+    );
+    const customerId = String(records?.[0]?.provider_customer_id || "").trim();
+    if (records?.[0]?.billing_provider !== "stripe" || !customerId.startsWith("cus_")) {
+      return Response.json(
+        { error: "No Stripe billing account was found for this user." },
+        { status: 404 },
+      );
     }
 
     const params = new URLSearchParams();
-    params.append("customer", resolvedCustomerId);
-    params.append("return_url", returnUrl);
+    params.append("customer", customerId);
+    params.append("return_url", getAppOrigin(req) + "/");
 
     const session = await stripePost("/billing_portal/sessions", params, newIdempotencyKey());
-
     return Response.json({ ok: true, url: session.url });
   } catch (error) {
     console.error("stripe-customer-portal error:", error?.message || error);
