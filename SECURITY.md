@@ -9,7 +9,7 @@
 
 ## Data access
 
-Project and AI-usage records use owner-scoped row-level security. Account entitlements are readable by their owner and managed through administrator or verified backend workflows. The AI generation function requires an authenticated Base44 user and enforces an hourly per-user request limit.
+Project and AI-usage records use owner-scoped row-level security. Account entitlements are readable by their owner and managed through administrator or verified backend workflows. The AI generation function requires an authenticated Base44 user and enforces per-user hourly safety limits plus monthly allowances. Purchased credits are stored on the administrator-managed entitlement and consumed only after the included allowance.
 
 ## Billing
 
@@ -19,7 +19,8 @@ Project and AI-usage records use owner-scoped row-level security. Account entitl
 - Redirects are constrained to known IABT origins.
 - Webhook signatures use HMAC verification, constant-time comparison, and a five-minute timestamp tolerance.
 - Webhook plan assignment is derived from configured Stripe price IDs, not client-supplied plan names.
-- Invalid or cross-app Stripe events are rejected.
+- AI credit grants are idempotently recorded by Stripe event ID.
+- Invalid, cross-app, or live-mode Stripe events are rejected.
 
 ## Generated apps
 
