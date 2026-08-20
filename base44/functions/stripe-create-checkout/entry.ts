@@ -28,7 +28,7 @@ export default async function(req: Request): Promise<Response> {
     const body = await req.json().catch(() => ({}));
     const plan = normalizePlan(String(body?.plan || ""));
     if (!plan) {
-      return Response.json({ error: "plan must be 'builder' or 'pro'." }, { status: 400 });
+      return Response.json({ error: "plan must be 'builder', 'pro', or 'agency'." }, { status: 400 });
     }
 
     const priceId = getConfiguredPriceId(plan);
