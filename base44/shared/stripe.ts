@@ -1,17 +1,56 @@
 import { secrets } from "base44:runtime";
 
 export const IABT_APP_ID = "6a849bcd3e04d068553b4af7";
-export const PLANS = ["builder", "pro"];
+export const PLANS = ["builder", "pro", "agency"];
+export const AI_CREDIT_PACK_SIZE = 100;
 
 export const PLAN_DEFAULTS = {
-  free: { ai_hourly_limit: 5, project_limit: 3, react_export_enabled: false },
-  builder: { ai_hourly_limit: 30, project_limit: 25, react_export_enabled: true },
-  pro: { ai_hourly_limit: 100, project_limit: 0, react_export_enabled: true },
+  free: {
+    ai_hourly_limit: 5,
+    ai_monthly_limit: 10,
+    project_limit: 1,
+    static_zip_export_enabled: false,
+    react_export_enabled: false,
+    commercial_use_enabled: false,
+    white_label_exports_enabled: false,
+    team_seat_limit: 1,
+  },
+  builder: {
+    ai_hourly_limit: 30,
+    ai_monthly_limit: 100,
+    project_limit: 5,
+    static_zip_export_enabled: true,
+    react_export_enabled: false,
+    commercial_use_enabled: false,
+    white_label_exports_enabled: false,
+    team_seat_limit: 1,
+  },
+  pro: {
+    ai_hourly_limit: 100,
+    ai_monthly_limit: 500,
+    project_limit: 25,
+    static_zip_export_enabled: true,
+    react_export_enabled: true,
+    commercial_use_enabled: true,
+    white_label_exports_enabled: false,
+    team_seat_limit: 1,
+  },
+  agency: {
+    ai_hourly_limit: 200,
+    ai_monthly_limit: 2000,
+    project_limit: 0,
+    static_zip_export_enabled: true,
+    react_export_enabled: true,
+    commercial_use_enabled: true,
+    white_label_exports_enabled: true,
+    team_seat_limit: 5,
+  },
 };
 
 const PRICE_SECRET_BY_PLAN = {
   builder: "STRIPE_BUILDER_PRICE_ID",
   pro: "STRIPE_PRO_PRICE_ID",
+  agency: "STRIPE_AGENCY_PRICE_ID",
 };
 
 const DEFAULT_APP_ORIGIN = "https://iabt.insuredspending.org";
@@ -41,6 +80,11 @@ export function getPlanForPriceId(priceId) {
     if (candidate && candidate === getConfiguredPriceId(plan)) return plan;
   }
   return null;
+}
+
+export function getConfiguredAiCreditPackPriceId() {
+  const priceId = String(secrets.get("STRIPE_AI_CREDIT_PACK_PRICE_ID") || "").trim();
+  return priceId.startsWith("price_") ? priceId : null;
 }
 
 export function getAppOrigin(req) {
