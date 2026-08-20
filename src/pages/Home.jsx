@@ -50,14 +50,15 @@ export default function Home() {
   async function load() {
     setLoading(true);
     try {
-      const [records, entitlements] = await Promise.all([
+      const [records, entitlementResponse] = await Promise.all([
         base44.entities.Project.list("-updated_date", 250),
         user?.id
-          ? base44.entities.AccountEntitlement.filter({ user_id: user.id }, "-updated_date", 1)
-          : Promise.resolve([]),
+          ? base44.functions.invoke("get-account-entitlement", {})
+          : Promise.resolve(null),
       ]);
+      const entitlementPayload = entitlementResponse?.data || entitlementResponse;
       setProjects(records);
-      setEntitlement(entitlements?.[0] || null);
+      setEntitlement(entitlementPayload?.entitlement || null);
       const importedTags = new Set(records.flatMap((project) => project.tags || []).filter((tag) => String(tag).startsWith("legacy:")));
       setLegacyProjects(readLegacyProjects().filter((item) => !importedTags.has(legacyTag(item.legacyId))));
     } catch (error) {
@@ -77,6 +78,8 @@ export default function Home() {
     if (!billing) return;
     if (billing === "success") {
       toast({ title: "Stripe test checkout completed", description: "Your plan will update after the verified webhook is processed." });
+    } else if (billing === "credits_success") {
+      toast({ title: "Stripe test credit purchase completed", description: "Your extra AI credits will appear after the verified webhook is processed." });
     } else if (billing === "canceled") {
       toast({ title: "Checkout canceled", description: "No changes were made to your plan." });
     }
@@ -95,7 +98,19 @@ export default function Home() {
     });
   }, [projects, query]);
 
+  function ensureProjectCapacity(additional = 1) {
+    const limit = Number(entitlement?.project_limit ?? 1);
+    if (limit === 0 || projects.length + additional <= limit) return true;
+    setBillingOpen(true);
+    toast({
+      title: "Project limit reached",
+      description: `Your ${entitlement?.plan || "free"} plan includes ${limit} cloud project${limit === 1 ? "" : "s"}. Choose a larger plan to add more.`,
+    });
+    return false;
+  }
+
   async function createProject(title) {
+    if (!ensureProjectCapacity()) return;
     setWorking(true);
     try {
       const definition = createDefaultAppDefinition(title);
@@ -139,6 +154,7 @@ export default function Home() {
   }
 
   async function duplicateProject(project) {
+    if (!ensureProjectCapacity()) return;
     setWorking(true);
     try {
       const definition = cloneValue(normalizeAppDefinition(project.app_definition, project.title));
@@ -187,6 +203,7 @@ export default function Home() {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
+    if (!ensureProjectCapacity()) return;
     setWorking(true);
     try {
       if (file.size > 2_000_000) throw new Error("The JSON file is too large.");
@@ -214,6 +231,7 @@ export default function Home() {
 
   async function migrateLegacyProjects() {
     if (!legacyProjects.length) return;
+    if (!ensureProjectCapacity(legacyProjects.length)) return;
     setWorking(true);
     try {
       const records = legacyProjects.map((item) => ({
@@ -261,7 +279,7 @@ export default function Home() {
             <h1>Build the app behind your next idea.</h1>
             <p>Design pages, wire navigation, test scanner workflows, save projects to the cloud, and export production-ready HTML or React.</p>
             <div className="iabt-hero-actions">
-              <Button size="lg" onClick={() => setNameDialog({ mode: "create" })} disabled={working}>
+              <Button size="lg" onClick={() => ensureProjectCapacity() && setNameDialog({ mode: "create" })} disabled={working}>
                 {working ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
                 New app
               </Button>
@@ -314,7 +332,7 @@ export default function Home() {
               <div><FolderOpen /></div>
               <h3>{query ? "No projects match that search" : "Create your first SaaS app"}</h3>
               <p>{query ? "Try a different name or clear the search." : "Your AppDefinition, pages, components, and settings will be stored in Base44."}</p>
-              {!query && <Button onClick={() => setNameDialog({ mode: "create" })}><Plus className="h-4 w-4 mr-2" /> New app</Button>}
+              {!query && <Button onClick={() => ensureProjectCapacity() && setNameDialog({ mode: "create" })}><Plus className="h-4 w-4 mr-2" /> New app</Button>}
             </div>
           ) : (
             <div className="iabt-project-grid">
