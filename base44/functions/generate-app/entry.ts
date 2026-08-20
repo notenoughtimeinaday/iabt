@@ -1,7 +1,11 @@
 import { createClientFromRequest } from "npm:@base44/sdk";
 
 const COMPONENT_TYPES = ["Text", "Input", "Button", "ScannerInput"];
-const MAX_REQUESTS_PER_HOUR = 20;
+const PLAN_DEFAULTS = {
+  free: { ai_hourly_limit: 5, project_limit: 3, react_export_enabled: false },
+  builder: { ai_hourly_limit: 30, project_limit: 25, react_export_enabled: true },
+  pro: { ai_hourly_limit: 100, project_limit: 0, react_export_enabled: true },
+};
 
 const componentSchema = {
   type: "object",
@@ -82,31 +86,70 @@ function validateGenerated(result: unknown) {
   return value;
 }
 
-async function enforceRateLimit(base44: any) {
+function planDefaults(plan: string) {
+  return PLAN_DEFAULTS[plan as keyof typeof PLAN_DEFAULTS] || PLAN_DEFAULTS.free;
+}
+
+async function getOrCreateEntitlement(base44: any, user: any) {
+  const service = base44.asServiceRole;
+  const records = await service.entities.AccountEntitlement.filter({ user_id: user.id }, "-updated_date", 1);
+  const current = records?.[0];
+  if (current) {
+    const isActive = ["active", "trialing"].includes(String(current.status));
+    const activePlan = isActive ? String(current.plan || "free") : "free";
+    if (isActive) return { ...planDefaults(activePlan), ...current, plan: activePlan };
+    return { ...current, ...planDefaults("free"), plan: "free" };
+  }
+
+  const plan = user.role === "admin" ? "pro" : "free";
+  const defaults = planDefaults(plan);
+  return service.entities.AccountEntitlement.create({
+    user_id: user.id,
+    user_email: user.email,
+    plan,
+    status: "active",
+    billing_provider: "none",
+    ai_hourly_limit: user.role === "admin" ? 200 : defaults.ai_hourly_limit,
+    project_limit: defaults.project_limit,
+    react_export_enabled: defaults.react_export_enabled,
+    notes: user.role === "admin" ? "Founding administrator entitlement" : "Default free entitlement",
+  });
+}
+
+async function enforceRateLimit(base44: any, entitlement: any) {
   const now = new Date();
   const windowKey = now.toISOString().slice(0, 13);
+  const limit = Math.max(1, Number(entitlement.ai_hourly_limit || planDefaults(entitlement.plan).ai_hourly_limit));
   const records = await base44.entities.AiUsage.filter({ window_key: windowKey }, "-updated_date", 1);
   const current = records?.[0];
+  const used = Number(current?.request_count || 0);
 
-  if (current && Number(current.request_count || 0) >= MAX_REQUESTS_PER_HOUR) {
+  if (used >= limit) {
     throw new Response(
-      JSON.stringify({ error: "Hourly AI generation limit reached. Try again after the hour changes." }),
+      JSON.stringify({
+        error: "Hourly AI generation limit reached. Try again after the hour changes.",
+        plan: entitlement.plan,
+        limit,
+      }),
       { status: 429, headers: { "Content-Type": "application/json" } },
     );
   }
 
+  const nextUsed = used + 1;
   if (current) {
     await base44.entities.AiUsage.update(current.id, {
-      request_count: Number(current.request_count || 0) + 1,
+      request_count: nextUsed,
       last_request_at: now.toISOString(),
     });
   } else {
     await base44.entities.AiUsage.create({
       window_key: windowKey,
-      request_count: 1,
+      request_count: nextUsed,
       last_request_at: now.toISOString(),
     });
   }
+
+  return { limit, used: nextUsed, remaining: Math.max(0, limit - nextUsed) };
 }
 
 async function generateWithOpenAI(apiKey: string, prompt: string) {
@@ -182,7 +225,8 @@ Deno.serve(async (req) => {
     if (!prompt) return Response.json({ error: "Describe the app you want to generate." }, { status: 400 });
     if (prompt.length > 6000) return Response.json({ error: "Prompt is too long." }, { status: 400 });
 
-    await enforceRateLimit(base44);
+    const entitlement = await getOrCreateEntitlement(base44, user);
+    const usage = await enforceRateLimit(base44, entitlement);
 
     const existingContext = context
       ? "\n\nExisting app context (preserve or extend when useful):\n" + JSON.stringify(context).slice(0, 12000)
@@ -231,6 +275,13 @@ Deno.serve(async (req) => {
       ok: true,
       provider,
       generated_at: new Date().toISOString(),
+      entitlement: {
+        plan: entitlement.plan,
+        status: entitlement.status,
+        project_limit: entitlement.project_limit,
+        react_export_enabled: entitlement.react_export_enabled,
+      },
+      usage,
       app: result.app,
       pages: result.pages,
     });
