@@ -181,18 +181,36 @@ Deno.serve(async (req) => {
 
     let generated;
     let provider;
+    let openAIError = "";
+
     if (apiKey) {
-      generated = await generateWithOpenAI(apiKey, fullPrompt);
-      provider = "openai";
-    } else {
-      generated = await base44.integrations.Core.InvokeLLM({
-        prompt:
-          "Design an IABT SaaS application from this request:\n\n" +
-          fullPrompt +
-          "\n\nUse only Text, Input, Button, and ScannerInput components. Button routes must match generated page routes.",
-        response_json_schema: responseSchema,
-      });
-      provider = "base44-managed-ai";
+      try {
+        generated = await generateWithOpenAI(apiKey, fullPrompt);
+        provider = "openai";
+      } catch (error) {
+        openAIError = error instanceof Error ? error.message : String(error);
+      }
+    }
+
+    if (!generated) {
+      try {
+        generated = await base44.integrations.Core.InvokeLLM({
+          prompt:
+            "Design an IABT SaaS application from this request:\n\n" +
+            fullPrompt +
+            "\n\nUse only Text, Input, Button, and ScannerInput components. Button routes must match generated page routes.",
+          response_json_schema: responseSchema,
+        });
+        provider = apiKey ? "base44-managed-ai-fallback" : "base44-managed-ai";
+      } catch (error) {
+        const managedError = error instanceof Error ? error.message : String(error);
+        if (openAIError) {
+          throw new Error(
+            "OpenAI generation failed (" + openAIError + "); Base44 managed AI fallback also failed (" + managedError + ").",
+          );
+        }
+        throw error;
+      }
     }
 
     const result = validateGenerated(generated);
