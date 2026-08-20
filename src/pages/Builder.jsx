@@ -4,6 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ConfirmActionDialog, NameDialog } from "@/components/ActionDialogs";
 import { useToast } from "@/components/ui/use-toast";
 import {
   ArrowLeft,
@@ -154,6 +155,8 @@ export default function Builder() {
   const [lastScan, setLastScan] = useState("");
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
+  const [pageDialog, setPageDialog] = useState(null);
+  const [pageDeleteTarget, setPageDeleteTarget] = useState(null);
 
   useEffect(() => {
     let active = true;
@@ -270,22 +273,18 @@ export default function Builder() {
     setPreviewRoute(page.route);
   }
 
-  function addPage() {
-    const name = window.prompt("Page name", "New Page");
-    if (!name?.trim()) return;
-    const page = createPage(name.trim(), definition.pages);
+  function addPage(name) {
+    const page = createPage(name, definition.pages);
     mutate((next) => next.pages.push(page));
     setSelectedPageId(page.id);
     setSelectedComponentId(null);
     setPreviewRoute(page.route);
   }
 
-  function renamePage(page) {
-    const name = window.prompt("Rename page", page.name);
-    if (!name?.trim()) return;
+  function renamePage(page, name) {
     mutate((next) => {
       const target = next.pages.find((item) => item.id === page.id);
-      target.name = name.trim().slice(0, 80);
+      target.name = name.slice(0, 80);
     });
   }
 
@@ -309,7 +308,6 @@ export default function Builder() {
       toast({ title: "Keep at least one page", variant: "destructive" });
       return;
     }
-    if (!window.confirm('Delete "' + page.name + '"?')) return;
     const index = definition.pages.findIndex((item) => item.id === page.id);
     mutate((next) => {
       next.pages = next.pages.filter((item) => item.id !== page.id);
@@ -552,7 +550,7 @@ export default function Builder() {
           <section>
             <div className="iabt-section-title">
               <span>Pages</span>
-              <button type="button" onClick={addPage} title="Add page"><Plus className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setPageDialog({ mode: "create" })} title="Add page"><Plus className="h-4 w-4" /></button>
             </div>
             <div className="iabt-page-list">
               {definition.pages.map((page, index) => (
@@ -564,9 +562,15 @@ export default function Builder() {
                   <div className="iabt-row-actions">
                     <button type="button" onClick={() => reorderPage(page, -1)} disabled={index === 0} title="Move up"><ChevronUp /></button>
                     <button type="button" onClick={() => reorderPage(page, 1)} disabled={index === definition.pages.length - 1} title="Move down"><ChevronDown /></button>
-                    <button type="button" onClick={() => renamePage(page)} title="Rename">✎</button>
+                    <button type="button" onClick={() => setPageDialog({ mode: "rename", page })} title="Rename">✎</button>
                     <button type="button" onClick={() => duplicatePage(page)} title="Duplicate"><Copy /></button>
-                    <button type="button" onClick={() => deletePage(page)} title="Delete"><Trash2 /></button>
+                    <button type="button" onClick={() => {
+                      if (definition.pages.length === 1) {
+                        toast({ title: "Keep at least one page", variant: "destructive" });
+                        return;
+                      }
+                      setPageDeleteTarget(page);
+                    }} title="Delete"><Trash2 /></button>
                   </div>
                 </div>
               ))}
@@ -757,6 +761,37 @@ export default function Builder() {
           </section>
         </aside>
       </div>
+
+      <NameDialog
+        open={Boolean(pageDialog)}
+        onOpenChange={(open) => { if (!open) setPageDialog(null); }}
+        title={pageDialog?.mode === "rename" ? "Rename page" : "Add a page"}
+        description={pageDialog?.mode === "rename"
+          ? "Use a concise label that will be easy to recognize in navigation."
+          : "Add another screen to this app flow. IABT will create a unique route automatically."}
+        label="Page name"
+        initialValue={pageDialog?.mode === "rename" ? pageDialog.page?.name || "" : "New Page"}
+        placeholder="Inventory, Checkout, Customer details…"
+        submitLabel={pageDialog?.mode === "rename" ? "Save name" : "Add page"}
+        maxLength={80}
+        onSubmit={(value) => {
+          if (pageDialog?.mode === "rename") renamePage(pageDialog.page, value);
+          else addPage(value);
+          setPageDialog(null);
+        }}
+      />
+
+      <ConfirmActionDialog
+        open={Boolean(pageDeleteTarget)}
+        onOpenChange={(open) => { if (!open) setPageDeleteTarget(null); }}
+        title="Delete this page?"
+        description={pageDeleteTarget ? `“${pageDeleteTarget.name}” will be removed. Buttons that point to its route will be disconnected. You can still use Undo immediately afterward.` : ""}
+        confirmLabel="Delete page"
+        onConfirm={() => {
+          if (pageDeleteTarget) deletePage(pageDeleteTarget);
+          setPageDeleteTarget(null);
+        }}
+      />
     </div>
   );
 }
