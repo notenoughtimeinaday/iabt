@@ -1,0 +1,133 @@
+{
+  "name": "GenerationJob",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "user_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "plan_id": {
+      "type": "string"
+    },
+    "conversation_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "intent": {
+      "type": "string"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "prepare",
+        "render"
+      ],
+      "default": "render"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "provider_model": {
+      "type": "string"
+    },
+    "provider_job_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "running",
+        "waiting_provider",
+        "succeeded",
+        "failed",
+        "canceled",
+        "needs_setup"
+      ],
+      "default": "queued"
+    },
+    "progress": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 0
+    },
+    "stage": {
+      "type": "string"
+    },
+    "input_spec": {
+      "type": "object"
+    },
+    "quote_snapshot": {
+      "type": "object"
+    },
+    "artifact_id": {
+      "type": "string"
+    },
+    "output_url": {
+      "type": "string"
+    },
+    "error_message": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "poll_after": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "user_id",
+    "user_email",
+    "plan_id",
+    "intent",
+    "mode",
+    "provider",
+    "status",
+    "progress",
+    "stage",
+    "input_spec",
+    "quote_snapshot"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
