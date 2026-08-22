@@ -2,6 +2,25 @@
   "name": "AiUsage",
   "type": "object",
   "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Base44 user ID for server-owned quota accounting"
+    },
+    "user_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "usage_kind": {
+      "type": "string",
+      "enum": [
+        "planning",
+        "app_generation",
+        "image_generation",
+        "content_generation",
+        "media_preproduction"
+      ],
+      "default": "app_generation"
+    },
     "window_key": {
       "type": "string",
       "description": "Per-user UTC usage bucket, prefixed with hour: or month:"
@@ -16,19 +35,37 @@
     }
   },
   "required": [
+    "user_id",
     "window_key",
     "request_count"
   ],
   "rls": {
-    "create": true,
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
     "read": {
-      "created_by": "{{user.email}}"
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
     },
     "update": {
-      "created_by": "{{user.email}}"
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
-      "created_by": "{{user.email}}"
+      "user_condition": {
+        "role": "admin"
+      }
     }
   }
 }
