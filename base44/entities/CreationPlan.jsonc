@@ -1,0 +1,207 @@
+{
+  "name": "CreationPlan",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Owning Base44 user ID"
+    },
+    "user_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "conversation_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "request_text": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 140
+    },
+    "intent": {
+      "type": "string",
+      "enum": [
+        "app",
+        "website",
+        "image",
+        "video",
+        "audio",
+        "document",
+        "code",
+        "design",
+        "gcode",
+        "automation",
+        "other"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "needs_input",
+        "quoted",
+        "approved",
+        "executing",
+        "completed",
+        "failed",
+        "canceled",
+        "expired"
+      ],
+      "default": "quoted"
+    },
+    "capability_id": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "provider_ready": {
+      "type": "boolean",
+      "default": false
+    },
+    "render_ready": {
+      "type": "boolean",
+      "default": false
+    },
+    "fallback_available": {
+      "type": "boolean",
+      "default": true
+    },
+    "assistant_summary": {
+      "type": "string"
+    },
+    "normalized_spec": {
+      "type": "object"
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": []
+    },
+    "deliverables": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "success_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "clarification_questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "credit_cost": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "provider_cost_cents": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "platform_fee_cents": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "total_estimated_cost_cents": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "USD"
+      ],
+      "default": "USD"
+    },
+    "pricing_version": {
+      "type": "string"
+    },
+    "quote_expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "consent_summary": {
+      "type": "string"
+    },
+    "approved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "execution_job_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_id",
+    "user_email",
+    "request_text",
+    "title",
+    "intent",
+    "status",
+    "capability_id",
+    "provider",
+    "normalized_spec",
+    "steps",
+    "deliverables",
+    "credit_cost",
+    "total_estimated_cost_cents",
+    "currency",
+    "pricing_version",
+    "quote_expires_at"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
