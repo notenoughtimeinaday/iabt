@@ -15,7 +15,12 @@ async function verifyProjectAccess(base44: any, user: any, projectId: string) {
   if (!projectId) return;
   try {
     const project = await base44.entities.Project.get(projectId);
-    if (!project || (user.role !== "admin" && String(project.created_by || "") !== String(user.email))) {
+    const ownsProject = project && (
+      user.role === "admin" ||
+      String(project.user_id || "") === String(user.id) ||
+      String(project.created_by || "") === String(user.email)
+    );
+    if (!ownsProject) {
       throw new Error("Project not found.");
     }
   } catch {
