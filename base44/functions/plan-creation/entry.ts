@@ -70,6 +70,41 @@ Deno.serve(async (req) => {
     const quote = quoteFor(details.intent, details.normalized_spec);
     const capability = quote.capability;
     const service = base44.asServiceRole;
+    const videoRenderUnavailable = details.intent === "video" && !capability.render_ready;
+    const planSummary = videoRenderUnavailable
+      ? "JERICHO can prepare the complete video production package, but the installed Ray 3.2 renderer is not active yet. Approving this plan will not create or imply an MP4."
+      : details.assistant_summary;
+    const planSteps = videoRenderUnavailable
+      ? [
+          {
+            order: 1,
+            title: "Production direction",
+            description: "Create the concept, script, shot list, motion, camera, lighting, pacing, and sound direction.",
+            tool: "JERICHO planner",
+            deliverable: "Video direction package",
+          },
+          {
+            order: 2,
+            title: "Renderer-ready package",
+            description: "Create storyboard prompts and a final render prompt for the installed video adapter. No MP4 is produced until the renderer is active.",
+            tool: "IABT preproduction",
+            deliverable: "Storyboard-ready preproduction document",
+          },
+        ]
+      : details.steps;
+    const planDeliverables = videoRenderUnavailable
+      ? [
+          "Video direction package",
+          "Storyboard-ready preproduction document",
+          "Final render prompt for a compatible video renderer",
+        ]
+      : details.deliverables;
+    const planWarnings = videoRenderUnavailable
+      ? Array.from(new Set([
+          ...(details.warnings || []),
+          "VIDEO RENDERER OFFLINE: this approval creates preproduction only. No MP4 will be generated until the Ray 3.2 provider credential and paid-media gates are enabled.",
+        ]))
+      : details.warnings;
 
     const plan = await service.entities.CreationPlan.create({
       user_id: user.id,
@@ -85,13 +120,13 @@ Deno.serve(async (req) => {
       provider_ready: capability.provider_ready,
       render_ready: capability.render_ready,
       fallback_available: capability.fallback_available,
-      assistant_summary: details.assistant_summary,
+      assistant_summary: planSummary,
       normalized_spec: details.normalized_spec,
-      steps: details.steps,
-      deliverables: details.deliverables,
+      steps: planSteps,
+      deliverables: planDeliverables,
       success_criteria: details.success_criteria,
       clarification_questions: details.clarification_questions,
-      warnings: details.warnings,
+      warnings: planWarnings,
       credit_cost: quote.credit_cost,
       provider_cost_cents: quote.provider_cost_cents,
       platform_fee_cents: quote.platform_fee_cents,
