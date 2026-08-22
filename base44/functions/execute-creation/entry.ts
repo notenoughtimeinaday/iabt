@@ -250,13 +250,22 @@ Deno.serve(async (req) => {
       return responseForExisting(existing, artifact);
     }
 
-    if (["canceled", "expired"].includes(String(plan.status))) {
-      return Response.json({ error: "This creation plan can no longer be executed. Request a new plan." }, { status: 409 });
+    if (String(plan.status) === "expired") {
+      return Response.json({ error: "This quote expired. Request a new plan before execution." }, { status: 410 });
+    }
+    if (String(plan.status) === "canceled") {
+      return Response.json({ error: "This creation plan was canceled. Request a new plan." }, { status: 409 });
     }
     const expiresAt = Date.parse(String(plan.quote_expires_at || ""));
     if (!Number.isFinite(expiresAt) || Date.now() > expiresAt) {
       await service.entities.CreationPlan.update(plan.id, { status: "expired" });
-      return Response.json({ error: "This quote expired. Request a new plan before execution." }, { status: 409 });
+      return Response.json({ error: "This quote expired. Request a new plan before execution." }, { status: 410 });
+    }
+    if (Array.isArray(plan.clarification_questions) && plan.clarification_questions.length > 0) {
+      return Response.json({
+        error: "This plan still needs required information before it can be approved.",
+        clarification_questions: plan.clarification_questions,
+      }, { status: 422 });
     }
 
     const now = new Date().toISOString();
@@ -395,14 +404,30 @@ Deno.serve(async (req) => {
 
     if (plan.intent === "app" || plan.intent === "website") {
       const definition = await generateAppDefinition(base44, plan.request_text, plan.normalized_spec);
+      const project = await saveGeneratedProject(service, user, plan, definition);
+      plan = await service.entities.CreationPlan.update(plan.id, {
+        status: "executing",
+        project_id: project.id,
+        execution_job_id: job.id,
+      });
+      job = await service.entities.GenerationJob.update(job.id, {
+        project_id: project.id,
+        stage: "Project created; securing AppDefinition artifact",
+        progress: 90,
+      });
       return await finish({
         name: clean(plan.title, 160) + " — AppDefinition.json",
         kind: "app",
         mime_type: "application/vnd.iabt+json",
         content: JSON.stringify(definition, null, 2),
         provider: "base44-managed-ai",
-        metadata: { schema_version: definition.schemaVersion, page_count: definition.pages.length },
-      }, "IABT created an importable AppDefinition with pages and the requested application blueprint.");
+        metadata: {
+          schema_version: definition.schemaVersion,
+          page_count: definition.pages.length,
+          project_id: project.id,
+          builder_ready: true,
+        },
+      }, "IABT created a Builder-ready project and an importable AppDefinition artifact.");
     }
 
     if (plan.intent === "image" || plan.intent === "design") {
