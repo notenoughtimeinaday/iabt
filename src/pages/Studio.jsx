@@ -449,8 +449,14 @@ export default function Studio() {
         content: request,
         custom_context: [{
           type: "iabt_creation_request",
-          message: "The user selected " + mode + " mode. Plan and quote first. Never execute without explicit approval.",
-          data: { mode, approval_required: true, surface: "creator_studio" },
+          message: "The user selected " + mode + " mode. Use this exact conversation_id when calling plan-creation: " + target.id + ". Plan and quote first. Never execute without explicit approval.",
+          data: {
+            mode,
+            selected_mode: mode,
+            conversation_id: target.id,
+            approval_required: true,
+            surface: "creator_studio",
+          },
         }],
       });
       setMessages((current) => [...current.filter((item) => item.id !== sent.id), sent]);
