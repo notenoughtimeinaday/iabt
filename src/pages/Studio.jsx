@@ -111,7 +111,7 @@ function titleFromConversation(conversation) {
   const first = conversation?.messages?.find((message) => message.role === "user");
   const text = contentText(first?.content).trim();
   if (text) return text.length > 46 ? text.slice(0, 46) + "…" : text;
-  return "New creation";
+  return "New project conversation";
 }
 
 function formatMoney(cents = 0) {
@@ -372,7 +372,7 @@ export default function Studio() {
           setConversations([created]);
         }
       } catch (error) {
-        if (active) setLoadError(errorMessage(error, "Creator Studio could not start."));
+        if (active) setLoadError(errorMessage(error, "The AI project operator could not start."));
       } finally {
         if (active) setLoading(false);
       }
@@ -501,8 +501,8 @@ export default function Studio() {
     return (
       <div className="creator-loading">
         <div className="creator-loading-mark"><Sparkles /></div>
-        <strong>Opening Creator Studio</strong>
-        <span>Loading your conversations, capabilities and deliverables…</span>
+        <strong>Opening your AI project operator</strong>
+        <span>Loading your project context, capabilities and deliverables…</span>
       </div>
     );
   }
@@ -527,7 +527,7 @@ export default function Studio() {
         <div className="creator-sidebar-brand">
           <Link to="/" className="creator-brand-link" aria-label="Return to IABT home">
             <span className="creator-brand-mark">IA</span>
-            <span><strong>IABT</strong><small>Creator Studio</small></span>
+            <span><strong>IABT</strong><small>AI project operator</small></span>
           </Link>
           <button type="button" className="creator-mobile-close" onClick={() => setMobileNavOpen(false)} aria-label="Close menu">
             <X />
@@ -536,11 +536,11 @@ export default function Studio() {
 
         <Button className="creator-new-button" onClick={createConversation} disabled={conversationBusy}>
           {conversationBusy ? <Loader2 className="animate-spin" /> : <MessageSquarePlus />}
-          New creation
+          New project conversation
         </Button>
 
         <div className="creator-history-heading">
-          <span>Recent conversations</span>
+          <span>Project conversations</span>
           <small>{conversations.length}</small>
         </div>
         <nav className="creator-history" aria-label="Creation conversations">
@@ -582,7 +582,7 @@ export default function Studio() {
           </button>
           <div className="creator-topbar-title">
             <span className="creator-live-dot" />
-            <div><strong>Creator Studio</strong><small>Describe it. Review the plan. Approve production.</small></div>
+            <div><strong>AI Project Operator</strong><small>One conversation from idea through verified deliverables.</small></div>
           </div>
           <div className="creator-topbar-actions">
             <span className="creator-credit-chip"><Sparkles /> {remainingCredits || monthlyLimit || 0} credits</span>
@@ -595,7 +595,7 @@ export default function Studio() {
           {loadError ? (
             <div className="creator-error-state">
               <Bot />
-              <h1>Creator Studio needs attention</h1>
+              <h1>Your AI project operator needs attention</h1>
               <p>{loadError}</p>
               <Button onClick={() => window.location.reload()}><RefreshCw /> Try again</Button>
             </div>
@@ -607,11 +607,12 @@ export default function Studio() {
               transition={{ duration: 0.35 }}
             >
               <div className="creator-welcome-orb"><WandSparkles /></div>
-              <p className="creator-kicker">A production workspace, not another page generator</p>
-              <h1>What would you like to create?</h1>
+              <p className="creator-kicker">IABT · AI project operator</p>
+              <h1>One conversation. From idea through verified deliverables.</h1>
               <p className="creator-welcome-copy">
-                Tell IABT the result you want. It will develop a detailed plan, identify the right tools,
-                disclose the cost and only begin production after you approve.
+                IABT keeps the context, plans the work, coordinates connected tools and services, completes
+                authorized in-scope steps, and verifies the result. It asks only when it needs your decision,
+                credentials, or explicit approval.
               </p>
 
               <div className="creator-mode-grid" role="list" aria-label="Creation modes">
@@ -664,7 +665,7 @@ export default function Studio() {
                     </div>
                     <div className="creator-message-body">
                       <div className="creator-message-meta">
-                        <strong>{message.role === "user" ? "You" : "IABT Creator"}</strong>
+                        <strong>{message.role === "user" ? "You" : "IABT Operator"}</strong>
                         <span>{formatDate(message.created_date)}</span>
                       </div>
                       <p>{contentText(message.content)}</p>
@@ -685,7 +686,7 @@ export default function Studio() {
               {assistantWorking && (
                 <div className="creator-message creator-message-assistant creator-thinking">
                   <div className="creator-message-avatar"><Sparkles /></div>
-                  <div><span /><span /><span /><small>IABT is developing the plan and quote…</small></div>
+                  <div><span /><span /><span /><small>IABT is planning the work and checking connected capabilities…</small></div>
                 </div>
               )}
               <div ref={messageEndRef} />
@@ -710,7 +711,7 @@ export default function Studio() {
               maxLength={12000}
             />
             <div className="creator-composer-foot">
-              <span><Check /> Planning is safe. Production always requires your approval.</span>
+              <span><Check /> IABT plans first. Decisions, credentials and approvals stay yours.</span>
               <Button type="submit" disabled={!prompt.trim() || sending || conversationBusy}>
                 {sending ? <Loader2 className="animate-spin" /> : <Sparkles />}
                 Develop plan
