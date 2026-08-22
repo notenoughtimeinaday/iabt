@@ -64,20 +64,29 @@ function videoSettings(spec: any = {}) {
 
 export function normalizeIntent(value: unknown, requestText = "") {
   const candidate = String(value || "").trim().toLowerCase();
-  if (INTENTS.includes(candidate)) return candidate;
   const request = String(requestText || "").toLowerCase();
-  if (/\b(g-?code|cnc|toolpath|3d print|laser cut|router path)\b/.test(request)) return "gcode";
-  if (/\b(video|movie|film|animation|animated|clip|reel|trailer)\b/.test(request)) return "video";
-  if (/\b(song|music|audio|voiceover|voice-over|podcast|soundtrack|sound effect)\b/.test(request)) return "audio";
-  if (/\b(image|picture|photo|photograph|artwork|illustration|logo|poster|painting)\b/.test(request)) return "image";
-  if (/\b(floor plan|blueprint|layout|visual design|mockup|wireframe)\b/.test(request)) return "design";
-  if (/\b(code|script|library|package|api client|program)\b/.test(request)) return "code";
-  if (/\b(automation|workflow|integration|scheduled task|bot)\b/.test(request)) return "automation";
-  if (/\b(app|application|website|web site|portal|dashboard|software|saas)\b/.test(request)) {
-    return /\b(website|web site)\b/.test(request) ? "website" : "app";
+  let inferred = "other";
+  if (/\b(g-?code|cnc|toolpath|3d print|laser cut|router path)\b/.test(request)) inferred = "gcode";
+  else if (/\b(video|movie|film|animation|animated|clip|reel|trailer)\b/.test(request)) inferred = "video";
+  else if (/\b(song|music|audio|voiceover|voice-over|podcast|soundtrack|sound effect)\b/.test(request)) inferred = "audio";
+  else if (/\b(image|picture|photo|photograph|artwork|illustration|logo|poster|painting)\b/.test(request)) inferred = "image";
+  else if (/\b(floor plan|blueprint|layout|visual design|mockup|wireframe)\b/.test(request)) inferred = "design";
+  else if (/\b(code|script|library|package|api client|program)\b/.test(request)) inferred = "code";
+  else if (/\b(automation|workflow|integration|scheduled task|bot)\b/.test(request)) inferred = "automation";
+  else if (/\b(app|application|website|web site|portal|dashboard|software|saas)\b/.test(request)) {
+    inferred = /\b(website|web site)\b/.test(request) ? "website" : "app";
+  } else if (/\b(document|report|proposal|resume|letter|manual|guide|book|article|plan)\b/.test(request)) {
+    inferred = "document";
   }
-  if (/\b(document|report|proposal|resume|letter|manual|guide|book|article|plan)\b/.test(request)) return "document";
-  return "other";
+
+  if (INTENTS.includes(candidate)) {
+    const appNounPresent = /\b(app|application|website|web site|portal|dashboard|software|saas)\b/.test(request);
+    if ((candidate === "app" || candidate === "website") && !appNounPresent && inferred !== "other") {
+      return inferred;
+    }
+    return candidate;
+  }
+  return inferred;
 }
 
 function clampText(value: unknown, max: number, fallback = "") {
