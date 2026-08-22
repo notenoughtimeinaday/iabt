@@ -1,0 +1,184 @@
+{
+  "name": "AutomationRunbook",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Owning Base44 user ID"
+    },
+    "user_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 180
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1600
+    },
+    "objective_pattern": {
+      "type": "string",
+      "maxLength": 1200
+    },
+    "target_system": {
+      "type": "string",
+      "maxLength": 240
+    },
+    "adapter_id": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "execution_mode": {
+      "type": "string",
+      "enum": [
+        "api_first",
+        "browser_fallback",
+        "hybrid",
+        "manual_handoff"
+      ],
+      "default": "api_first"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "validated",
+        "proven",
+        "paused",
+        "retired"
+      ],
+      "default": "draft"
+    },
+    "version": {
+      "type": "string",
+      "default": "1.0"
+    },
+    "fingerprint": {
+      "type": "string",
+      "description": "Deterministic workflow identity for idempotency; never a credential"
+    },
+    "allowed_domains": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "required_scopes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "credential_mode": {
+      "type": "string",
+      "enum": [
+        "oauth",
+        "secret_reference",
+        "customer_gateway",
+        "none"
+      ]
+    },
+    "step_contracts": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": []
+    },
+    "approval_policy": {
+      "type": "object"
+    },
+    "cost_policy": {
+      "type": "object"
+    },
+    "retry_policy": {
+      "type": "object"
+    },
+    "verification_contract": {
+      "type": "object"
+    },
+    "fallback_contract": {
+      "type": "object"
+    },
+    "recording_source": {
+      "type": "string",
+      "enum": [
+        "api_trace",
+        "browser_trace",
+        "hybrid_trace",
+        "manual_contract"
+      ]
+    },
+    "source_run_id": {
+      "type": "string"
+    },
+    "success_count": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "failure_count": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "last_verified_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_run_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "terms_reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "user_id",
+    "user_email",
+    "name",
+    "objective_pattern",
+    "target_system",
+    "adapter_id",
+    "execution_mode",
+    "status",
+    "version",
+    "fingerprint",
+    "credential_mode"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
