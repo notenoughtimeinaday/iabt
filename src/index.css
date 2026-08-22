@@ -3963,3 +3963,40 @@
     text-align: left;
   }
 }
+
+.creator-fabric-strip {
+  width: min(100%, 760px);
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 18px auto 2px;
+  padding: 11px 13px;
+  border: 1px solid rgba(111, 69, 210, 0.13);
+  border-radius: 14px;
+  color: #5e2bc4;
+  background: linear-gradient(145deg, rgba(249, 247, 255, 0.96), rgba(243, 248, 251, 0.94));
+  text-align: left;
+}
+
+.creator-fabric-strip > svg {
+  width: 18px;
+  justify-self: center;
+}
+
+.creator-fabric-strip strong,
+.creator-fabric-strip span {
+  display: block;
+}
+
+.creator-fabric-strip strong {
+  color: #3d2a65;
+  font-size: 10px;
+}
+
+.creator-fabric-strip span {
+  margin-top: 2px;
+  color: #7a7487;
+  font-size: 8px;
+  line-height: 1.5;
+}
