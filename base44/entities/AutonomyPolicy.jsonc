@@ -1,0 +1,150 @@
+{
+  "name": "AutonomyPolicy",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Owning Base44 user ID"
+    },
+    "user_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "guided",
+        "bounded_autonomous",
+        "managed_autonomous"
+      ],
+      "default": "bounded_autonomous"
+    },
+    "allowed_action_classes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "read",
+        "plan",
+        "internal_reversible_write",
+        "test",
+        "create_artifact"
+      ]
+    },
+    "always_confirm_action_classes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [
+        "external_representation",
+        "financial",
+        "destructive",
+        "access_change",
+        "sensitive_transmission",
+        "machine_control"
+      ]
+    },
+    "allowed_domains": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "blocked_domains": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "max_cost_per_run_cents": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "max_cost_per_day_cents": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "max_runtime_minutes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1440,
+      "default": 30
+    },
+    "max_retry_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10,
+      "default": 2
+    },
+    "require_verified_runbook": {
+      "type": "boolean",
+      "default": true
+    },
+    "allow_api_execution": {
+      "type": "boolean",
+      "default": true
+    },
+    "allow_browser_fallback": {
+      "type": "boolean",
+      "default": false
+    },
+    "allow_scheduled_runs": {
+      "type": "boolean",
+      "default": false
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "paused"
+      ],
+      "default": "active"
+    },
+    "version": {
+      "type": "string",
+      "default": "1.0"
+    }
+  },
+  "required": [
+    "user_id",
+    "user_email",
+    "mode",
+    "status",
+    "version"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
