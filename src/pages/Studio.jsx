@@ -45,7 +45,7 @@ const MODE_OPTIONS = [
   { id: "app", label: "App", icon: AppWindow, description: "Product flows, data and working screens" },
   { id: "website", label: "Website", icon: Globe2, description: "Marketable sites with a clear purpose" },
   { id: "image", label: "Image", icon: ImageIcon, description: "Original visual concepts and assets" },
-  { id: "video", label: "Video", icon: Video, description: "Rendered video or a complete production package" },
+  { id: "video", label: "Video", icon: Video, description: "MP4 rendering when active · preproduction otherwise" },
   { id: "audio", label: "Audio", icon: Music2, description: "Audio direction, scripts and production assets" },
   { id: "document", label: "Document", icon: FileText, description: "Detailed, useful written deliverables" },
   { id: "code", label: "Code", icon: Code2, description: "Implementation-ready source and technical plans" },
@@ -654,6 +654,8 @@ export default function Studio() {
                   const Icon = item.icon;
                   const capability = capabilityForMode(capabilities, item.id);
                   const ready = capability?.provider_ready ?? capability?.ready;
+                  const renderReady = capability?.render_ready;
+                  const preparationOnly = ready === true && renderReady === false;
                   return (
                     <button
                       type="button"
@@ -663,8 +665,9 @@ export default function Studio() {
                     >
                       <span className="creator-mode-icon"><Icon /></span>
                       <span><strong>{item.label}</strong><small>{item.description}</small></span>
-                      {ready === true && <i className="is-ready" title="Rendering provider ready" />}
-                      {ready === false && <i className="is-prepare" title="Preparation package available" />}
+                      {ready === true && renderReady !== false && <i className="is-ready" title="Final output provider ready" />}
+                      {preparationOnly && <i className="is-prepare" title="Preproduction only — final renderer offline" />}
+                      {ready === false && <i className="is-prepare" title="Provider setup required" />}
                     </button>
                   );
                 })}
@@ -787,7 +790,7 @@ export default function Studio() {
                 <span className={activePlan.provider_ready ? "is-ready" : "is-limited"}>
                   {activePlan.provider_ready ? <CheckCircle2 /> : <Clock3 />}
                 </span>
-                <p><strong>{activePlan.provider_ready ? "Provider ready" : "Rendering not connected"}</strong><small>{activePlan.provider || "IABT managed production"}</small></p>
+                <p><strong>{activePlan.provider_ready ? (activePlan.render_ready ? "Production provider ready" : "Preproduction provider ready") : "Provider setup required"}</strong><small>{activePlan.provider || "IABT managed production"}</small></p>
               </div>
               <div>
                 <span className={activePlan.render_ready ? "is-ready" : "is-prepare"}>{activePlan.render_ready ? <Play /> : <FileText />}</span>
@@ -797,11 +800,12 @@ export default function Studio() {
 
             {(!activePlan.provider_ready || !activePlan.render_ready) && (
               <div className="creator-honesty-note">
-                <FileText />
+                {activePlan.intent === "video" ? <Video /> : <FileText />}
                 <p>
-                  <strong>No pretend output.</strong>
-                  Approval creates the complete preproduction package described below. It will not label a script,
-                  storyboard or plan as a finished {activePlan.intent}.
+                  <strong>{activePlan.intent === "video" ? "VIDEO RENDERER OFFLINE — no MP4 will be created." : "No pretend output."}</strong>
+                  {activePlan.intent === "video"
+                    ? " JERICHO will create the complete renderer-ready production package only. Ray 3.2 is installed in IABT, but its provider credential and paid-media gates must be enabled before final video rendering becomes available."
+                    : <> Approval creates the complete preproduction package described below. It will not label a script, storyboard or plan as a finished {activePlan.intent}.</>}
                 </p>
               </div>
             )}
@@ -868,9 +872,9 @@ export default function Studio() {
                   disabled={!quoteAccepted || approvalBusy || quoteExpired || activePlan.clarification_questions?.length > 0}
                 >
                   {approvalBusy ? <Loader2 className="animate-spin" /> : executionMode === "render" ? <Play /> : <FileText />}
-                  {executionMode === "render" ? "Approve & produce" : "Approve preparation package"}
+                  {executionMode === "render" ? "Approve & produce" : activePlan.intent === "video" ? "Approve preproduction only" : "Approve preparation package"}
                 </Button>
-                <small>Approval is recorded. IABT will not silently start a paid tool.</small>
+                <small>{activePlan.intent === "video" && !activePlan.render_ready ? "This approval cannot generate an MP4 while the renderer is offline." : "Approval is recorded. IABT will not silently start a paid tool."}</small>
               </div>
             )}
           </motion.section>
