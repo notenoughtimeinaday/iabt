@@ -739,10 +739,21 @@ export async function getLumaGeneration(generationId: string) {
 }
 
 export function lumaVideoOutput(generation: any) {
-  const output = Array.isArray(generation?.output)
-    ? generation.output.find((item: any) => item?.type === "video" && /^https:\/\//i.test(String(item?.url || "")))
-    : null;
-  return output ? { url: String(output.url), type: "video" } : null;
+  const candidates = [
+    ...(Array.isArray(generation?.output) ? generation.output : []),
+    generation?.output,
+    generation?.assets?.video,
+    generation?.video,
+  ];
+  for (const candidate of candidates) {
+    const url = typeof candidate === "string"
+      ? candidate
+      : candidate?.url || candidate?.video_url || candidate?.download_url;
+    if (/^https:\/\//i.test(String(url || ""))) {
+      return { url: String(url), type: "video" };
+    }
+  }
+  return null;
 }
 
 export async function persistRemoteFile(base44: any, url: string, name: string, expectedType: string) {
