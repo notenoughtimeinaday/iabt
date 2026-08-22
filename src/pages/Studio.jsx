@@ -27,6 +27,7 @@ import {
   Menu,
   MessageSquarePlus,
   Music2,
+  Network,
   Palette,
   Play,
   RefreshCw,
@@ -188,6 +189,7 @@ export default function Studio() {
   const [artifacts, setArtifacts] = useState([]);
   const [artifactAccessUrls, setArtifactAccessUrls] = useState({});
   const [capabilities, setCapabilities] = useState([]);
+  const [connectionFabric, setConnectionFabric] = useState(null);
   const [entitlement, setEntitlement] = useState(null);
   const [monthlyUsed, setMonthlyUsed] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -330,7 +332,7 @@ export default function Studio() {
       setLoading(true);
       setLoadError("");
       try {
-        const [conversationRows, capabilityResponse, entitlementResponse] = await Promise.all([
+        const [conversationRows, capabilityResponse, fabricResponse, entitlementResponse] = await Promise.all([
           base44.agents.listConversations({
             q: { agent_name: CREATOR_AGENT },
             sort: "-updated_date",
@@ -338,6 +340,7 @@ export default function Studio() {
             skip: 0,
           }),
           base44.functions.invoke("get-creation-capabilities", {}).catch(() => null),
+          base44.functions.invoke("get-connection-fabric", {}).catch(() => null),
           base44.functions.invoke("get-account-entitlement", {}).catch(() => null),
         ]);
         if (!active) return;
@@ -345,6 +348,9 @@ export default function Studio() {
         setConversations(conversationRows || []);
         const capabilityPayload = capabilityResponse?.data || capabilityResponse;
         setCapabilities(Array.isArray(capabilityPayload?.capabilities) ? capabilityPayload.capabilities : []);
+
+        const fabricPayload = fabricResponse?.data || fabricResponse;
+        setConnectionFabric(fabricPayload?.fabric || null);
 
         const entitlementPayload = entitlementResponse?.data || entitlementResponse;
         setEntitlement(entitlementPayload?.entitlement || null);
@@ -614,12 +620,23 @@ export default function Studio() {
             >
               <div className="creator-welcome-orb"><WandSparkles /></div>
               <p className="creator-kicker">IABT · AI project operator</p>
-              <h1>One conversation. From idea through verified deliverables.</h1>
+              <h1>One conversation. Any connected system. Verified deliverables.</h1>
               <p className="creator-welcome-copy">
-                IABT keeps the context, plans the work, coordinates connected tools and services, completes
-                authorized in-scope steps, and verifies the result. It asks only when it needs your decision,
-                credentials, or explicit approval.
+                IABT preserves your objective while it discovers and routes work through the best authorized
+                adapter available. New models, services, enterprise systems, and secure gateways can be added
+                without changing how you work with the operator.
               </p>
+              <div className="creator-fabric-strip">
+                <Network />
+                <div>
+                  <strong>Provider-neutral connection fabric</strong>
+                  <span>
+                    {connectionFabric?.adapters?.length
+                      ? connectionFabric.adapters.length + " registered adapter paths · readiness verified before use"
+                      : "Models · media · business systems · enterprise gateways · custom tools"}
+                  </span>
+                </div>
+              </div>
 
               <div className="creator-mode-grid" role="list" aria-label="Creation modes">
                 {MODE_OPTIONS.map((item) => {
