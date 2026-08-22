@@ -11,7 +11,6 @@ import {
   ArchiveRestore,
   ArrowRight,
   Cloud,
-  Code2,
   Copy,
   CreditCard,
   FolderOpen,
