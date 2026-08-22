@@ -3663,3 +3663,110 @@
     transform: none;
   }
 }
+
+/* AI project operator workflow */
+.iabt-operator-flow {
+  margin-top: 26px;
+  padding: clamp(24px, 4vw, 40px);
+  border: 1px solid rgba(118, 93, 172, 0.15);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 96% 4%, rgba(124, 58, 237, 0.08), transparent 30%),
+    rgba(255, 255, 255, 0.82);
+  box-shadow: 0 20px 58px rgba(61, 52, 96, 0.075);
+  backdrop-filter: blur(16px);
+}
+
+.iabt-operator-flow-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(300px, 1.1fr);
+  align-items: end;
+  gap: clamp(24px, 5vw, 72px);
+}
+
+.iabt-operator-flow-heading h2 {
+  max-width: 560px;
+  margin: 8px 0 0;
+  color: #1c1830;
+  font-size: clamp(1.65rem, 3vw, 2.55rem);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+}
+
+.iabt-operator-flow-heading > p {
+  max-width: 620px;
+  margin: 0;
+  color: #676c7f;
+  font-size: 0.98rem;
+  line-height: 1.7;
+}
+
+.iabt-operator-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.iabt-operator-steps article {
+  min-width: 0;
+  min-height: 172px;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border: 1px solid rgba(116, 99, 155, 0.13);
+  border-radius: 19px;
+  background: rgba(250, 249, 253, 0.88);
+}
+
+.iabt-operator-steps article > span {
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #6d36d0;
+  background: #eee8fb;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+
+.iabt-operator-steps article > strong {
+  margin-top: 18px;
+  color: #28243a;
+  font-size: 0.94rem;
+  letter-spacing: -0.015em;
+}
+
+.iabt-operator-steps article > p {
+  margin: 8px 0 0;
+  color: #74798a;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+  .iabt-operator-flow-heading {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 14px;
+  }
+
+  .iabt-operator-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .iabt-operator-flow {
+    margin-top: 18px;
+    border-radius: 22px;
+  }
+
+  .iabt-operator-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .iabt-operator-steps article {
+    min-height: 0;
+  }
+}
