@@ -190,6 +190,7 @@ export default function Studio() {
   const [artifactAccessUrls, setArtifactAccessUrls] = useState({});
   const [capabilities, setCapabilities] = useState([]);
   const [connectionFabric, setConnectionFabric] = useState(null);
+  const [autonomyProfile, setAutonomyProfile] = useState(null);
   const [entitlement, setEntitlement] = useState(null);
   const [monthlyUsed, setMonthlyUsed] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -332,7 +333,7 @@ export default function Studio() {
       setLoading(true);
       setLoadError("");
       try {
-        const [conversationRows, capabilityResponse, fabricResponse, entitlementResponse] = await Promise.all([
+        const [conversationRows, capabilityResponse, fabricResponse, autonomyResponse, entitlementResponse] = await Promise.all([
           base44.agents.listConversations({
             q: { agent_name: CREATOR_AGENT },
             sort: "-updated_date",
@@ -341,6 +342,7 @@ export default function Studio() {
           }),
           base44.functions.invoke("get-creation-capabilities", {}).catch(() => null),
           base44.functions.invoke("get-connection-fabric", {}).catch(() => null),
+          base44.functions.invoke("get-autonomy-profile", {}).catch(() => null),
           base44.functions.invoke("get-account-entitlement", {}).catch(() => null),
         ]);
         if (!active) return;
@@ -351,6 +353,9 @@ export default function Studio() {
 
         const fabricPayload = fabricResponse?.data || fabricResponse;
         setConnectionFabric(fabricPayload?.fabric || null);
+
+        const autonomyPayload = autonomyResponse?.data || autonomyResponse;
+        setAutonomyProfile(autonomyPayload || null);
 
         const entitlementPayload = entitlementResponse?.data || entitlementResponse;
         setEntitlement(entitlementPayload?.entitlement || null);
@@ -635,6 +640,12 @@ export default function Studio() {
                       ? connectionFabric.adapters.length + " registered adapter paths · readiness verified before use"
                       : "Models · media · business systems · enterprise gateways · custom tools"}
                   </span>
+                  <small>
+                    {readable(autonomyProfile?.autonomy?.mode || "bounded_autonomous")}
+                    {" · "}
+                    {autonomyProfile?.autonomy?.proven_runbook_count || 0} proven runbooks
+                    {" · "}API-first, isolated computer fallback
+                  </small>
                 </div>
               </div>
 
