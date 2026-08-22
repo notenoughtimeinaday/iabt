@@ -302,15 +302,19 @@ Deno.serve(async (req) => {
       started_at: now,
     });
 
-    const concurrentJobs = await service.entities.GenerationJob.filter(
-      { user_id: user.id, plan_id: plan.id, mode },
-      "created_date",
-      10,
+    const lock = await service.entities.CreationPlan.updateMany(
+      { id: plan.id, status: "quoted" },
+      {
+        $set: {
+          status: "approved",
+          approved_at: now,
+          execution_job_id: job.id,
+        },
+      },
     );
-    const canonicalJob = (concurrentJobs || []).find((record: any) =>
-      String(record?.quote_snapshot?.execution_key || "") === key
-    );
-    if (canonicalJob && canonicalJob.id !== job.id) {
+    if (Number(lock?.updated || 0) !== 1) {
+      const lockedPlan = await service.entities.CreationPlan.get(plan.id);
+      const canonicalJobId = clean(lockedPlan?.execution_job_id, 200);
       job = await service.entities.GenerationJob.update(job.id, {
         status: "canceled",
         progress: 100,
@@ -318,7 +322,15 @@ Deno.serve(async (req) => {
         error_message: "A prior execution already owns this approved plan.",
         completed_at: new Date().toISOString(),
       });
-      return responseForExisting(canonicalJob, await loadArtifact(service, canonicalJob));
+      if (canonicalJobId && canonicalJobId !== job.id) {
+        const canonicalJob = await service.entities.GenerationJob.get(canonicalJobId);
+        return responseForExisting(canonicalJob, await loadArtifact(service, canonicalJob));
+      }
+      return Response.json({
+        error: "This plan is already executing or is no longer eligible for execution.",
+        job,
+        billing: billing(),
+      }, { status: 409 });
     }
 
     const priorConsents = await service.entities.ConsentGrant.filter(
