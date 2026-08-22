@@ -1,0 +1,175 @@
+{
+  "name": "AutomationRun",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Owning Base44 user ID"
+    },
+    "user_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "runbook_id": {
+      "type": "string"
+    },
+    "conversation_id": {
+      "type": "string"
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
+    "goal": {
+      "type": "string",
+      "maxLength": 4000
+    },
+    "target_system": {
+      "type": "string",
+      "maxLength": 240
+    },
+    "adapter_id": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "trigger_type": {
+      "type": "string",
+      "enum": [
+        "user",
+        "schedule",
+        "event",
+        "recovery"
+      ],
+      "default": "user"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "preflight",
+        "waiting_authorization",
+        "waiting_confirmation",
+        "running",
+        "verifying",
+        "succeeded",
+        "partial",
+        "failed",
+        "canceled"
+      ],
+      "default": "queued"
+    },
+    "action_class": {
+      "type": "string",
+      "enum": [
+        "read",
+        "plan",
+        "internal_reversible_write",
+        "test",
+        "create_artifact",
+        "external_representation",
+        "financial",
+        "destructive",
+        "access_change",
+        "sensitive_transmission",
+        "machine_control"
+      ]
+    },
+    "approval_grant_id": {
+      "type": "string"
+    },
+    "max_authorized_cost_cents": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "actual_cost_cents": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "current_step": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "step_count": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "attempt_count": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "requires_handoff": {
+      "type": "boolean",
+      "default": false
+    },
+    "handoff_reason": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "evidence_summary": {
+      "type": "object"
+    },
+    "artifact_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "error_message": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "user_id",
+    "user_email",
+    "idempotency_key",
+    "goal",
+    "target_system",
+    "adapter_id",
+    "trigger_type",
+    "status",
+    "action_class"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
