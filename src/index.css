@@ -4001,6 +4001,15 @@
   line-height: 1.5;
 }
 
+.creator-fabric-strip small {
+  display: block;
+  margin-top: 3px;
+  color: #11806a;
+  font-size: 7px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
 /* Reusable autonomy */
 .iabt-autonomy-engine {
   margin-top: 18px;
