@@ -71,8 +71,9 @@ function billing() {
 
 function responseForExisting(job: any, artifact: any) {
   const complete = ["succeeded", "failed", "canceled", "needs_setup"].includes(String(job.status));
+  const ok = !["failed", "canceled", "needs_setup"].includes(String(job.status));
   return Response.json({
-    ok: job.status !== "failed",
+    ok,
     reused: true,
     job,
     artifact: artifact || null,
@@ -81,7 +82,7 @@ function responseForExisting(job: any, artifact: any) {
       ? { message: "The previously approved execution is complete.", artifact_kind: artifact?.kind || null }
       : { message: "The previously approved execution was reused.", status: job.status },
     billing: billing(),
-  }, { status: job.status === "failed" ? 409 : 200 });
+  }, { status: ok ? 200 : 409 });
 }
 
 Deno.serve(async (req) => {
