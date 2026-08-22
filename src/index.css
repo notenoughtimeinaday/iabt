@@ -3770,3 +3770,196 @@
     min-height: 0;
   }
 }
+
+/* Provider-neutral connection fabric */
+.iabt-connection-fabric {
+  position: relative;
+  margin-top: 18px;
+  padding: clamp(26px, 4vw, 44px);
+  overflow: hidden;
+  border: 1px solid rgba(87, 61, 144, 0.16);
+  border-radius: 28px;
+  color: #f8f7ff;
+  background:
+    radial-gradient(circle at 9% 8%, rgba(142, 92, 246, 0.34), transparent 31%),
+    radial-gradient(circle at 95% 90%, rgba(42, 193, 160, 0.14), transparent 31%),
+    linear-gradient(145deg, #151125, #21143d 56%, #16182f);
+  box-shadow: 0 24px 64px rgba(30, 20, 57, 0.16);
+}
+
+.iabt-connection-fabric::after {
+  content: "";
+  width: 260px;
+  height: 260px;
+  position: absolute;
+  top: -130px;
+  right: -90px;
+  border: 1px solid rgba(215, 203, 255, 0.15);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 36px rgba(215, 203, 255, 0.035),
+    0 0 0 72px rgba(215, 203, 255, 0.025);
+  pointer-events: none;
+}
+
+.iabt-connection-heading {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(280px, 0.78fr);
+  align-items: center;
+  gap: 20px;
+}
+
+.iabt-connection-mark {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(225, 214, 255, 0.2);
+  border-radius: 17px;
+  color: #d9c5ff;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.iabt-connection-mark svg {
+  width: 23px;
+}
+
+.iabt-connection-heading .iabt-eyebrow {
+  color: #c7b0f4;
+}
+
+.iabt-connection-heading h2 {
+  max-width: 720px;
+  margin: 8px 0 0;
+  color: #fff;
+  font-size: clamp(1.65rem, 3vw, 2.55rem);
+  line-height: 1.08;
+  letter-spacing: -0.045em;
+}
+
+.iabt-connection-heading > p {
+  margin: 0;
+  color: #b7b2c7;
+  font-size: 0.86rem;
+  line-height: 1.7;
+}
+
+.iabt-connection-lanes {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+  margin-top: 30px;
+}
+
+.iabt-connection-lanes article {
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  border: 1px solid rgba(226, 217, 255, 0.12);
+  border-radius: 19px;
+  background: rgba(255, 255, 255, 0.055);
+  backdrop-filter: blur(10px);
+}
+
+.iabt-connection-lanes article > span {
+  width: fit-content;
+  padding: 5px 8px;
+  border: 1px solid rgba(216, 198, 255, 0.16);
+  border-radius: 999px;
+  color: #cdb8f7;
+  background: rgba(147, 96, 249, 0.12);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+}
+
+.iabt-connection-lanes article > strong {
+  margin-top: 22px;
+  color: #fff;
+  font-size: 0.96rem;
+}
+
+.iabt-connection-lanes article > p {
+  margin: 9px 0 0;
+  color: #aaa5b8;
+  font-size: 0.74rem;
+  line-height: 1.62;
+}
+
+.iabt-connection-rule {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  margin-top: 13px;
+  padding: 15px 17px;
+  border: 1px solid rgba(96, 213, 179, 0.15);
+  border-radius: 15px;
+  color: #d9fff3;
+  background: rgba(48, 187, 151, 0.07);
+}
+
+.iabt-connection-rule strong {
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
+}
+
+.iabt-connection-rule span {
+  color: #aebdb9;
+  font-size: 0.72rem;
+  text-align: right;
+}
+
+@media (max-width: 980px) {
+  .iabt-connection-heading {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .iabt-connection-heading > p {
+    grid-column: 2;
+  }
+
+  .iabt-connection-lanes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .iabt-connection-fabric {
+    border-radius: 22px;
+  }
+
+  .iabt-connection-heading {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .iabt-connection-heading > p {
+    grid-column: 1;
+  }
+
+  .iabt-connection-lanes {
+    grid-template-columns: 1fr;
+  }
+
+  .iabt-connection-lanes article {
+    min-height: 0;
+  }
+
+  .iabt-connection-rule {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .iabt-connection-rule span {
+    text-align: left;
+  }
+}
