@@ -19,6 +19,11 @@ const INTENTS = [
   "other",
 ];
 
+export function selectedCreationIntent(value: unknown) {
+  const candidate = String(value || "").trim().toLowerCase();
+  return INTENTS.includes(candidate) ? candidate : "";
+}
+
 const VIDEO_PRICES_CENTS = {
   "360p": { "5s": 6, "10s": 18 },
   "540p": { "5s": 15, "10s": 45 },
@@ -264,7 +269,8 @@ export function parseStructured(value: any) {
 }
 
 export async function planRequest(base44: any, requestText: string, context: any = null) {
-  const inferredIntent = normalizeIntent("", requestText);
+  const forcedIntent = selectedCreationIntent(context?.selected_mode);
+  const inferredIntent = forcedIntent || normalizeIntent("", requestText);
   const fallback = heuristicDetails(requestText, inferredIntent);
   const contextText = context && typeof context === "object"
     ? JSON.stringify(context).slice(0, 10000)
@@ -273,6 +279,9 @@ export async function planRequest(base44: any, requestText: string, context: any
   const prompt = [
     "You are IABT's multimodal creation planner.",
     "Classify the requested deliverable accurately. Never turn a video, song, image, document, code, design, G-code, or automation request into app pages.",
+    forcedIntent
+      ? "The Studio explicitly selected " + forcedIntent + " mode. Set intent exactly to " + forcedIntent + " and plan that output type even when the request is vague."
+      : "No Studio mode was supplied; infer the requested output type from the request.",
     "Make useful professional assumptions instead of blocking on optional details. Ask clarification only when a missing physical-machine fact would make a G-code draft unsafe.",
     "For video, choose only 5 or 10 seconds, 360p/540p/720p/1080p, and one of 9:16, 3:4, 1:1, 4:3, 16:9, 21:9. Default to 5 seconds, 720p, 16:9.",
     "For floor plans or regulated technical designs, label results conceptual and require qualified review.",
@@ -290,7 +299,7 @@ export async function planRequest(base44: any, requestText: string, context: any
       response_json_schema: PLANNER_SCHEMA,
     });
     const value = parseStructured(raw);
-    const intent = normalizeIntent(value?.intent, requestText);
+    const intent = forcedIntent || normalizeIntent(value?.intent, requestText);
     return {
       ...fallback,
       title: clampText(value?.title, 140, fallback.title),
