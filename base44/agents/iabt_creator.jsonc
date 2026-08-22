@@ -12,6 +12,10 @@
       "description": "Create a server-owned multimodal creation plan and exact expiring quote, linked to the exact Studio conversation and selected output mode when supplied. Planning never counts as execution or approval."
     },
     {
+      "function_name": "get-connection-fabric",
+      "description": "Discover provider-neutral adapter capabilities, current readiness, interface types, route candidates, and authorization requirements without connecting, charging, or executing anything."
+    },
+    {
       "function_name": "get-creation-status",
       "description": "Read the latest owned plan, job, Builder project ID, and sanitized artifact summaries by exact plan_id or conversation_id after Studio execution; never exposes private storage URIs or grants execution rights."
     },
