@@ -85,6 +85,92 @@ function responseForExisting(job: any, artifact: any) {
   }, { status: ok ? 200 : 409 });
 }
 
+async function projectLimitFor(service: any, user: any) {
+  const records = await service.entities.AccountEntitlement.filter(
+    { user_id: user.id },
+    "-updated_date",
+    1,
+  );
+  const entitlement = records?.[0];
+  if (user.role === "admin" && !entitlement) return 0;
+  if (!entitlement || !["active", "trialing"].includes(String(entitlement.status))) return 1;
+  const limit = Number(entitlement.project_limit);
+  return Number.isInteger(limit) && limit >= 0 ? limit : 1;
+}
+
+async function enforceProjectCapacity(service: any, user: any) {
+  const limit = await projectLimitFor(service, user);
+  if (limit === 0) return;
+
+  const byOwnerId = await service.entities.Project.filter(
+    { user_id: user.id },
+    "-created_date",
+    Math.min(1000, limit + 10),
+  );
+  let byCreator: any[] = [];
+  try {
+    byCreator = await service.entities.Project.filter(
+      { created_by: user.email },
+      "-created_date",
+      Math.min(1000, limit + 10),
+    );
+  } catch {
+    // Explicit owner IDs cover all orchestrator-created projects.
+  }
+  const ids = new Set([...(byOwnerId || []), ...(byCreator || [])].map((project: any) => project.id));
+  if (ids.size >= limit) {
+    throw new Response(JSON.stringify({
+      error: "Your current plan project limit has been reached.",
+      code: "project_limit_reached",
+      project_limit: limit,
+      current_projects: ids.size,
+    }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
+async function saveGeneratedProject(service: any, user: any, plan: any, definition: any) {
+  const values = {
+    user_id: user.id,
+    user_email: user.email,
+    title: clean(definition?.app?.name || plan.title, 100) || "IABT Application",
+    description: clean(definition?.app?.description || plan.request_text, 500),
+    category: "Other",
+    status: "ready",
+    color: clean(definition?.theme?.primary, 20) || "#7c3aed",
+    tags: ["IABT Generated", String(plan.intent || "app")].slice(0, 10),
+    schema_version: clean(definition?.schemaVersion, 30) || "1.0",
+    app_definition: definition,
+    last_opened_at: new Date().toISOString(),
+  };
+
+  if (plan.project_id) {
+    let current;
+    try {
+      current = await service.entities.Project.get(plan.project_id);
+    } catch {
+      current = null;
+    }
+    const ownsProject = current && (
+      user.role === "admin" ||
+      String(current.user_id || "") === String(user.id) ||
+      String(current.created_by || "") === String(user.email)
+    );
+    if (!ownsProject) {
+      throw new Response(JSON.stringify({ error: "The target project no longer exists or is not owned by this user." }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return service.entities.Project.update(current.id, values);
+  }
+
+  await enforceProjectCapacity(service, user);
+  return service.entities.Project.create(values);
+}
+
 Deno.serve(async (req) => {
   let service: any = null;
   let plan: any = null;
