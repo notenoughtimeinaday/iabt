@@ -12,6 +12,10 @@ function lumaReady() {
     enabled("IABT_MEDIA_BILLING_READY");
 }
 
+function openAiKeyConfigured() {
+  return Boolean(String(secrets.get("OPENAI_API_KEY") || "").trim());
+}
+
 const INTERFACES = [
   {
     id: "platform",
@@ -66,6 +70,53 @@ function builtInAdapters() {
       version: "1.0",
       enabled: true,
       priority: 10,
+      source: "system",
+    },
+    {
+      adapter_id: "openai-frontier-orchestrator",
+      display_name: "Frontier model orchestrator",
+      description: openAiKeyConfigured()
+        ? "A server-side OpenAI credential is configured. The Responses API adapter and workload evaluations must be completed before this route is marked active."
+        : "Prepared for quality-first routing through the current frontier OpenAI model after a server-side credential, Responses API adapter, cost controls, and representative evaluations are configured.",
+      category: "intelligence",
+      interface_type: "https_api",
+      auth_mode: "secret_reference",
+      status: openAiKeyConfigured() ? "adapter_ready" : "setup_required",
+      capabilities: ["frontier_reasoning", "tool_calling", "persisted_reasoning", "model_routing"],
+      operations: ["plan", "route", "call_tools", "verify"],
+      supported_intents: ["app", "website", "image", "video", "audio", "document", "code", "design", "gcode", "automation", "other"],
+      execution_function: "",
+      pricing_mode: "provider_account",
+      verification_mode: "custom",
+      risk_tier: "medium",
+      version: "gpt-5.6-policy",
+      enabled: true,
+      priority: 15,
+      source: "system",
+      model_policy: {
+        frontier_alias: "gpt-5.6",
+        strategy: "quality_first_with_cost_and_latency_fallbacks",
+        activation_rule: "Benchmark representative IABT workflows and record the actual model/version for every run.",
+      },
+    },
+    {
+      adapter_id: "openai-computer-use-harness",
+      display_name: "Isolated computer-use runner",
+      description: "Prepared for browser and desktop automation through an isolated runner. It is not active until the runtime, domain policy, confirmation controller, audit capture, and recovery tests are connected.",
+      category: "development",
+      interface_type: "https_api",
+      auth_mode: "secret_reference",
+      status: "adapter_ready",
+      capabilities: ["screenshot_inspection", "browser_action", "desktop_action", "runbook_replay", "visual_verification"],
+      operations: ["preflight", "inspect", "act", "verify", "handoff"],
+      supported_intents: ["app", "website", "code", "automation", "other"],
+      execution_function: "",
+      pricing_mode: "provider_account",
+      verification_mode: "custom",
+      risk_tier: "high",
+      version: "computer-harness-1.0",
+      enabled: true,
+      priority: 16,
       source: "system",
     },
     {
