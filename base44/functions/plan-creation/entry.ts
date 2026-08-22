@@ -5,6 +5,7 @@ import {
   publicCapability,
   quoteFor,
   requireUser,
+  selectedCreationIntent,
 } from "../../shared/creation.ts";
 
 function text(value: unknown, max: number) {
@@ -41,11 +42,24 @@ Deno.serve(async (req) => {
     const user = await requireUser(base44);
     const body = await req.json().catch(() => ({}));
     const requestText = text(body?.request_text || body?.request || body?.prompt, 12000);
-    const conversationId = text(body?.conversation_id, 200);
-    const projectId = text(body?.project_id, 200);
-    const context = body?.context && typeof body.context === "object" && !Array.isArray(body.context)
+    const rawContext = body?.context && typeof body.context === "object" && !Array.isArray(body.context)
       ? body.context
       : null;
+    const contextHasMode = rawContext && Object.prototype.hasOwnProperty.call(rawContext, "selected_mode");
+    const selectedMode = selectedCreationIntent(rawContext?.selected_mode);
+    if (contextHasMode && !selectedMode) {
+      return Response.json({ error: "context.selected_mode is not a supported creation mode." }, { status: 400 });
+    }
+    const context = rawContext
+      ? { ...rawContext, ...(selectedMode ? { selected_mode: selectedMode } : {}) }
+      : null;
+    const bodyConversationId = text(body?.conversation_id, 200);
+    const contextConversationId = text(context?.conversation_id, 200);
+    if (bodyConversationId && contextConversationId && bodyConversationId !== contextConversationId) {
+      return Response.json({ error: "conversation_id does not match context.conversation_id." }, { status: 400 });
+    }
+    const conversationId = bodyConversationId || contextConversationId;
+    const projectId = text(body?.project_id, 200);
 
     if (requestText.length < 3) {
       return Response.json({ error: "Describe what you want IABT to create." }, { status: 400 });
