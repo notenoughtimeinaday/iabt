@@ -1,0 +1,173 @@
+{
+  "name": "ConnectionAdapter",
+  "type": "object",
+  "properties": {
+    "adapter_id": {
+      "type": "string",
+      "description": "Stable adapter identifier; never a credential or secret",
+      "maxLength": 120
+    },
+    "display_name": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1200
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "intelligence",
+        "media",
+        "productivity",
+        "business",
+        "data",
+        "development",
+        "enterprise",
+        "machine",
+        "custom"
+      ]
+    },
+    "interface_type": {
+      "type": "string",
+      "enum": [
+        "platform",
+        "oauth2",
+        "https_api",
+        "webhook",
+        "mcp",
+        "database",
+        "file_exchange",
+        "message_queue",
+        "enterprise_gateway",
+        "machine_gateway"
+      ]
+    },
+    "auth_mode": {
+      "type": "string",
+      "enum": [
+        "platform_managed",
+        "oauth",
+        "secret_reference",
+        "customer_gateway",
+        "none"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "available_to_connect",
+        "setup_required",
+        "adapter_ready",
+        "simulation_only",
+        "disabled"
+      ],
+      "default": "adapter_ready"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "supported_intents": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "execution_function": {
+      "type": "string",
+      "description": "Reviewed backend function name. Metadata alone never grants execution.",
+      "maxLength": 160
+    },
+    "pricing_mode": {
+      "type": "string",
+      "enum": [
+        "included",
+        "quoted",
+        "provider_account",
+        "custom_contract",
+        "unknown"
+      ],
+      "default": "unknown"
+    },
+    "verification_mode": {
+      "type": "string",
+      "enum": [
+        "artifact",
+        "provider_status",
+        "read_after_write",
+        "human_review",
+        "simulation",
+        "custom"
+      ],
+      "default": "custom"
+    },
+    "risk_tier": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "default": "medium"
+    },
+    "version": {
+      "type": "string",
+      "default": "1.0"
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "priority": {
+      "type": "integer",
+      "default": 100
+    }
+  },
+  "required": [
+    "adapter_id",
+    "display_name",
+    "category",
+    "interface_type",
+    "auth_mode",
+    "status",
+    "enabled",
+    "version"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
