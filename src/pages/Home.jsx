@@ -19,6 +19,7 @@ import {
   Network,
   LogOut,
   Plus,
+  Repeat2,
   Search,
   Sparkles,
   Trash2,
@@ -341,6 +342,28 @@ export default function Home() {
           <div className="iabt-connection-rule">
             <strong>Discover → authorize → quote → execute → verify.</strong>
             <span>“Adapter-ready” never means “already connected.” IABT proves access before it claims control.</span>
+          </div>
+        </section>
+
+        <section className="iabt-autonomy-engine" aria-labelledby="iabt-autonomy-title">
+          <div className="iabt-autonomy-heading">
+            <div className="iabt-autonomy-mark"><Repeat2 /></div>
+            <div>
+              <p className="iabt-eyebrow">Reusable autonomy</p>
+              <h2 id="iabt-autonomy-title">Teach it once. Let IABT handle the repeatable work.</h2>
+              <p>When a workflow succeeds and its result is verified, IABT can preserve the path as a versioned runbook—complete with permissions, cost limits, retries, recovery, and proof of completion.</p>
+            </div>
+          </div>
+          <div className="iabt-autonomy-grid">
+            <article><span>QUALITY FIRST</span><strong>Best connected intelligence</strong><p>Route each workload to the strongest suitable connected model, record what actually ran, and fall back without changing the user’s goal.</p></article>
+            <article><span>PROVEN PATHS</span><strong>Reusable runbook memory</strong><p>A pathway becomes reusable only after the final state passes its verification contract.</p></article>
+            <article><span>API → BROWSER</span><strong>Hands-off execution</strong><p>Use supported APIs first. When necessary, replay a permitted workflow in an isolated browser or desktop runner.</p></article>
+            <article><span>PRECISE HANDOFF</span><strong>Pause only where required</strong><p>IABT completes every safe step before requesting OAuth, MFA, identity checks, payments, destructive changes, or other required owner action.</p></article>
+          </div>
+          <div className="iabt-autonomy-status">
+            <span><i className="is-live" /> Bounded-autonomy policy active</span>
+            <span><i className="is-live" /> Runbook registry ready</span>
+            <span><i /> Computer-use runtime requires connection</span>
           </div>
         </section>
 
