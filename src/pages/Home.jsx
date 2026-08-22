@@ -263,6 +263,7 @@ export default function Home() {
           <div><strong>IABT</strong><span>Interactive App Builder Tool</span></div>
         </div>
         <div className="iabt-home-user">
+          <Button size="sm" onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-1" /> Creator Studio</Button>
           {entitlement && <span className="iabt-plan-badge">{entitlement.plan} plan</span>}
           <Button variant="outline" size="sm" onClick={() => setBillingOpen(true)}>
             <CreditCard className="h-4 w-4 mr-1" /> Plans & billing
@@ -275,27 +276,33 @@ export default function Home() {
       <main className="iabt-home-main">
         <section className="iabt-hero">
           <div>
-            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> AI-assisted SaaS construction</p>
-            <h1>Build the app behind your next idea.</h1>
-            <p>Design pages, wire navigation, test scanner workflows, save projects to the cloud, and export production-ready HTML or React.</p>
+            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> Conversational planning and real production</p>
+            <h1>Describe what you want. Leave with something real.</h1>
+            <p>Plan and produce apps, websites, images, video, audio, documents, code, designs, G-code, and automations—with the tools, credits, and costs shown before you approve production.</p>
             <div className="iabt-hero-actions">
-              <Button size="lg" onClick={() => ensureProjectCapacity() && setNameDialog({ mode: "create" })} disabled={working}>
+              <Button size="lg" onClick={() => navigate("/studio")}>
+                <Sparkles className="h-4 w-4 mr-2" /> Open Creator Studio
+              </Button>
+              <Button size="lg" variant="outline" onClick={() => ensureProjectCapacity() && setNameDialog({ mode: "create" })} disabled={working}>
                 {working ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-                New app
+                New visual app
               </Button>
               <input ref={importRef} type="file" hidden accept=".json,application/json" onChange={importProject} />
-              <Button size="lg" variant="outline" onClick={() => importRef.current?.click()} disabled={working}>
-                <Upload className="h-4 w-4 mr-2" /> Import IABT JSON
+              <Button size="lg" variant="ghost" onClick={() => importRef.current?.click()} disabled={working}>
+                <Upload className="h-4 w-4 mr-2" /> Import project
               </Button>
+            </div>
+            <div className="iabt-hero-capabilities" aria-label="Creator Studio capabilities">
+              <span>Apps</span><span>Video</span><span>Images</span><span>Audio</span><span>Code</span><span>G-code</span><span>Automations</span>
             </div>
           </div>
           <div className="iabt-hero-visual" aria-hidden="true">
             <div className="iabt-orbit orbit-one" />
             <div className="iabt-orbit orbit-two" />
             <div className="iabt-hero-card">
-              <Code2 />
-              <strong>Prompt → AppDefinition</strong>
-              <span>Pages · components · routing · exports</span>
+              <Sparkles />
+              <strong>Conversation → Plan → Artifact</strong>
+              <span>Transparent quote · explicit approval · verified deliverables</span>
             </div>
           </div>
         </section>
@@ -331,8 +338,13 @@ export default function Home() {
             <div className="iabt-project-empty">
               <div><FolderOpen /></div>
               <h3>{query ? "No projects match that search" : "Create your first SaaS app"}</h3>
-              <p>{query ? "Try a different name or clear the search." : "Your AppDefinition, pages, components, and settings will be stored in Base44."}</p>
-              {!query && <Button onClick={() => ensureProjectCapacity() && setNameDialog({ mode: "create" })}><Plus className="h-4 w-4 mr-2" /> New app</Button>}
+              <p>{query ? "Try a different name or clear the search." : "Start in Creator Studio for conversational production, or open the specialist visual builder for an AppDefinition project."}</p>
+              {!query && (
+                <div className="iabt-empty-actions">
+                  <Button onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-2" /> Open Creator Studio</Button>
+                  <Button variant="outline" onClick={() => ensureProjectCapacity() && setNameDialog({ mode: "create" })}><Plus className="h-4 w-4 mr-2" /> New visual app</Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="iabt-project-grid">
