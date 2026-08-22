@@ -16,6 +16,7 @@ import {
   FolderOpen,
   LayoutTemplate,
   Loader2,
+  Network,
   LogOut,
   Plus,
   Search,
@@ -276,8 +277,8 @@ export default function Home() {
         <section className="iabt-hero">
           <div>
             <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> IABT · AI project operator</p>
-            <h1>One conversation from idea through verified deliverables.</h1>
-            <p>IABT keeps the project context, plans the work, coordinates connected tools and services, and completes authorized in-scope steps. It asks you only for decisions, credentials, or explicit approvals—then verifies and delivers the result.</p>
+            <h1>One conversation. Any connected system. Verified deliverables.</h1>
+            <p>IABT keeps the project context, plans the work, and routes authorized steps through a provider-neutral connection fabric. Today’s tools can be replaced or expanded with future models, services, enterprise systems, and secure gateways without rebuilding the experience.</p>
             <div className="iabt-hero-actions">
               <Button size="lg" onClick={() => navigate("/studio")}>
                 <Sparkles className="h-4 w-4 mr-2" /> Start a project conversation
@@ -292,7 +293,7 @@ export default function Home() {
               </Button>
             </div>
             <div className="iabt-hero-capabilities" aria-label="AI project operator capabilities">
-              <span>Persistent context</span><span>Plans work</span><span>Connected tools</span><span>Authorized execution</span><span>Verified results</span>
+              <span>Persistent context</span><span>Provider-neutral routing</span><span>Expandable connection fabric</span><span>Authorized execution</span><span>Verified results</span>
             </div>
           </div>
           <div className="iabt-hero-visual" aria-hidden="true">
@@ -300,8 +301,8 @@ export default function Home() {
             <div className="iabt-orbit orbit-two" />
             <div className="iabt-hero-card">
               <Sparkles />
-              <strong>One conversation → Verified deliverables</strong>
-              <span>Context · plan · connected tools · execution · verification</span>
+              <strong>Your goal → The right connection → Verified delivery</strong>
+              <span>Context · discovery · routing · execution · verification</span>
             </div>
           </div>
         </section>
@@ -319,6 +320,27 @@ export default function Home() {
             <article><span>02</span><strong>Plan and coordinate</strong><p>IABT breaks down the work and selects the connected tools or services suited to each step.</p></article>
             <article><span>03</span><strong>Execute with authority</strong><p>It completes authorized in-scope work and brings you only the decisions or approvals it cannot make.</p></article>
             <article><span>04</span><strong>Verify and deliver</strong><p>It checks results, reports real limits and costs, and returns usable deliverables with a clear status.</p></article>
+          </div>
+        </section>
+
+        <section className="iabt-connection-fabric" aria-labelledby="iabt-connection-title">
+          <div className="iabt-connection-heading">
+            <div className="iabt-connection-mark"><Network /></div>
+            <div>
+              <p className="iabt-eyebrow">IABT connection fabric</p>
+              <h2 id="iabt-connection-title">Not limited to today’s providers. Designed to connect to what comes next.</h2>
+            </div>
+            <p>IABT separates your objective from the system that performs each step. Every adapter declares its capabilities, authorization method, cost, risk, and verification requirements before IABT treats it as usable.</p>
+          </div>
+          <div className="iabt-connection-lanes">
+            <article><span>ACTIVE NOW</span><strong>Models and media</strong><p>Managed intelligence, images, structured apps, documents, code, and provider-gated rendering.</p></article>
+            <article><span>AUTHORIZE</span><strong>Business systems</strong><p>Files, communications, CRM, finance, analytics, commerce, data, and development platforms through scoped connections.</p></article>
+            <article><span>ADAPTER-READY</span><strong>Enterprise and mainframes</strong><p>Customer-controlled bridges for APIs, databases, SFTP, queues, batch jobs, ERP, and systems of record.</p></article>
+            <article><span>VERIFY FIRST</span><strong>Custom tools and machines</strong><p>Tool servers, webhooks, scanners, devices, and simulation-first machine workflows with explicit safety gates.</p></article>
+          </div>
+          <div className="iabt-connection-rule">
+            <strong>Discover → authorize → quote → execute → verify.</strong>
+            <span>“Adapter-ready” never means “already connected.” IABT proves access before it claims control.</span>
           </div>
         </section>
 
