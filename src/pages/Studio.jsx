@@ -608,7 +608,7 @@ export default function Studio() {
           ) : (
             <div className="creator-message-list">
               <div className="creator-thread-intro">
-                <span className="creator-thread-mode"><currentMode.icon /> {currentMode.label}</span>
+                <span className="creator-thread-mode">{React.createElement(currentMode.icon)} {currentMode.label}</span>
                 <button type="button" onClick={createConversation}><MessageSquarePlus /> Start another</button>
               </div>
               <AnimatePresence initial={false}>
