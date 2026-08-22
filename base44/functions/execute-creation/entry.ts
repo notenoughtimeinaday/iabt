@@ -212,9 +212,9 @@ Deno.serve(async (req) => {
       10,
     );
     const canonicalJob = (concurrentJobs || []).find((record: any) =>
-      String(record?.quote_snapshot?.execution_key || "") === key && record.id !== job.id
+      String(record?.quote_snapshot?.execution_key || "") === key
     );
-    if (canonicalJob) {
+    if (canonicalJob && canonicalJob.id !== job.id) {
       job = await service.entities.GenerationJob.update(job.id, {
         status: "canceled",
         progress: 100,
