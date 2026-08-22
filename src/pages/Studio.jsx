@@ -177,6 +177,7 @@ export default function Studio() {
   const { user } = useAuth();
   const reduceMotion = useReducedMotion();
   const messageEndRef = useRef(null);
+  const artifactAccessRef = useRef({});
   const [mode, setMode] = useState("app");
   const [prompt, setPrompt] = useState("");
   const [conversations, setConversations] = useState([]);
@@ -185,6 +186,7 @@ export default function Studio() {
   const [plans, setPlans] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [artifacts, setArtifacts] = useState([]);
+  const [artifactAccessUrls, setArtifactAccessUrls] = useState({});
   const [capabilities, setCapabilities] = useState([]);
   const [entitlement, setEntitlement] = useState(null);
   const [monthlyUsed, setMonthlyUsed] = useState(0);
@@ -214,6 +216,42 @@ export default function Studio() {
   const bonusCredits = Number(entitlement?.bonus_ai_credits || 0);
   const remainingCredits = Math.max(0, monthlyLimit - monthlyUsed) + bonusCredits;
 
+  const resolvePrivateArtifacts = useCallback(async (rows = []) => {
+    const refreshBefore = Date.now() + 45_000;
+    const pending = rows.filter((artifact) => {
+      if (!artifact?.id || !artifact.file_uri || artifact.file_url) return false;
+      const cached = artifactAccessRef.current[artifact.id];
+      const expiresAt = cached?.expires_at ? new Date(cached.expires_at).getTime() : 0;
+      return !cached?.url || !expiresAt || expiresAt <= refreshBefore;
+    });
+    if (!pending.length) return;
+
+    const results = await Promise.allSettled(pending.map(async (artifact) => {
+      const response = await base44.functions.invoke("get-artifact-access-url", {
+        artifact_id: artifact.id,
+      });
+      const payload = response?.data || response;
+      if (!payload?.ok || !payload.url) throw new Error("Private artifact access is not ready.");
+      return {
+        artifactId: artifact.id,
+        access: {
+          url: payload.url,
+          expires_at: payload.expires_at,
+        },
+      };
+    }));
+
+    const next = {};
+    results.forEach((result) => {
+      if (result.status === "fulfilled") {
+        next[result.value.artifactId] = result.value.access;
+      }
+    });
+    if (!Object.keys(next).length) return;
+    artifactAccessRef.current = { ...artifactAccessRef.current, ...next };
+    setArtifactAccessUrls((current) => ({ ...current, ...next }));
+  }, []);
+
   const loadResources = useCallback(async (conversationId, quiet = false) => {
     if (!conversationId) return;
     try {
@@ -225,12 +263,13 @@ export default function Studio() {
       setPlans(planRows || []);
       setJobs(jobRows || []);
       setArtifacts(artifactRows || []);
+      void resolvePrivateArtifacts(artifactRows || []);
     } catch (error) {
       if (!quiet) {
         toast({ title: "Could not refresh this creation", description: errorMessage(error), variant: "destructive" });
       }
     }
-  }, [toast]);
+  }, [resolvePrivateArtifacts, toast]);
 
   const openConversation = useCallback(async (conversationId, quiet = false) => {
     if (!conversationId) return;
@@ -830,31 +869,41 @@ export default function Studio() {
         {artifacts.length > 0 && (
           <section className="creator-artifacts">
             <div className="creator-section-title"><span>Deliverables</span><small>{artifacts.length} ready</small></div>
-            {artifacts.map((artifact) => (
-              <article key={artifact.id}>
-                <ArtifactPreview artifact={artifact} />
-                <div className="creator-artifact-info">
-                  <span className="creator-artifact-kind">{readable(artifact.kind)}</span>
-                  <strong>{artifact.name}</strong>
-                  <small>{artifact.mime_type || "IABT deliverable"} · {readable(artifact.provider)}</small>
-                  <div>
-                    {artifact.file_url && (
-                      <a href={artifact.file_url} target="_blank" rel="noreferrer">
-                        <ArrowUpRight /> Open
-                      </a>
-                    )}
-                    {artifact.file_url && (
-                      <a href={artifact.file_url} download>
-                        <Download /> Download
-                      </a>
-                    )}
-                    {artifact.project_id && (
-                      <Link to={"/projects/" + artifact.project_id}><AppWindow /> Open in builder</Link>
-                    )}
+            {artifacts.map((artifact) => {
+              const deliveryUrl = artifact.file_url || artifactAccessUrls[artifact.id]?.url || "";
+              const previewArtifact = {
+                name: artifact.name,
+                kind: artifact.kind,
+                mime_type: artifact.mime_type,
+                content: artifact.content,
+                file_url: deliveryUrl,
+              };
+              return (
+                <article key={artifact.id}>
+                  <ArtifactPreview artifact={previewArtifact} />
+                  <div className="creator-artifact-info">
+                    <span className="creator-artifact-kind">{readable(artifact.kind)}</span>
+                    <strong>{artifact.name}</strong>
+                    <small>{artifact.mime_type || "IABT deliverable"} · {readable(artifact.provider)}</small>
+                    <div>
+                      {deliveryUrl && (
+                        <a href={deliveryUrl} target="_blank" rel="noreferrer">
+                          <ArrowUpRight /> Open
+                        </a>
+                      )}
+                      {deliveryUrl && (
+                        <a href={deliveryUrl} download>
+                          <Download /> Download
+                        </a>
+                      )}
+                      {artifact.project_id && (
+                        <Link to={"/projects/" + artifact.project_id}><AppWindow /> Open in builder</Link>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </section>
         )}
       </aside>
