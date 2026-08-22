@@ -1,3 +1,5 @@
+import { secrets } from "base44:runtime";
+
 export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-21.1";
 export const CREATION_QUOTE_TTL_MS = 30 * 60 * 1000;
 export const LUMA_MODEL = "ray-3.2";
@@ -28,11 +30,11 @@ const VIDEO_ASPECT_RATIOS = new Set(["9:16", "3:4", "1:1", "4:3", "16:9", "21:9"
 const COMPONENT_TYPES = new Set(["Text", "Input", "Button", "ScannerInput"]);
 
 function enabled(name: string) {
-  return /^(1|true|yes|on)$/i.test(String(Deno.env.get(name) || "").trim());
+  return /^(1|true|yes|on)$/i.test(String(secrets.get(name) || "").trim());
 }
 
 export function getMediaReadiness() {
-  const lumaKeyConfigured = Boolean(String(Deno.env.get("LUMA_AGENTS_API_KEY") || "").trim());
+  const lumaKeyConfigured = Boolean(String(secrets.get("LUMA_AGENTS_API_KEY") || "").trim());
   const paidMediaEnabled = enabled("IABT_ENABLE_PAID_MEDIA");
   const mediaBillingReady = enabled("IABT_MEDIA_BILLING_READY");
   return {
@@ -675,13 +677,8 @@ export async function generateImage(base44: any, prompt: string) {
   return { url };
 }
 
-async function opaqueUserId(userId: string) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(userId));
-  return "iabt_" + Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("").slice(0, 40);
-}
-
 function lumaKey() {
-  return String(Deno.env.get("LUMA_AGENTS_API_KEY") || "").trim();
+  return String(secrets.get("LUMA_AGENTS_API_KEY") || "").trim();
 }
 
 async function lumaRequest(path: string, init: RequestInit) {
@@ -703,7 +700,7 @@ async function lumaRequest(path: string, init: RequestInit) {
   return payload;
 }
 
-export async function submitLumaVideo(spec: any, userId: string) {
+export async function submitLumaVideo(spec: any) {
   const readiness = getMediaReadiness();
   if (!readiness.luma_ready) throw new Error("Paid Luma rendering is not fully enabled.");
   const settings = videoSettings(spec);
@@ -716,7 +713,6 @@ export async function submitLumaVideo(spec: any, userId: string) {
       resolution: settings.resolution,
       duration: settings.duration,
     },
-    user_id: await opaqueUserId(userId),
   };
   const result = await lumaRequest("/generations", {
     method: "POST",
@@ -749,7 +745,15 @@ export async function persistRemoteFile(base44: any, url: string, name: string, 
   const blob = await response.blob();
   if (!blob.size) throw new Error("The provider output was empty.");
   if (blob.size > 200_000_000) throw new Error("Provider output exceeds the 200 MB secure-copy limit.");
-  const mimeType = String(blob.type || expectedType || "application/octet-stream");
+  const mimeType = String(blob.type || response.headers.get("content-type") || expectedType || "application/octet-stream").split(";")[0].trim().toLowerCase();
+  if (expectedType.startsWith("video/") && !mimeType.startsWith("video/")) {
+    throw new Error("The provider returned a non-video response instead of the expected media file.");
+  }
+  const signature = new Uint8Array(await blob.slice(0, 32).arrayBuffer());
+  if (expectedType === "video/mp4") {
+    const hasFtyp = signature.length >= 12 && String.fromCharCode(...signature.slice(4, 8)) === "ftyp";
+    if (!hasFtyp) throw new Error("The provider response was not a valid MP4 file.");
+  }
   const file = new File([blob], name, { type: mimeType });
   const stored = await base44.asServiceRole.integrations.Core.UploadPrivateFile({ file });
   const fileUri = String(stored?.file_uri || "").trim();
