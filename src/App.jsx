@@ -12,6 +12,7 @@ import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import Home from '@/pages/Home';
+import Studio from '@/pages/Studio';
 import Builder from '@/pages/Builder';
 import { Navigate } from 'react-router-dom';
 // Add page imports here
@@ -48,6 +49,7 @@ const AuthenticatedApp = () => {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route path="/" element={<Home />} />
+        <Route path="/studio" element={<Studio />} />
         <Route path="/projects/:id" element={<Builder />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
