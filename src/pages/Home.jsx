@@ -262,7 +262,7 @@ export default function Home() {
           <div><strong>IABT</strong><span>Interactive App Builder Tool</span></div>
         </div>
         <div className="iabt-home-user">
-          <Button size="sm" onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-1" /> Creator Studio</Button>
+          <Button size="sm" onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-1" /> AI Project Operator</Button>
           {entitlement && <span className="iabt-plan-badge">{entitlement.plan} plan</span>}
           <Button variant="outline" size="sm" onClick={() => setBillingOpen(true)}>
             <CreditCard className="h-4 w-4 mr-1" /> Plans & billing
@@ -275,24 +275,24 @@ export default function Home() {
       <main className="iabt-home-main">
         <section className="iabt-hero">
           <div>
-            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> Conversational planning and real production</p>
-            <h1>Describe what you want. Leave with something real.</h1>
-            <p>Plan and produce apps, websites, images, video, audio, documents, code, designs, G-code, and automations—with the tools, credits, and costs shown before you approve production.</p>
+            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> IABT · AI project operator</p>
+            <h1>One conversation from idea through verified deliverables.</h1>
+            <p>IABT keeps the project context, plans the work, coordinates connected tools and services, and completes authorized in-scope steps. It asks you only for decisions, credentials, or explicit approvals—then verifies and delivers the result.</p>
             <div className="iabt-hero-actions">
               <Button size="lg" onClick={() => navigate("/studio")}>
-                <Sparkles className="h-4 w-4 mr-2" /> Open Creator Studio
+                <Sparkles className="h-4 w-4 mr-2" /> Start a project conversation
               </Button>
               <Button size="lg" variant="outline" onClick={() => ensureProjectCapacity() && setNameDialog({ mode: "create" })} disabled={working}>
                 {working ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-                New visual app
+                Open visual app builder
               </Button>
               <input ref={importRef} type="file" hidden accept=".json,application/json" onChange={importProject} />
               <Button size="lg" variant="ghost" onClick={() => importRef.current?.click()} disabled={working}>
                 <Upload className="h-4 w-4 mr-2" /> Import project
               </Button>
             </div>
-            <div className="iabt-hero-capabilities" aria-label="Creator Studio capabilities">
-              <span>Apps</span><span>Video</span><span>Images</span><span>Audio</span><span>Code</span><span>G-code</span><span>Automations</span>
+            <div className="iabt-hero-capabilities" aria-label="AI project operator capabilities">
+              <span>Persistent context</span><span>Plans work</span><span>Connected tools</span><span>Authorized execution</span><span>Verified results</span>
             </div>
           </div>
           <div className="iabt-hero-visual" aria-hidden="true">
@@ -300,9 +300,25 @@ export default function Home() {
             <div className="iabt-orbit orbit-two" />
             <div className="iabt-hero-card">
               <Sparkles />
-              <strong>Conversation → Plan → Artifact</strong>
-              <span>Transparent quote · explicit approval · verified deliverables</span>
+              <strong>One conversation → Verified deliverables</strong>
+              <span>Context · plan · connected tools · execution · verification</span>
             </div>
+          </div>
+        </section>
+
+        <section className="iabt-operator-flow" aria-labelledby="iabt-operator-flow-title">
+          <div className="iabt-operator-flow-heading">
+            <div>
+              <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> How IABT works</p>
+              <h2 id="iabt-operator-flow-title">A capable operator that stays with the project.</h2>
+            </div>
+            <p>IABT proceeds independently where it is authorized and pauses only when your judgment, credentials, or approval are genuinely required.</p>
+          </div>
+          <div className="iabt-operator-steps">
+            <article><span>01</span><strong>Keep the context</strong><p>Your goal, decisions, files, and prior work stay together in one project conversation.</p></article>
+            <article><span>02</span><strong>Plan and coordinate</strong><p>IABT breaks down the work and selects the connected tools or services suited to each step.</p></article>
+            <article><span>03</span><strong>Execute with authority</strong><p>It completes authorized in-scope work and brings you only the decisions or approvals it cannot make.</p></article>
+            <article><span>04</span><strong>Verify and deliver</strong><p>It checks results, reports real limits and costs, and returns usable deliverables with a clear status.</p></article>
           </div>
         </section>
 
@@ -340,7 +356,7 @@ export default function Home() {
               <p>{query ? "Try a different name or clear the search." : "Start in Creator Studio for conversational production, or open the specialist visual builder for an AppDefinition project."}</p>
               {!query && (
                 <div className="iabt-empty-actions">
-                  <Button onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-2" /> Open Creator Studio</Button>
+                  <Button onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-2" /> Start with the AI operator</Button>
                   <Button variant="outline" onClick={() => ensureProjectCapacity() && setNameDialog({ mode: "create" })}><Plus className="h-4 w-4 mr-2" /> New visual app</Button>
                 </div>
               )}
