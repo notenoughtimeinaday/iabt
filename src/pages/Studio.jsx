@@ -870,7 +870,10 @@ export default function Studio() {
           <section className="creator-artifacts">
             <div className="creator-section-title"><span>Deliverables</span><small>{artifacts.length} ready</small></div>
             {artifacts.map((artifact) => {
-              const deliveryUrl = artifact.file_url || artifactAccessUrls[artifact.id]?.url || "";
+              const cachedAccess = artifactAccessUrls[artifact.id];
+              const signedUrlReady = cachedAccess?.url &&
+                new Date(cachedAccess.expires_at || 0).getTime() > Date.now();
+              const deliveryUrl = artifact.file_url || (signedUrlReady ? cachedAccess.url : "");
               const previewArtifact = {
                 name: artifact.name,
                 kind: artifact.kind,
