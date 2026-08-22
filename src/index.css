@@ -4000,3 +4000,150 @@
   font-size: 8px;
   line-height: 1.5;
 }
+
+/* Reusable autonomy */
+.iabt-autonomy-engine {
+  margin-top: 18px;
+  padding: clamp(24px, 4vw, 40px);
+  border: 1px solid rgba(88, 119, 159, 0.14);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 95% 0, rgba(25, 176, 143, 0.08), transparent 30%),
+    rgba(255, 255, 255, 0.86);
+  box-shadow: 0 20px 55px rgba(39, 56, 81, 0.07);
+}
+
+.iabt-autonomy-heading {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
+}
+
+.iabt-autonomy-mark {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: #147c68;
+  background: linear-gradient(145deg, #e8faf5, #e6f1f8);
+}
+
+.iabt-autonomy-mark svg {
+  width: 22px;
+}
+
+.iabt-autonomy-heading h2 {
+  margin: 7px 0 0;
+  color: #202536;
+  font-size: clamp(1.55rem, 2.8vw, 2.35rem);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+.iabt-autonomy-heading > div:last-child > p:last-child {
+  max-width: 840px;
+  margin: 12px 0 0;
+  color: #6d7484;
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.iabt-autonomy-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 11px;
+  margin-top: 27px;
+}
+
+.iabt-autonomy-grid article {
+  min-height: 176px;
+  display: flex;
+  flex-direction: column;
+  padding: 19px;
+  border: 1px solid #e7eaf0;
+  border-radius: 18px;
+  background: #fbfcfd;
+}
+
+.iabt-autonomy-grid article > span {
+  color: #19816c;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+}
+
+.iabt-autonomy-grid article > strong {
+  margin-top: 18px;
+  color: #2e3445;
+  font-size: 0.93rem;
+}
+
+.iabt-autonomy-grid article > p {
+  margin: 8px 0 0;
+  color: #747b8a;
+  font-size: 0.73rem;
+  line-height: 1.6;
+}
+
+.iabt-autonomy-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 15px;
+  padding: 13px 15px;
+  border-radius: 14px;
+  color: #697181;
+  background: #f5f7f9;
+}
+
+.iabt-autonomy-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.iabt-autonomy-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d39332;
+  box-shadow: 0 0 0 3px rgba(211, 147, 50, 0.12);
+}
+
+.iabt-autonomy-status i.is-live {
+  background: #20a47e;
+  box-shadow: 0 0 0 3px rgba(32, 164, 126, 0.12);
+}
+
+@media (max-width: 900px) {
+  .iabt-autonomy-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .iabt-autonomy-engine {
+    border-radius: 22px;
+  }
+
+  .iabt-autonomy-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .iabt-autonomy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .iabt-autonomy-grid article {
+    min-height: 0;
+  }
+
+  .iabt-autonomy-status {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
