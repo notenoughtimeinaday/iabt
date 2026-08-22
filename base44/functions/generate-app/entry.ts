@@ -160,15 +160,19 @@ async function getOrCreateEntitlement(base44: any, user: any) {
   });
 }
 
-async function incrementUsageBucket(base44: any, key: string, current: any, now: Date) {
+async function incrementUsageBucket(base44: any, user: any, key: string, current: any, now: Date) {
+  const service = base44.asServiceRole;
   const nextUsed = Number(current?.request_count || 0) + 1;
   if (current) {
-    await base44.entities.AiUsage.update(current.id, {
+    await service.entities.AiUsage.update(current.id, {
       request_count: nextUsed,
       last_request_at: now.toISOString(),
     });
   } else {
-    await base44.entities.AiUsage.create({
+    await service.entities.AiUsage.create({
+      user_id: user.id,
+      user_email: user.email,
+      usage_kind: "app_generation",
       window_key: key,
       request_count: nextUsed,
       last_request_at: now.toISOString(),
@@ -177,7 +181,7 @@ async function incrementUsageBucket(base44: any, key: string, current: any, now:
   return nextUsed;
 }
 
-async function enforceRateLimit(base44: any, entitlement: any) {
+async function enforceRateLimit(base44: any, user: any, entitlement: any) {
   const now = new Date();
   const defaults = planDefaults(entitlement.plan);
   const hourlyKey = "hour:" + now.toISOString().slice(0, 13);
@@ -186,9 +190,10 @@ async function enforceRateLimit(base44: any, entitlement: any) {
   const monthlyLimit = Math.max(1, Number(entitlement.ai_monthly_limit || defaults.ai_monthly_limit));
   const bonusCredits = Math.max(0, Number(entitlement.bonus_ai_credits || 0));
 
+  const service = base44.asServiceRole;
   const [hourlyRecords, monthlyRecords] = await Promise.all([
-    base44.entities.AiUsage.filter({ window_key: hourlyKey }, "-updated_date", 1),
-    base44.entities.AiUsage.filter({ window_key: monthlyKey }, "-updated_date", 1),
+    service.entities.AiUsage.filter({ user_id: user.id, window_key: hourlyKey }, "-updated_date", 1),
+    service.entities.AiUsage.filter({ user_id: user.id, window_key: monthlyKey }, "-updated_date", 1),
   ]);
   const hourly = hourlyRecords?.[0];
   const monthly = monthlyRecords?.[0];
@@ -226,8 +231,8 @@ async function enforceRateLimit(base44: any, entitlement: any) {
   }
 
   const [nextHourlyUsed, nextMonthlyUsed] = await Promise.all([
-    incrementUsageBucket(base44, hourlyKey, hourly, now),
-    incrementUsageBucket(base44, monthlyKey, monthly, now),
+    incrementUsageBucket(base44, user, hourlyKey, hourly, now),
+    incrementUsageBucket(base44, user, monthlyKey, monthly, now),
   ]);
 
   return {
@@ -315,7 +320,7 @@ Deno.serve(async (req) => {
     if (prompt.length > 6000) return Response.json({ error: "Prompt is too long." }, { status: 400 });
 
     const entitlement = await getOrCreateEntitlement(base44, user);
-    const usage = await enforceRateLimit(base44, entitlement);
+    const usage = await enforceRateLimit(base44, user, entitlement);
 
     const existingContext = context
       ? "\n\nExisting app context (preserve or extend when useful):\n" + JSON.stringify(context).slice(0, 12000)
