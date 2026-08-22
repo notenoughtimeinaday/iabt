@@ -2,6 +2,15 @@
   "name": "Project",
   "type": "object",
   "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Owning Base44 user ID for projects created by backend orchestration"
+    },
+    "user_email": {
+      "type": "string",
+      "format": "email",
+      "description": "Owning user email for backend-created projects"
+    },
     "title": {
       "type": "string",
       "title": "Project name",
@@ -68,6 +77,9 @@
     "read": {
       "$or": [
         {
+          "data.user_id": "{{user.id}}"
+        },
+        {
           "created_by": "{{user.email}}"
         },
         {
@@ -80,6 +92,9 @@
     "update": {
       "$or": [
         {
+          "data.user_id": "{{user.id}}"
+        },
+        {
           "created_by": "{{user.email}}"
         },
         {
@@ -91,6 +106,9 @@
     },
     "delete": {
       "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
         {
           "created_by": "{{user.email}}"
         },
