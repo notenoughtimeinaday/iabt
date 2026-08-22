@@ -253,8 +253,11 @@ Deno.serve(async (req) => {
     if (String(plan.status) === "expired") {
       return Response.json({ error: "This quote expired. Request a new plan before execution." }, { status: 410 });
     }
-    if (String(plan.status) === "canceled") {
-      return Response.json({ error: "This creation plan was canceled. Request a new plan." }, { status: 409 });
+    if (String(plan.status) !== "quoted") {
+      return Response.json({
+        error: "This creation plan is no longer eligible for a new execution. Request a new plan.",
+        status: plan.status,
+      }, { status: 409 });
     }
     const expiresAt = Date.parse(String(plan.quote_expires_at || ""));
     if (!Number.isFinite(expiresAt) || Date.now() > expiresAt) {
