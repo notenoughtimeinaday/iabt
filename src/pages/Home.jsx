@@ -315,7 +315,7 @@ export default function Home() {
             <p>IABT proceeds independently where it is authorized and pauses only when your judgment, credentials, or approval are genuinely required.</p>
           </div>
           <div className="iabt-operator-steps">
-            <article><span>01</span><strong>Keep the context</strong><p>Your goal, decisions, files, and prior work stay together in one project conversation.</p></article>
+            <article><span>01</span><strong>Keep the context</strong><p>Your goal, decisions, plans, and prior work stay together in one project conversation.</p></article>
             <article><span>02</span><strong>Plan and coordinate</strong><p>IABT breaks down the work and selects the connected tools or services suited to each step.</p></article>
             <article><span>03</span><strong>Execute with authority</strong><p>It completes authorized in-scope work and brings you only the decisions or approvals it cannot make.</p></article>
             <article><span>04</span><strong>Verify and deliver</strong><p>It checks results, reports real limits and costs, and returns usable deliverables with a clear status.</p></article>
