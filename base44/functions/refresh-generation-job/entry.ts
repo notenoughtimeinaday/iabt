@@ -6,6 +6,10 @@ import {
   persistRemoteFile,
   requireUser,
 } from "../../shared/creation.ts";
+import {
+  captureJobCredits,
+  releaseJobCredits,
+} from "../../shared/usage.ts";
 
 function clean(value: unknown, max = 600) {
   return String(value || "").trim().slice(0, max);
@@ -19,13 +23,24 @@ function hasArtifactOutput(artifact: any) {
   );
 }
 
-function billing() {
+function billing(job: any = null) {
+  const state = String(job?.usage_state || "none");
+  const amount = Number(job?.usage_reservation?.amount || 0);
   return {
     charged: false,
     card_charged: false,
-    credits_deducted: false,
-    action: "none",
-    note: "Refreshing a job never charges a card or deducts IABT credits.",
+    credit_amount: amount,
+    credits_reserved: ["reserved", "release_pending"].includes(state),
+    credits_deducted: state === "captured",
+    credits_released: state === "released",
+    action:
+      state === "captured" ? "credits_captured" :
+      state === "released" ? "credits_released" :
+      state === "reserved" ? "credits_reserved" :
+      "none",
+    note: amount
+      ? "Refreshing does not charge a card; it only reconciles the existing IABT credit reservation."
+      : "Refreshing a job never charges a card.",
   };
 }
 
@@ -45,11 +60,11 @@ async function loadArtifact(service: any, job: any) {
   return (records || []).find(hasArtifactOutput) || null;
 }
 
-async function markComplete(service: any, job: any, artifact: any) {
+async function markComplete(base44: any, service: any, job: any, artifact: any) {
   if (!artifact?.id || !clean(artifact.file_uri, 2000)) {
     throw new Error("A durable private media artifact is required before completion.");
   }
-  const completedJob = await service.entities.GenerationJob.update(job.id, {
+  let completedJob = await service.entities.GenerationJob.update(job.id, {
     status: "succeeded",
     progress: 100,
     stage: "Video secured in private storage",
@@ -61,44 +76,46 @@ async function markComplete(service: any, job: any, artifact: any) {
     status: "completed",
     execution_job_id: job.id,
   });
-
-  const usage = await service.entities.UsageLedger.filter(
-    { user_id: job.user_id, job_id: job.id, event_type: "included_usage" },
-    "-created_date",
-    1,
-  );
-  if (!usage?.length) {
-    await service.entities.UsageLedger.create({
-      user_id: job.user_id,
-      user_email: job.user_email,
-      plan_id: job.plan_id,
-      job_id: job.id,
-      event_type: "included_usage",
-      unit: "generation",
-      amount: 1,
-      pricing_version: String(job.quote_snapshot?.pricing_version || "unknown"),
-      description: "Completed approved video generation and private-file persistence. Usage metadata only; no IABT card charge or app-credit deduction was performed.",
-      status: "settled",
-      occurred_at: new Date().toISOString(),
-    });
+  if (await captureJobCredits(
+    base44,
+    completedJob,
+    "Video completed and was secured in private Base44 storage; reserved credits captured.",
+  )) {
+    completedJob = { ...completedJob, usage_state: "captured" };
   }
   return completedJob;
 }
 
+async function restoreJobCredits(base44: any, job: any, description: string) {
+  if (!["reserved", "release_failed"].includes(String(job?.usage_state || ""))) return job;
+  try {
+    if (await releaseJobCredits(base44, job, description)) {
+      return { ...job, usage_state: "released" };
+    }
+    return job;
+  } catch (error) {
+    console.error("generation job credit restoration failed:", error);
+    return { ...job, usage_state: "release_failed" };
+  }
+}
+
 Deno.serve(async (req) => {
+  let base44: any = null;
+  let service: any = null;
+  let job: any = null;
+
   try {
     if (req.method !== "POST") {
       return Response.json({ error: "Method not allowed." }, { status: 405 });
     }
 
-    const base44 = createClientFromRequest(req);
+    base44 = createClientFromRequest(req);
     const user = await requireUser(base44);
-    const service = base44.asServiceRole;
+    service = base44.asServiceRole;
     const body = await req.json().catch(() => ({}));
     const jobId = clean(body?.job_id || body?.generation_job_id, 200);
     if (!jobId) return Response.json({ error: "job_id is required." }, { status: 400 });
 
-    let job;
     try {
       job = await service.entities.GenerationJob.get(jobId);
     } catch {
