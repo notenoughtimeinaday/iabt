@@ -44,6 +44,7 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [legacyProjects, setLegacyProjects] = useState([]);
   const [entitlement, setEntitlement] = useState(null);
+  const [billingStatus, setBillingStatus] = useState(null);
   const [billingOpen, setBillingOpen] = useState(false);
   const [nameDialog, setNameDialog] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -60,6 +61,7 @@ export default function Home() {
       const entitlementPayload = entitlementResponse?.data || entitlementResponse;
       setProjects(records);
       setEntitlement(entitlementPayload?.entitlement || null);
+      setBillingStatus(entitlementPayload?.billing || null);
       const importedTags = new Set(records.flatMap((project) => project.tags || []).filter((tag) => String(tag).startsWith("legacy:")));
       setLegacyProjects(readLegacyProjects().filter((item) => !importedTags.has(legacyTag(item.legacyId))));
     } catch (error) {
@@ -78,9 +80,9 @@ export default function Home() {
     const billing = url.searchParams.get("billing");
     if (!billing) return;
     if (billing === "success") {
-      toast({ title: "Stripe test checkout completed", description: "Your plan will update after the verified webhook is processed." });
+      toast({ title: "Stripe checkout completed", description: "Your plan will update after the verified webhook is processed." });
     } else if (billing === "credits_success") {
-      toast({ title: "Stripe test credit purchase completed", description: "Your extra AI credits will appear after the verified webhook is processed." });
+      toast({ title: "Stripe credit purchase completed", description: "Your extra AI credits will appear after the verified webhook is processed." });
     } else if (billing === "canceled") {
       toast({ title: "Checkout canceled", description: "No changes were made to your plan." });
     }
@@ -443,6 +445,7 @@ export default function Home() {
         open={billingOpen}
         onOpenChange={setBillingOpen}
         entitlement={entitlement}
+        billingStatus={billingStatus}
       />
 
       <NameDialog
