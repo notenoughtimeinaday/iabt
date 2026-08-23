@@ -66,6 +66,23 @@
     "quote_snapshot": {
       "type": "object"
     },
+    "usage_state": {
+      "type": "string",
+      "enum": [
+        "none",
+        "reserved",
+        "captured",
+        "release_pending",
+        "released",
+        "release_failed"
+      ],
+      "default": "none",
+      "description": "Exactly-once state for the IABT credit reservation attached to this job"
+    },
+    "usage_reservation": {
+      "type": "object",
+      "description": "Server-owned allocation of included and purchased IABT credits"
+    },
     "artifact_id": {
       "type": "string"
     },
