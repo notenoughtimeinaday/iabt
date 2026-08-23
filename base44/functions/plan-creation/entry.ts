@@ -160,12 +160,12 @@ Deno.serve(async (req) => {
       user_email: user.email,
       plan_id: plan.id,
       event_type: "estimate",
-      unit: quote.provider_cost_cents > 0 ? "usd_cent" : "generation",
-      amount: quote.provider_cost_cents > 0 ? quote.provider_cost_cents : 1,
+      unit: "media_credit",
+      amount: quote.credit_cost,
       pricing_version: quote.pricing_version,
       description: quote.provider_cost_cents > 0
-        ? "Provider-cost quote preview only; no card charge, credit reservation, or deduction was performed."
-        : "Included generation estimate only; no card charge, credit reservation, or deduction was performed.",
+        ? "Quote preview: " + quote.credit_cost + " IABT credits cover an estimated provider cost of $" + (quote.provider_cost_cents / 100).toFixed(2) + ". No card charge or credit reservation was performed during planning."
+        : "Quote preview: " + quote.credit_cost + " IABT credit. No card charge or credit reservation was performed during planning.",
       status: "preview",
       occurred_at: new Date().toISOString(),
     });
