@@ -258,14 +258,20 @@ export default function Studio() {
   const loadResources = useCallback(async (conversationId, quiet = false) => {
     if (!conversationId) return;
     try {
-      const [planRows, jobRows, artifactRows] = await Promise.all([
+      const [planRows, jobRows, artifactRows, entitlementResponse] = await Promise.all([
         base44.entities.CreationPlan.filter({ conversation_id: conversationId }, "-created_date", 25),
         base44.entities.GenerationJob.filter({ conversation_id: conversationId }, "-created_date", 50),
         base44.entities.CreationArtifact.filter({ conversation_id: conversationId }, "-created_date", 100),
+        base44.functions.invoke("get-account-entitlement", {}).catch(() => null),
       ]);
       setPlans(planRows || []);
       setJobs(jobRows || []);
       setArtifacts(artifactRows || []);
+      const entitlementPayload = entitlementResponse?.data || entitlementResponse;
+      if (entitlementPayload?.entitlement) {
+        setEntitlement(entitlementPayload.entitlement);
+        setMonthlyUsed(Number(entitlementPayload?.usage?.monthly_used || 0));
+      }
       void resolvePrivateArtifacts(artifactRows || []);
     } catch (error) {
       if (!quiet) {
@@ -359,16 +365,7 @@ export default function Studio() {
 
         const entitlementPayload = entitlementResponse?.data || entitlementResponse;
         setEntitlement(entitlementPayload?.entitlement || null);
-
-        if (user?.id) {
-          const monthlyKey = "month:" + new Date().toISOString().slice(0, 7);
-          const usageRows = await base44.entities.AiUsage.filter(
-            { user_id: user.id, window_key: monthlyKey },
-            "-updated_date",
-            1,
-          ).catch(() => []);
-          if (active) setMonthlyUsed(Number(usageRows?.[0]?.request_count || 0));
-        }
+        setMonthlyUsed(Number(entitlementPayload?.usage?.monthly_used || 0));
 
         if (conversationRows?.[0]?.id) {
           await openConversation(conversationRows[0].id, true);
@@ -584,7 +581,7 @@ export default function Studio() {
           <div>
             <Gauge />
             <span>
-              <strong>{remainingCredits || monthlyLimit || 0} credits available</strong>
+              <strong>{remainingCredits} credits available</strong>
               <small>{readable(entitlement?.plan || "free")} plan · usage shown before approval</small>
             </span>
           </div>
@@ -602,7 +599,7 @@ export default function Studio() {
             <div><strong>AI Project Operator</strong><small>One conversation from idea through verified deliverables.</small></div>
           </div>
           <div className="creator-topbar-actions">
-            <span className="creator-credit-chip"><Sparkles /> {remainingCredits || monthlyLimit || 0} credits</span>
+            <span className="creator-credit-chip"><Sparkles /> {remainingCredits} credits</span>
             <Link to="/" className="creator-builder-link"><AppWindow /> Visual app builder</Link>
             <span className="creator-user">{user?.full_name || user?.email || "Creator"}</span>
           </div>
