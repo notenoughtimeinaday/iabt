@@ -526,7 +526,7 @@ export default function Builder() {
           </Button>
           <div className="iabt-mark">IA</div>
           <div>
-            <p className="iabt-eyebrow">Interactive App Builder Tool</p>
+            <p className="iabt-eyebrow">Intelligent App Building Technology</p>
             <h1>{definition.app.name}</h1>
           </div>
         </div>
