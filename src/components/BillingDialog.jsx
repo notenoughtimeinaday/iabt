@@ -18,6 +18,13 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
   const currentPlan = String(entitlement?.plan || "free").toLowerCase();
   const billingMode = billingStatus?.mode === "live" ? "live" : "test";
   const billingReady = Boolean(billingStatus?.ready);
+  const hasStripeSubscription =
+    entitlement?.billing_provider === "stripe" &&
+    String(entitlement?.provider_customer_id || "").startsWith("cus_") &&
+    String(entitlement?.provider_subscription_id || "").startsWith("sub_") &&
+    ["active", "trialing", "past_due", "paused"].includes(
+      String(entitlement?.status || "").toLowerCase(),
+    );
   const foundingAccess =
     currentPlan === "pro" &&
     entitlement?.billing_provider === "none" &&
@@ -96,7 +103,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
 
         <div className="iabt-billing-trust">
           <span><ShieldCheck /> Secure server-side checkout</span>
-          <span><Sparkles /> AI usage by account</span>
+          <span><Sparkles /> IABT credits by account</span>
           <span><Zap /> Change plans through Stripe</span>
         </div>
 
@@ -126,11 +133,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
                   ))}
                 </ul>
 
-                {plan.id === "free" ? (
-                  <Button variant="outline" disabled className="w-full">
-                    {isCurrent ? "Current plan" : "Included"}
-                  </Button>
-                ) : isCurrent && entitlement?.billing_provider === "stripe" ? (
+                {hasStripeSubscription ? (
                   <Button
                     variant="outline"
                     className="w-full"
@@ -138,7 +141,15 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
                     disabled={Boolean(busyPlan) || !billingReady}
                   >
                     {busyPlan === "portal" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Manage billing
+                    {isCurrent
+                      ? "Manage billing"
+                      : plan.id === "free"
+                        ? "Manage or cancel in Stripe"
+                        : "Change plan in Stripe"}
+                  </Button>
+                ) : plan.id === "free" ? (
+                  <Button variant="outline" disabled className="w-full">
+                    {isCurrent ? "Current plan" : "Included"}
                   </Button>
                 ) : isCurrent && foundingAccess ? (
                   <Button variant="outline" disabled className="w-full">Founding access</Button>
@@ -160,9 +171,9 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
 
         <div className="iabt-credit-pack">
           <div>
-            <span className="iabt-credit-pack-kicker">Flexible AI capacity</span>
-            <strong>{AI_CREDIT_PACK.credits} extra AI generations for {"$" + AI_CREDIT_PACK.price}</strong>
-            <p>One-time credit packs never expire and are used only after the plan's monthly allowance.</p>
+            <span className="iabt-credit-pack-kicker">Flexible creation capacity</span>
+            <strong>{AI_CREDIT_PACK.credits} extra IABT credits for {"$" + AI_CREDIT_PACK.price}</strong>
+            <p>One-time credits never expire, are used after the monthly allowance, and can cover weighted paid-media renders.</p>
           </div>
           <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan) || !billingReady}>
             {busyPlan === "credits" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
