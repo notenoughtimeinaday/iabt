@@ -118,6 +118,8 @@ export default function Home() {
     try {
       const definition = createDefaultAppDefinition(title);
       const project = await base44.entities.Project.create({
+        user_id: user.id,
+        user_email: user.email,
         title: definition.app.name,
         description: definition.app.description,
         category: "SaaS",
@@ -168,6 +170,8 @@ export default function Home() {
         components: page.components.map((component) => ({ ...component, id: createId("component") })),
       }));
       const duplicate = await base44.entities.Project.create({
+        user_id: user.id,
+        user_email: user.email,
         title: definition.app.name,
         description: definition.app.description,
         category: project.category || "SaaS",
@@ -213,6 +217,8 @@ export default function Home() {
       const raw = JSON.parse(await file.text());
       const definition = normalizeAppDefinition(raw, file.name.replace(/\.json$/i, ""));
       const project = await base44.entities.Project.create({
+        user_id: user.id,
+        user_email: user.email,
         title: definition.app.name,
         description: definition.app.description,
         category: "SaaS",
@@ -238,6 +244,8 @@ export default function Home() {
     setWorking(true);
     try {
       const records = legacyProjects.map((item) => ({
+        user_id: user.id,
+        user_email: user.email,
         title: item.definition.app.name || item.name,
         description: item.definition.app.description,
         category: "SaaS",
