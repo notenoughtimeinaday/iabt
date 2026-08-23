@@ -67,6 +67,26 @@ export function getPlanDefaults(plan) {
   return PLAN_DEFAULTS[plan] || PLAN_DEFAULTS.free;
 }
 
+export function getStripeMode() {
+  const configured = String(secrets.get("IABT_STRIPE_MODE") || "test").trim().toLowerCase();
+  return configured === "live" ? "live" : "test";
+}
+
+export function getStripeReadiness() {
+  const mode = getStripeMode();
+  const key = String(secrets.get("STRIPE_SECRET_KEY") || "").trim();
+  const webhookSecret = String(secrets.get("STRIPE_WEBHOOK_SECRET") || "").trim();
+  const expectedPrefix = mode === "live" ? "sk_live_" : "sk_test_";
+  const pricesReady = PLANS.every((plan) => Boolean(getConfiguredPriceId(plan))) && Boolean(getConfiguredAiCreditPackPriceId());
+  return {
+    mode,
+    key_ready: key.startsWith(expectedPrefix),
+    webhook_ready: webhookSecret.startsWith("whsec_"),
+    prices_ready: pricesReady,
+    ready: key.startsWith(expectedPrefix) && webhookSecret.startsWith("whsec_") && pricesReady,
+  };
+}
+
 export function getConfiguredPriceId(plan) {
   const normalized = normalizePlan(plan);
   if (!normalized) return null;
@@ -115,9 +135,15 @@ export function getAppOrigin(req) {
       // Continue to the canonical origin.
     }
   }
-  return configured && allowed.has(new URL(configured).origin)
-    ? new URL(configured).origin
-    : DEFAULT_APP_ORIGIN;
+  if (configured) {
+    try {
+      const configuredOrigin = new URL(configured).origin;
+      if (allowed.has(configuredOrigin)) return configuredOrigin;
+    } catch {
+      // Fall through to the canonical production origin.
+    }
+  }
+  return DEFAULT_APP_ORIGIN;
 }
 
 export function mapStripeStatus(stripeStatus) {
@@ -136,10 +162,12 @@ export function mapStripeStatus(stripeStatus) {
 const STRIPE_API = "https://api.stripe.com/v1";
 
 function authHeaders() {
+  const mode = getStripeMode();
   const key = String(secrets.get("STRIPE_SECRET_KEY") || "").trim();
-  if (!key) throw new Error("Stripe test mode is not configured.");
-  if (!key.startsWith("sk_test_")) {
-    throw new Error("IABT billing is locked to Stripe test mode.");
+  const expectedPrefix = mode === "live" ? "sk_live_" : "sk_test_";
+  if (!key) throw new Error(`Stripe ${mode} mode is not configured.`);
+  if (!key.startsWith(expectedPrefix)) {
+    throw new Error(`Stripe key does not match configured ${mode} billing mode.`);
   }
   return { Authorization: "Bearer " + key };
 }
