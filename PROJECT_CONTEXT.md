@@ -2,9 +2,10 @@
 
 ## Canonical Base44 app
 
-- Name: CreatorFlow (IABT implementation)
+- Name: IABT-JERICHO
 - App ID: `6a849bcd3e04d068553b4af7`
-- Public URL: https://crazy-creator-flow-hub.base44.app
+- Production URL: https://iabt.insuredspending.org
+- Base44 fallback: https://crazy-creator-flow-hub.base44.app
 - Architecture: React/Vite + Base44 SDK/auth/entities/functions
 - AppDefinition schema: 1.0
 
@@ -26,6 +27,8 @@ The initial IABT version of this concept must remain a no-real-money prototype a
 
 - Sign in through the Base44-hosted login.
 - Optional: configure `OPENAI_API_KEY` and `OPENAI_MODEL` in Base44 backend secrets for direct OpenAI Responses API usage.
+- Luma Ray 3.2 requires a funded provider account, `LUMA_AGENTS_API_KEY`, and both paid-media safety gates.
+- Stripe subscriptions and IABT credit packs fund user allowances; Stripe does not directly refill the separate Luma provider balance.
 - Publish from Base44 after `npm run verify` passes.
 - Do not change DNS without explicit authorization.
 
