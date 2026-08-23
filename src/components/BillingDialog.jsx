@@ -135,7 +135,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
                     variant="outline"
                     className="w-full"
                     onClick={openBillingPortal}
-                    disabled={Boolean(busyPlan)}
+                    disabled={Boolean(busyPlan) || !billingReady}
                   >
                     {busyPlan === "portal" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     Manage billing
@@ -147,7 +147,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
                     className="w-full"
                     variant={isFeatured ? "default" : "outline"}
                     onClick={() => startCheckout(plan.id)}
-                    disabled={Boolean(busyPlan)}
+                    disabled={Boolean(busyPlan) || !billingReady}
                   >
                     {busyPlan === plan.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     {billingMode === "live" ? `Choose ${plan.name}` : `Test ${plan.name} checkout`}
@@ -164,7 +164,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
             <strong>{AI_CREDIT_PACK.credits} extra AI generations for {"$" + AI_CREDIT_PACK.price}</strong>
             <p>One-time credit packs never expire and are used only after the plan's monthly allowance.</p>
           </div>
-          <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan)}>
+          <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan) || !billingReady}>
             {busyPlan === "credits" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {billingMode === "live" ? "Buy credit pack" : "Test credit-pack checkout"}
           </Button>
