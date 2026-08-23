@@ -661,7 +661,7 @@ export default function Studio() {
                     >
                       <span className="creator-mode-icon"><Icon /></span>
                       <span><strong>{item.label}</strong><small>{item.description}</small></span>
-                      {ready === true && renderReady !== false && <i className="is-ready" title="Final output provider ready" />}
+                      {ready === true && renderReady !== false && <i className="is-ready" title="Renderer configured — provider balance and capacity are checked at submission" />}
                       {preparationOnly && <i className="is-prepare" title="Preproduction only — final renderer offline" />}
                       {ready === false && <i className="is-prepare" title="Provider setup required" />}
                     </button>
@@ -786,11 +786,11 @@ export default function Studio() {
                 <span className={activePlan.provider_ready ? "is-ready" : "is-limited"}>
                   {activePlan.provider_ready ? <CheckCircle2 /> : <Clock3 />}
                 </span>
-                <p><strong>{activePlan.provider_ready ? (activePlan.render_ready ? "Production provider ready" : "Preproduction provider ready") : "Provider setup required"}</strong><small>{activePlan.provider || "IABT managed production"}</small></p>
+                <p><strong>{activePlan.provider_ready ? (activePlan.render_ready ? "Production provider configured" : "Preproduction provider configured") : "Provider setup required"}</strong><small>{activePlan.provider || "IABT managed production"}</small></p>
               </div>
               <div>
                 <span className={activePlan.render_ready ? "is-ready" : "is-prepare"}>{activePlan.render_ready ? <Play /> : <FileText />}</span>
-                <p><strong>{activePlan.render_ready ? "Final rendering available" : "Preparation package available"}</strong><small>{activePlan.render_ready ? "Produces the requested media" : "Produces detailed, usable production assets"}</small></p>
+                <p><strong>{activePlan.render_ready ? "Final renderer configured" : "Preparation package available"}</strong><small>{activePlan.render_ready ? "Balance and provider capacity are confirmed when the approved job is submitted" : "Produces detailed, usable production assets"}</small></p>
               </div>
             </div>
 
