@@ -261,7 +261,7 @@ export default function Home() {
       <header className="iabt-home-nav">
         <div className="iabt-home-brand">
           <div className="iabt-mark">IA</div>
-          <div><strong>IABT</strong><span>Interactive App Builder Tool</span></div>
+          <div><strong>IABT</strong><span>Intelligent App Building Technology</span></div>
         </div>
         <div className="iabt-home-user">
           <Button size="sm" onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-1" /> AI Project Operator</Button>
