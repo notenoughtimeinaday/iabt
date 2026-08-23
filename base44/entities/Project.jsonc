@@ -73,7 +73,9 @@
     "app_definition"
   ],
   "rls": {
-    "create": true,
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
     "read": {
       "$or": [
         {
