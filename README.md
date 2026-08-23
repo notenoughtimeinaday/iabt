@@ -1,4 +1,4 @@
-# IABT — Interactive App Builder Tool
+# IABT — Intelligent App Building Technology
 
 IABT is an AI-assisted SaaS app builder running on Base44. It preserves the original AppDefinition workflow while replacing the localhost-only Express runtime with Base44 authentication, owner-scoped cloud entities, protected backend functions, and managed hosting.
 
