@@ -127,32 +127,60 @@ Deno.serve(async (req) => {
 
     let artifact = await loadArtifact(service, job);
     if (job.status === "succeeded") {
-      if (!hasArtifactOutput(artifact) || (job.provider === "luma-ray-3.2" && !clean(artifact?.file_uri, 2000))) {
+      const invalidArtifact = !hasArtifactOutput(artifact) ||
+        (job.provider === "luma-ray-3.2" && !clean(artifact?.file_uri, 2000));
+      if (invalidArtifact && job.provider === "luma-ray-3.2" && job.provider_job_id) {
+        job = await service.entities.GenerationJob.update(job.id, {
+          status: "waiting_provider",
+          progress: 95,
+          stage: "Recovering durable video artifact",
+          error_message: "The provider render completed, but the private artifact must be recovered.",
+          poll_after: new Date().toISOString(),
+        });
+      } else if (invalidArtifact) {
         job = await service.entities.GenerationJob.update(job.id, {
           status: "failed",
           progress: 100,
           stage: "Artifact integrity check failed",
-          error_message: "The completed job has no durable private media artifact.",
+          error_message: "The completed job has no durable output artifact.",
           completed_at: new Date().toISOString(),
         });
+        job = await restoreJobCredits(
+          base44,
+          job,
+          "No durable artifact existed; reserved credits restored.",
+        );
         return Response.json({
-          error: "The completed job has no durable media artifact.",
+          error: "The completed job has no durable artifact.",
           job,
           artifact: null,
           complete: true,
-          billing: billing(),
+          billing: billing(job),
         }, { status: 409 });
+      } else {
+        if (job.usage_state === "reserved" && await captureJobCredits(
+          base44,
+          job,
+          "Existing durable artifact verified; reserved credits captured.",
+        )) {
+          job = { ...job, usage_state: "captured" };
+        }
+        return Response.json({ ok: true, job, artifact, complete: true, billing: billing(job) });
       }
-      return Response.json({ ok: true, job, artifact, complete: true, billing: billing() });
     }
 
     if (["failed", "canceled"].includes(String(job.status))) {
+      job = await restoreJobCredits(
+        base44,
+        job,
+        "Terminal generation job produced no durable artifact; reserved credits restored.",
+      );
       return Response.json({
         ok: false,
         job,
         artifact: artifact || null,
         complete: true,
-        billing: billing(),
+        billing: billing(job),
       }, { status: 409 });
     }
 
@@ -162,7 +190,7 @@ Deno.serve(async (req) => {
         job,
         artifact: artifact || null,
         complete: ["succeeded", "failed", "canceled"].includes(String(job.status)),
-        billing: billing(),
+        billing: billing(job),
       });
     }
 
@@ -173,12 +201,17 @@ Deno.serve(async (req) => {
         stage: "Provider job was not submitted",
         error_message: "No Luma generation ID exists for this job. Request a new creation plan.",
       });
+      job = await restoreJobCredits(
+        base44,
+        job,
+        "No provider job was submitted; reserved credits restored.",
+      );
       return Response.json({
         error: "This job has no provider generation ID. No video artifact exists.",
         job,
         artifact: null,
         complete: true,
-        billing: billing(),
+        billing: billing(job),
       }, { status: 409 });
     }
 
@@ -194,7 +227,7 @@ Deno.serve(async (req) => {
         job,
         artifact: null,
         complete: false,
-        billing: billing(),
+        billing: billing(job),
       }, { status: 503 });
     }
 
@@ -204,28 +237,42 @@ Deno.serve(async (req) => {
     const completed = ["completed", "complete", "succeeded", "success"].includes(state);
 
     if (failed) {
+      const failureCode = clean(
+        generation?.failure_code || generation?.error?.code,
+        200,
+      );
       const reason = clean(
-        generation?.failure_reason || generation?.error?.message || generation?.message || "The video provider reported a failed render.",
+        generation?.failure_reason ||
+        generation?.error?.message ||
+        generation?.message ||
+        "The video provider reported a failed render.",
         1000,
       );
+      const providerFailure = failureCode ? failureCode + ": " + reason : reason;
       job = await service.entities.GenerationJob.update(job.id, {
         status: "failed",
         progress: 100,
         stage: "Video provider reported failure",
-        error_message: reason,
+        error_message: providerFailure,
         completed_at: new Date().toISOString(),
       });
+      job = await restoreJobCredits(
+        base44,
+        job,
+        "The video provider reported a failed render; reserved credits restored.",
+      );
       await service.entities.CreationPlan.update(job.plan_id, {
         status: "failed",
         execution_job_id: job.id,
       });
       return Response.json({
         ok: false,
-        error: reason,
+        error: providerFailure,
+        ...(failureCode ? { code: failureCode } : {}),
         job,
         artifact: null,
         complete: true,
-        billing: billing(),
+        billing: billing(job),
       }, { status: 502 });
     }
 
@@ -247,19 +294,19 @@ Deno.serve(async (req) => {
         artifact: null,
         complete: false,
         provider_status: state,
-        billing: billing(),
+        billing: billing(job),
       }, { status: 202 });
     }
 
     if (artifact?.id && clean(artifact.file_uri, 2000)) {
-      job = await markComplete(service, job, artifact);
+      job = await markComplete(base44, service, job, artifact);
       return Response.json({
         ok: true,
         job,
         artifact,
         complete: true,
         result: { message: "The video is complete and stored as a private Base44 artifact." },
-        billing: billing(),
+        billing: billing(job),
       });
     }
 
@@ -278,7 +325,7 @@ Deno.serve(async (req) => {
         artifact: null,
         complete: false,
         provider_status: state,
-        billing: billing(),
+        billing: billing(job),
       }, { status: 202 });
     }
 
@@ -302,7 +349,7 @@ Deno.serve(async (req) => {
         complete: false,
         provider_status: state,
         message: "The provider render is complete, but IABT has not yet secured the MP4. Success is not being claimed.",
-        billing: billing(),
+        billing: billing(job),
       }, { status: 202 });
     }
 
@@ -336,18 +383,18 @@ Deno.serve(async (req) => {
     if (!artifact?.id || !clean(artifact.file_uri, 2000)) {
       throw new Error("The video artifact could not be persisted safely.");
     }
-    job = await markComplete(service, job, artifact);
+    job = await markComplete(base44, service, job, artifact);
     return Response.json({
       ok: true,
       job,
       artifact,
       complete: true,
       result: { message: "The Ray 3.2 MP4 is complete and stored as a private Base44 artifact." },
-      billing: billing(),
+      billing: billing(job),
     });
   } catch (error) {
     if (error instanceof Response) return error;
     const message = error instanceof Error ? clean(error.message, 1000) : "Could not refresh the generation job.";
-    return Response.json({ error: message, billing: billing() }, { status: 500 });
+    return Response.json({ error: message, billing: billing(job) }, { status: 500 });
   }
 });
