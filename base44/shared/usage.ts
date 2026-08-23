@@ -334,3 +334,68 @@ export async function releaseIabtCredits(base44: any, reservation: any) {
   await reverseUsageBuckets(service, reservation.user_id, reservation);
   return true;
 }
+
+async function recordJobLedger(service: any, job: any, eventType: string, description: string, status: string) {
+  const existing = await service.entities.UsageLedger.filter(
+    { user_id: job.user_id, job_id: job.id, event_type: eventType },
+    "-created_date",
+    1,
+  );
+  if (existing?.length) return existing[0];
+  return service.entities.UsageLedger.create({
+    user_id: job.user_id,
+    user_email: job.user_email,
+    plan_id: job.plan_id,
+    job_id: job.id,
+    event_type: eventType,
+    unit: "media_credit",
+    amount: nonNegative(job.usage_reservation?.amount),
+    pricing_version: String(job.quote_snapshot?.pricing_version || "unknown"),
+    description,
+    status,
+    occurred_at: new Date().toISOString(),
+  });
+}
+
+export async function captureJobCredits(base44: any, job: any, description: string) {
+  if (!job?.id || String(job.usage_state || "") === "captured") return false;
+  const service = base44.asServiceRole;
+  const lock = await service.entities.GenerationJob.updateMany(
+    { id: job.id, usage_state: "reserved" },
+    { $set: { usage_state: "captured" } },
+  );
+  if (Number(lock?.updated || 0) !== 1) return false;
+  try {
+    await recordJobLedger(service, job, "capture", description, "settled");
+  } catch (error) {
+    console.warn("credit capture ledger failed:", error instanceof Error ? error.message : error);
+  }
+  return true;
+}
+
+export async function releaseJobCredits(base44: any, job: any, description: string) {
+  if (!job?.id || String(job.usage_state || "") === "released") return false;
+  const service = base44.asServiceRole;
+  const currentState = String(job.usage_state || "");
+  if (!["reserved", "release_failed"].includes(currentState)) return false;
+  const lock = await service.entities.GenerationJob.updateMany(
+    { id: job.id, usage_state: currentState },
+    { $set: { usage_state: "release_pending" } },
+  );
+  if (Number(lock?.updated || 0) !== 1) return false;
+
+  try {
+    const released = await releaseIabtCredits(base44, job.usage_reservation);
+    if (!released) throw new Error("The entitlement reservation could not be found.");
+    await service.entities.GenerationJob.update(job.id, { usage_state: "released" });
+    try {
+      await recordJobLedger(service, job, "release", description, "reversed");
+    } catch (ledgerError) {
+      console.warn("credit release ledger failed:", ledgerError instanceof Error ? ledgerError.message : ledgerError);
+    }
+    return true;
+  } catch (error) {
+    await service.entities.GenerationJob.update(job.id, { usage_state: "release_failed" }).catch(() => {});
+    throw error;
+  }
+}
