@@ -4,6 +4,7 @@ export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-21.1";
 export const CREATION_QUOTE_TTL_MS = 30 * 60 * 1000;
 export const LUMA_MODEL = "ray-3.2";
 export const LUMA_API_BASE = "https://agents.lumalabs.ai/v1";
+export const PROVIDER_COST_PER_IABT_CREDIT_CENTS = 5;
 
 const INTENTS = [
   "app",
@@ -382,9 +383,12 @@ export function capabilityFor(intent: string, spec: any = {}) {
     ? video.provider_cost_cents
     : Number(capability?.pricing?.default_cents || 0);
   const platformFee = Number(capability?.pricing?.platform_fee_cents || 0);
+  const creditCost = providerCost > 0
+    ? Math.max(1, Math.ceil((providerCost + platformFee) / PROVIDER_COST_PER_IABT_CREDIT_CENTS))
+    : 1;
   return {
     ...capability,
-    credit_cost: 1,
+    credit_cost: creditCost,
     provider_cost_cents: providerCost,
     platform_fee_cents: platformFee,
     total_estimated_cost_cents: providerCost + platformFee,
@@ -395,9 +399,12 @@ export function capabilityFor(intent: string, spec: any = {}) {
 export function quoteFor(intent: string, spec: any = {}) {
   const capability = capabilityFor(intent, spec);
   const expiresAt = new Date(Date.now() + CREATION_QUOTE_TTL_MS).toISOString();
+  const creditLabel = capability.credit_cost === 1 ? "1 IABT credit" : capability.credit_cost + " IABT credits";
   const noChargeMessage = capability.total_estimated_cost_cents > 0
-    ? "This is a provider-cost estimate for explicit approval. IABT does not charge a card or deduct app credits in this release. The connected provider account may incur the approved cost."
-    : "No card charge or app-credit deduction will occur for this execution.";
+    ? creditLabel + " will be reserved only after approval. The displayed " +
+      "$" + (capability.total_estimated_cost_cents / 100).toFixed(2) +
+      " provider cost is covered by those credits and is not a separate card charge. If Luma rejects the request before it is queued, the reservation is restored."
+    : creditLabel + " will be reserved only after approval. No separate card charge will occur.";
   return {
     capability,
     credit_cost: capability.credit_cost,
@@ -409,7 +416,7 @@ export function quoteFor(intent: string, spec: any = {}) {
     quote_expires_at: expiresAt,
     consent_summary: noChargeMessage,
     requires_explicit_approval: true,
-    billing_action: "none",
+    billing_action: "reserve_iabt_credits",
   };
 }
 
@@ -712,13 +719,26 @@ async function lumaRequest(path: string, init: RequestInit) {
     headers: {
       Accept: "application/json",
       Authorization: "Bearer " + key,
+      "X-Request-Id": crypto.randomUUID(),
       ...(init.headers || {}),
     },
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const detail = payload?.detail || payload?.error?.message || payload?.message || "Luma request failed with status " + response.status + ".";
-    throw new Error(String(detail).slice(0, 800));
+    const code =
+      response.status === 402 ? "luma_insufficient_balance" :
+      response.status === 401 ? "luma_authentication_failed" :
+      response.status === 403 ? "luma_access_denied" :
+      response.status === 429 ? "luma_rate_limited" :
+      response.status >= 500 ? "luma_provider_unavailable" :
+      "luma_invalid_request";
+    const error: any = new Error(String(detail).slice(0, 800));
+    error.status = response.status;
+    error.code = code;
+    error.request_id = String(response.headers.get("x-request-id") || "");
+    error.retryable = [429, 502, 503].includes(response.status);
+    throw error;
   }
   return payload;
 }
