@@ -5,7 +5,7 @@
 - Store `OPENAI_API_KEY`, Stripe credentials, price IDs, and webhook secrets only in Base44 backend secrets.
 - Never commit `.env`, `.env.local`, Base44 tokens, Stripe keys, webhook signing secrets, or `base44/.app.jsonc`.
 - Never expose backend secrets through `VITE_*` variables.
-- IABT billing is code-locked to Stripe test secret keys until an explicitly reviewed live-billing release.
+- IABT billing defaults to Stripe test mode. Live mode is accepted only when `IABT_STRIPE_MODE=live` and the configured Stripe key, price IDs, and webhook endpoint are the corresponding live resources.
 
 ## Data access
 
@@ -20,7 +20,7 @@ Project and AI-usage records use owner-scoped row-level security. Account entitl
 - Webhook signatures use HMAC verification, constant-time comparison, and a five-minute timestamp tolerance.
 - Webhook plan assignment is derived from configured Stripe price IDs, not client-supplied plan names.
 - AI credit grants are idempotently recorded by Stripe event ID.
-- Invalid, cross-app, or live-mode Stripe events are rejected.
+- Invalid and cross-app Stripe events are rejected. Test/live webhook events must exactly match the configured `IABT_STRIPE_MODE`; mode-mismatched events are rejected.
 
 ## Generated apps
 
