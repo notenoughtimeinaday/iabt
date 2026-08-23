@@ -1,49 +1,11 @@
 import { createClientFromRequest } from "npm:@base44/sdk";
+import {
+  getOrCreateEntitlement,
+  releaseIabtCredits,
+  reserveIabtCredits,
+} from "../../shared/usage.ts";
 
 const COMPONENT_TYPES = ["Text", "Input", "Button", "ScannerInput"];
-const PLAN_DEFAULTS = {
-  free: {
-    ai_hourly_limit: 5,
-    ai_monthly_limit: 10,
-    project_limit: 1,
-    static_zip_export_enabled: false,
-    react_export_enabled: false,
-    commercial_use_enabled: false,
-    white_label_exports_enabled: false,
-    team_seat_limit: 1,
-  },
-  builder: {
-    ai_hourly_limit: 30,
-    ai_monthly_limit: 100,
-    project_limit: 5,
-    static_zip_export_enabled: true,
-    react_export_enabled: false,
-    commercial_use_enabled: false,
-    white_label_exports_enabled: false,
-    team_seat_limit: 1,
-  },
-  pro: {
-    ai_hourly_limit: 100,
-    ai_monthly_limit: 500,
-    project_limit: 25,
-    static_zip_export_enabled: true,
-    react_export_enabled: true,
-    commercial_use_enabled: true,
-    white_label_exports_enabled: false,
-    team_seat_limit: 1,
-  },
-  agency: {
-    ai_hourly_limit: 200,
-    ai_monthly_limit: 2000,
-    project_limit: 0,
-    static_zip_export_enabled: true,
-    react_export_enabled: true,
-    commercial_use_enabled: true,
-    white_label_exports_enabled: true,
-    team_seat_limit: 5,
-  },
-};
-
 const componentSchema = {
   type: "object",
   additionalProperties: false,
@@ -121,129 +83,6 @@ function validateGenerated(result: unknown) {
     }
   }
   return value;
-}
-
-function planDefaults(plan: string) {
-  return PLAN_DEFAULTS[plan as keyof typeof PLAN_DEFAULTS] || PLAN_DEFAULTS.free;
-}
-
-async function getOrCreateEntitlement(base44: any, user: any) {
-  const service = base44.asServiceRole;
-  const records = await service.entities.AccountEntitlement.filter({ user_id: user.id }, "-updated_date", 1);
-  const current = records?.[0];
-  if (current) {
-    const isActive = ["active", "trialing"].includes(String(current.status));
-    const activePlan = isActive ? String(current.plan || "free") : "free";
-    if (isActive) {
-      const defaults = planDefaults(activePlan);
-      const foundingAdmin = user.role === "admin" && current.billing_provider === "none";
-      return foundingAdmin
-        ? { ...defaults, ...current, plan: activePlan }
-        : { ...current, ...defaults, bonus_ai_credits: Number(current.bonus_ai_credits || 0), plan: activePlan };
-    }
-    return { ...current, ...planDefaults("free"), bonus_ai_credits: Number(current.bonus_ai_credits || 0), plan: "free" };
-  }
-
-  const plan = user.role === "admin" ? "pro" : "free";
-  const defaults = planDefaults(plan);
-  return service.entities.AccountEntitlement.create({
-    user_id: user.id,
-    user_email: user.email,
-    plan,
-    status: "active",
-    billing_provider: "none",
-    ...defaults,
-    ai_hourly_limit: user.role === "admin" ? 200 : defaults.ai_hourly_limit,
-    project_limit: user.role === "admin" ? 0 : defaults.project_limit,
-    bonus_ai_credits: 0,
-    notes: user.role === "admin" ? "Founding administrator entitlement" : "Default free entitlement",
-  });
-}
-
-async function incrementUsageBucket(base44: any, user: any, key: string, current: any, now: Date) {
-  const service = base44.asServiceRole;
-  const nextUsed = Number(current?.request_count || 0) + 1;
-  if (current) {
-    await service.entities.AiUsage.update(current.id, {
-      request_count: nextUsed,
-      last_request_at: now.toISOString(),
-    });
-  } else {
-    await service.entities.AiUsage.create({
-      user_id: user.id,
-      user_email: user.email,
-      usage_kind: "app_generation",
-      window_key: key,
-      request_count: nextUsed,
-      last_request_at: now.toISOString(),
-    });
-  }
-  return nextUsed;
-}
-
-async function enforceRateLimit(base44: any, user: any, entitlement: any) {
-  const now = new Date();
-  const defaults = planDefaults(entitlement.plan);
-  const hourlyKey = "hour:" + now.toISOString().slice(0, 13);
-  const monthlyKey = "month:" + now.toISOString().slice(0, 7);
-  const hourlyLimit = Math.max(1, Number(entitlement.ai_hourly_limit || defaults.ai_hourly_limit));
-  const monthlyLimit = Math.max(1, Number(entitlement.ai_monthly_limit || defaults.ai_monthly_limit));
-  const bonusCredits = Math.max(0, Number(entitlement.bonus_ai_credits || 0));
-
-  const service = base44.asServiceRole;
-  const [hourlyRecords, monthlyRecords] = await Promise.all([
-    service.entities.AiUsage.filter({ user_id: user.id, window_key: hourlyKey }, "-updated_date", 1),
-    service.entities.AiUsage.filter({ user_id: user.id, window_key: monthlyKey }, "-updated_date", 1),
-  ]);
-  const hourly = hourlyRecords?.[0];
-  const monthly = monthlyRecords?.[0];
-  const hourlyUsed = Number(hourly?.request_count || 0);
-  const monthlyUsed = Number(monthly?.request_count || 0);
-
-  if (hourlyUsed >= hourlyLimit) {
-    throw new Response(
-      JSON.stringify({
-        error: "Hourly AI safety limit reached. Try again after the hour changes.",
-        plan: entitlement.plan,
-        limit: hourlyLimit,
-      }),
-      { status: 429, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
-  const useBonusCredit = monthlyUsed >= monthlyLimit;
-  if (useBonusCredit && bonusCredits < 1) {
-    throw new Response(
-      JSON.stringify({
-        error: "Monthly AI generation allowance reached. Upgrade your plan or add an AI credit pack.",
-        plan: entitlement.plan,
-        limit: monthlyLimit,
-        bonus_remaining: bonusCredits,
-      }),
-      { status: 429, headers: { "Content-Type": "application/json" } },
-    );
-  }
-
-  if (useBonusCredit) {
-    await base44.asServiceRole.entities.AccountEntitlement.update(entitlement.id, {
-      bonus_ai_credits: bonusCredits - 1,
-    });
-  }
-
-  const [nextHourlyUsed, nextMonthlyUsed] = await Promise.all([
-    incrementUsageBucket(base44, user, hourlyKey, hourly, now),
-    incrementUsageBucket(base44, user, monthlyKey, monthly, now),
-  ]);
-
-  return {
-    limit: hourlyLimit,
-    used: nextHourlyUsed,
-    remaining: Math.max(0, hourlyLimit - nextHourlyUsed),
-    monthly_limit: monthlyLimit,
-    monthly_used: nextMonthlyUsed,
-    monthly_remaining: Math.max(0, monthlyLimit - nextMonthlyUsed),
-    bonus_remaining: useBonusCredit ? bonusCredits - 1 : bonusCredits,
-  };
 }
 
 async function generateWithOpenAI(apiKey: string, prompt: string) {
