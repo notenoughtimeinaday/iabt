@@ -199,8 +199,22 @@ async function grantAiCreditPack(base44, eventId, eventType, session) {
   }
 
   const service = base44.asServiceRole;
-  const processed = await service.entities.BillingEvent.filter({ event_id: eventId }, "-created_date", 1);
-  if (processed?.[0]) return;
+  const checkoutSessionId = String(session?.id || "").trim();
+  if (!checkoutSessionId.startsWith("cs_")) {
+    throw new Error("AI credit checkout is missing its Stripe Checkout Session ID.");
+  }
+  const processedSession = await service.entities.BillingEvent.filter(
+    { checkout_session_id: checkoutSessionId },
+    "-created_date",
+    1,
+  );
+  if (Number(processedSession?.[0]?.credits_granted || 0) >= AI_CREDIT_PACK_SIZE) return;
+  const processedEvent = await service.entities.BillingEvent.filter(
+    { event_id: eventId },
+    "-created_date",
+    1,
+  );
+  if (Number(processedEvent?.[0]?.credits_granted || 0) >= AI_CREDIT_PACK_SIZE) return;
 
   const userId = String(metadata.user_id || session?.client_reference_id || "").trim();
   const userEmail = String(metadata.user_email || session?.customer_details?.email || "").trim();
@@ -211,6 +225,7 @@ async function grantAiCreditPack(base44, eventId, eventType, session) {
   const eventRecord = await service.entities.BillingEvent.create({
     event_id: eventId,
     event_type: eventType,
+    checkout_session_id: checkoutSessionId,
     user_id: userId,
     user_email: userEmail,
     product_type: "ai_credit_pack",
@@ -221,9 +236,10 @@ async function grantAiCreditPack(base44, eventId, eventType, session) {
   try {
     const existing = await findEntitlement(service, { user_id: userId, user_email: userEmail });
     if (existing) {
-      await service.entities.AccountEntitlement.update(existing.id, {
-        bonus_ai_credits: Number(existing.bonus_ai_credits || 0) + AI_CREDIT_PACK_SIZE,
-      });
+      await service.entities.AccountEntitlement.updateMany(
+        { id: existing.id },
+        { $inc: { bonus_ai_credits: AI_CREDIT_PACK_SIZE } },
+      );
     } else {
       const defaults = getPlanDefaults("free");
       await service.entities.AccountEntitlement.create({
@@ -280,19 +296,26 @@ export default async function(req: Request): Promise<Response> {
     const type = String(event?.type || "");
     const data = event?.data?.object || {};
 
-    if (type === "checkout.session.completed") {
+    if (
+      type === "checkout.session.completed" ||
+      type === "checkout.session.async_payment_succeeded"
+    ) {
       if (data?.metadata?.base44_app_id !== IABT_APP_ID) {
         throw new Error("Checkout session does not belong to this IABT app.");
       }
       if (data?.metadata?.product_type === "ai_credit_pack") {
-        await grantAiCreditPack(base44, String(event.id || ""), type, data);
-      } else {
+        if (data?.payment_status === "paid") {
+          await grantAiCreditPack(base44, String(event.id || ""), type, data);
+        }
+      } else if (type === "checkout.session.completed") {
         await processSubscriptionId(base44, stringId(data.subscription));
       }
     } else if (
       type === "customer.subscription.created" ||
       type === "customer.subscription.updated" ||
-      type === "customer.subscription.deleted"
+      type === "customer.subscription.deleted" ||
+      type === "customer.subscription.paused" ||
+      type === "customer.subscription.resumed"
     ) {
       await upsertSubscriptionEntitlement(base44, data);
     } else if (type === "invoice.paid" || type === "invoice.payment_failed") {
