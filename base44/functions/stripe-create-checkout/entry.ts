@@ -2,6 +2,8 @@ import { createClientFromRequest } from "npm:@base44/sdk";
 import {
   getAppOrigin,
   getConfiguredPriceId,
+  getStripeMode,
+  getStripeReadiness,
   IABT_APP_ID,
   newIdempotencyKey,
   normalizePlan,
@@ -31,12 +33,17 @@ export default async function(req: Request): Promise<Response> {
       return Response.json({ error: "plan must be 'builder', 'pro', or 'agency'." }, { status: 400 });
     }
 
-    const priceId = getConfiguredPriceId(plan);
-    if (!priceId) {
+    const readiness = getStripeReadiness();
+    if (!readiness.ready) {
       return Response.json(
-        { error: plan + " checkout is not configured yet. Add its Stripe test price ID in Base44 Secrets." },
+        { error: `Stripe ${getStripeMode()} billing is not fully configured. Verify the matching key, webhook secret, and all product price IDs in Base44 Secrets.` },
         { status: 503 },
       );
+    }
+
+    const priceId = getConfiguredPriceId(plan);
+    if (!priceId) {
+      return Response.json({ error: plan + " checkout price is not configured." }, { status: 503 });
     }
 
     const existing = await base44.asServiceRole.entities.AccountEntitlement.filter(
