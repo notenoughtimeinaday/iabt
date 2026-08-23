@@ -1,11 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
-  <title id="title">IABT</title>
+  <title id="title">IABT-JERICHO</title>
   <defs>
-    <linearGradient id="g" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#8b5cf6"/>
-      <stop offset="1" stop-color="#4f46e5"/>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="1.4" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <linearGradient id="frame" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22d3ee"/>
+      <stop offset=".5" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#a855f7"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="16" fill="url(#g)"/>
-  <path d="M18 17h7v30h-7zM30 17h11.5c7 0 11.5 3.5 11.5 9 0 3.4-1.8 6.1-4.8 7.4 3.8 1.2 5.8 4.2 5.8 7.8 0 6.3-5 9.8-12.4 9.8H30V17Zm11.2 13.2c3 0 4.7-1.2 4.7-3.5s-1.7-3.4-4.7-3.4h-4.1v6.9h4.1Zm.6 14.5c3.3 0 5.1-1.4 5.1-4.1 0-2.6-1.8-4-5.1-4h-4.7v8.1h4.7Z" fill="white"/>
+  <rect x="1" y="1" width="62" height="62" rx="15" fill="#040914" stroke="url(#frame)" stroke-width="1.5"/>
+  <g filter="url(#glow)" stroke="#020611" stroke-width="1.8" stroke-linejoin="round">
+    <path d="M32 6 10 19 15 47 32 58 49 47 54 19Z" fill="#081326"/>
+    <path d="M32 6 10 19 25 29Z" fill="#ff981f"/>
+    <path d="M32 6 25 29 32 53Z" fill="#14c8ff"/>
+    <path d="M32 6 39 29 32 53Z" fill="#2563eb"/>
+    <path d="M32 6 54 19 39 29Z" fill="#d946ef"/>
+    <path d="M10 19 15 47 25 29Z" fill="#06d6f0"/>
+    <path d="M15 47 32 58 32 53 25 29Z" fill="#0ea5e9"/>
+    <path d="M39 29 32 53 32 58 49 47Z" fill="#7c3aed"/>
+    <path d="M54 19 49 47 39 29Z" fill="#f43f5e"/>
+    <path d="M25 29 32 18 39 29 32 53Z" fill="#1597ff" fill-opacity=".68"/>
+  </g>
 </svg>
