@@ -29,6 +29,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
     currentPlan === "pro" &&
     entitlement?.billing_provider === "none" &&
     entitlement?.status === "active";
+  const remainingCredits = Number(entitlement?.total_iabt_credits_remaining ?? entitlement?.bonus_ai_credits ?? 0);
 
   async function startCheckout(plan) {
     setBusyPlan(plan);
@@ -103,8 +104,13 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
 
         <div className="iabt-billing-trust">
           <span><ShieldCheck /> Secure server-side checkout</span>
-          <span><Sparkles /> IABT credits by account</span>
+          <span><Sparkles /> {remainingCredits.toLocaleString()} IABT credits available</span>
           <span><Zap /> Change plans through Stripe</span>
+        </div>
+
+        <div className="iabt-billing-economics">
+          <div><Zap /></div>
+          <p><strong>Subscriptions fund the work.</strong><span>JERICHO shows the exact credit and provider-cost quote before approval, reserves only the approved credits, captures them after verified delivery, and restores them if no durable result is produced. IABT pays connected providers from its managed provider accounts.</span></p>
         </div>
 
         <div className="iabt-plan-grid">
@@ -173,7 +179,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
           <div>
             <span className="iabt-credit-pack-kicker">Flexible creation capacity</span>
             <strong>{AI_CREDIT_PACK.credits} extra IABT credits for {"$" + AI_CREDIT_PACK.price}</strong>
-            <p>One-time credits never expire, are used after the monthly allowance, and can cover weighted paid-media renders.</p>
+            <p>One-time credits never expire, are used after the monthly allowance, and can cover up to ${AI_CREDIT_PACK.maxProviderCost} in weighted provider cost per pack.</p>
           </div>
           <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan) || !billingReady}>
             {busyPlan === "credits" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
