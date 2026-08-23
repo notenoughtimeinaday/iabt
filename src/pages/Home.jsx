@@ -275,12 +275,13 @@ export default function Home() {
     <div className="iabt-home">
       <header className="iabt-home-nav">
         <div className="iabt-home-brand">
-          <div className="iabt-mark">IA</div>
-          <div><strong>IABT</strong><span>Intelligent App Building Technology</span></div>
+          <img className="iabt-mark" src="/iabt-mark.svg" alt="" />
+          <div><strong>IABT–JERICHO</strong><span>Autonomous Interactive App Building</span></div>
         </div>
         <div className="iabt-home-user">
-          <Button size="sm" onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-1" /> AI Project Operator</Button>
+          <Button size="sm" onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-1" /> JERICHO Studio</Button>
           {entitlement && <span className="iabt-plan-badge">{entitlement.plan} plan</span>}
+          {entitlement && <span className="iabt-credit-badge">{Number(entitlement.total_iabt_credits_remaining || 0).toLocaleString()} credits</span>}
           <Button variant="outline" size="sm" onClick={() => setBillingOpen(true)}>
             <CreditCard className="h-4 w-4 mr-1" /> Plans & billing
           </Button>
@@ -292,12 +293,12 @@ export default function Home() {
       <main className="iabt-home-main">
         <section className="iabt-hero">
           <div>
-            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> IABT · AI project operator</p>
-            <h1>One conversation. Any connected system. Verified deliverables.</h1>
-            <p>IABT keeps the project context, plans the work, and routes authorized steps through a provider-neutral connection fabric. Today’s tools can be replaced or expanded with future models, services, enterprise systems, and secure gateways without rebuilding the experience.</p>
+            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> IABT–JERICHO · autonomous project operator</p>
+            <h1>You define the objective. JERICHO gets it done.</h1>
+            <p>Describe the outcome once. JERICHO keeps the context, selects the best authorized tools, builds the workflow, verifies the result, and returns a usable deliverable—without making you manually connect every step.</p>
             <div className="iabt-hero-actions">
               <Button size="lg" onClick={() => navigate("/studio")}>
-                <Sparkles className="h-4 w-4 mr-2" /> Start a project conversation
+                <Sparkles className="h-4 w-4 mr-2" /> Tell JERICHO the objective
               </Button>
               <Button size="lg" variant="outline" onClick={() => ensureProjectCapacity() && setNameDialog({ mode: "create" })} disabled={working}>
                 {working ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
@@ -316,9 +317,9 @@ export default function Home() {
             <div className="iabt-orbit orbit-one" />
             <div className="iabt-orbit orbit-two" />
             <div className="iabt-hero-card">
-              <Sparkles />
-              <strong>Your goal → The right connection → Verified delivery</strong>
-              <span>Context · discovery · routing · execution · verification</span>
+              <img className="iabt-hero-emblem" src="/iabt-mark.svg" alt="" />
+              <strong>You define it → JERICHO decides what is needed → Your deliverable arrives verified</strong>
+              <span>Build it · operate it · improve it</span>
             </div>
           </div>
         </section>
@@ -326,8 +327,8 @@ export default function Home() {
         <section className="iabt-operator-flow" aria-labelledby="iabt-operator-flow-title">
           <div className="iabt-operator-flow-heading">
             <div>
-              <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> How IABT works</p>
-              <h2 id="iabt-operator-flow-title">A capable operator that stays with the project.</h2>
+              <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> How JERICHO works</p>
+              <h2 id="iabt-operator-flow-title">Don’t operate the software. Operate the objective.</h2>
             </div>
             <p>IABT proceeds independently where it is authorized and pauses only when your judgment, credentials, or approval are genuinely required.</p>
           </div>
