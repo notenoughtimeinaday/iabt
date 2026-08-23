@@ -13,6 +13,12 @@ import {
   requireUser,
   submitLumaVideo,
 } from "../../shared/creation.ts";
+import {
+  captureJobCredits,
+  releaseIabtCredits,
+  releaseJobCredits,
+  reserveIabtCredits,
+} from "../../shared/usage.ts";
 
 function clean(value: unknown, max = 300) {
   return String(value || "").trim().slice(0, max);
@@ -60,17 +66,44 @@ async function loadArtifact(service: any, job: any) {
   return records?.[0] || null;
 }
 
-function billing() {
+function billing(job: any = null) {
+  const state = String(job?.usage_state || "none");
+  const amount = Number(job?.usage_reservation?.amount || 0);
   return {
     charged: false,
     card_charged: false,
-    credits_deducted: false,
-    action: "none",
-    note: "IABT recorded approval and usage metadata only. It did not charge a card or deduct app credits.",
+    credit_amount: amount,
+    credits_reserved: ["reserved", "release_pending"].includes(state),
+    credits_deducted: state === "captured",
+    credits_released: state === "released",
+    action:
+      state === "captured" ? "credits_captured" :
+      state === "released" ? "credits_released" :
+      state === "reserved" ? "credits_reserved" :
+      "none",
+    note: amount
+      ? "IABT credits cover the approved provider cost; no separate card charge is made during creation."
+      : "No separate card charge was made during creation.",
   };
 }
 
-function responseForExisting(job: any, artifact: any) {
+async function responseForExisting(base44: any, job: any, artifact: any) {
+  const terminalFailure = ["failed", "canceled", "needs_setup"].includes(String(job.status));
+  if (job.status === "succeeded" && job.usage_state === "reserved") {
+    if (await captureJobCredits(base44, job, "Completed IABT creation; reserved credits captured.")) {
+      job = { ...job, usage_state: "captured" };
+    }
+  } else if (terminalFailure && ["reserved", "release_failed"].includes(String(job.usage_state))) {
+    try {
+      if (await releaseJobCredits(base44, job, "Creation did not complete; reserved credits restored.")) {
+        job = { ...job, usage_state: "released" };
+      }
+    } catch (error) {
+      console.error("existing job credit release failed:", error);
+      job = { ...job, usage_state: "release_failed" };
+    }
+  }
+
   const complete = ["succeeded", "failed", "canceled", "needs_setup"].includes(String(job.status));
   const ok = !["failed", "canceled", "needs_setup"].includes(String(job.status));
   return Response.json({
@@ -82,7 +115,7 @@ function responseForExisting(job: any, artifact: any) {
     result: job.status === "succeeded"
       ? { message: "The previously approved execution is complete.", artifact_kind: artifact?.kind || null }
       : { message: "The previously approved execution was reused.", status: job.status },
-    billing: billing(),
+    billing: billing(job),
   }, { status: ok ? 200 : 409 });
 }
 
