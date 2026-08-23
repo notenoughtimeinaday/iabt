@@ -39,12 +39,17 @@ function enabled(name: string) {
 }
 
 export function getMediaReadiness() {
-  const lumaKeyConfigured = Boolean(String(secrets.get("LUMA_AGENTS_API_KEY") || "").trim());
-  const paidMediaEnabled = enabled("IABT_ENABLE_PAID_MEDIA");
-  const mediaBillingReady = enabled("IABT_MEDIA_BILLING_READY");
+  const lumaKeyRaw = String(secrets.get("LUMA_AGENTS_API_KEY") || "").trim();
+  const paidMediaRaw = String(secrets.get("IABT_ENABLE_PAID_MEDIA") || "").trim();
+  const mediaBillingRaw = String(secrets.get("IABT_MEDIA_BILLING_READY") || "").trim();
+  const lumaKeyConfigured = Boolean(lumaKeyRaw);
+  const paidMediaEnabled = /^(1|true|yes|on)$/i.test(paidMediaRaw);
+  const mediaBillingReady = /^(1|true|yes|on)$/i.test(mediaBillingRaw);
   return {
     luma_key_configured: lumaKeyConfigured,
+    paid_media_gate_configured: Boolean(paidMediaRaw),
     paid_media_enabled: paidMediaEnabled,
+    media_billing_gate_configured: Boolean(mediaBillingRaw),
     media_billing_ready: mediaBillingReady,
     luma_ready: lumaKeyConfigured && paidMediaEnabled && mediaBillingReady,
   };
