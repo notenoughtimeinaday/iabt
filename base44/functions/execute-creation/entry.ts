@@ -9,6 +9,7 @@ import {
   generateImage,
   generateTextDeliverable,
   getMediaReadiness,
+  quoteFor,
   requireUser,
   submitLumaVideo,
 } from "../../shared/creation.ts";
@@ -201,6 +202,20 @@ Deno.serve(async (req) => {
     }
     if (!plan || String(plan.user_id) !== String(user.id)) {
       return Response.json({ error: "Creation plan not found." }, { status: 404 });
+    }
+
+    const currentQuote = quoteFor(String(plan.intent || "other"), plan.normalized_spec || {});
+    const capabilityChanged = Boolean(
+      String(currentQuote?.capability?.provider || "") !== String(plan.provider || "") ||
+      Boolean(currentQuote?.capability?.render_ready) !== Boolean(plan.render_ready) ||
+      Boolean(currentQuote?.capability?.provider_ready) !== Boolean(plan.provider_ready) ||
+      Number(currentQuote?.total_estimated_cost_cents || 0) !== Number(plan.total_estimated_cost_cents || 0)
+    );
+    if (capabilityChanged) {
+      return Response.json({
+        error: "Provider readiness or pricing changed after this quote was created. Request a new plan before approving execution.",
+        code: "quote_stale",
+      }, { status: 409 });
     }
 
     const acceptedTotal = Number(body?.accepted_total_cents);
