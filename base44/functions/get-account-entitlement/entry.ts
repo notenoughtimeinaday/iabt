@@ -1,5 +1,5 @@
 import { createClientFromRequest } from "npm:@base44/sdk";
-import { getPlanDefaults } from "../../shared/stripe.ts";
+import { getPlanDefaults, getStripeReadiness } from "../../shared/stripe.ts";
 
 export default async function(req: Request): Promise<Response> {
   try {
@@ -39,7 +39,7 @@ export default async function(req: Request): Promise<Response> {
             plan,
             bonus_ai_credits: Number(current.bonus_ai_credits || 0),
           };
-      return Response.json({ ok: true, entitlement: normalized });
+      return Response.json({ ok: true, entitlement: normalized, billing: getStripeReadiness() });
     }
 
     const plan = user.role === "admin" ? "pro" : "free";
@@ -59,7 +59,7 @@ export default async function(req: Request): Promise<Response> {
         : "Default free entitlement",
     });
 
-    return Response.json({ ok: true, entitlement });
+    return Response.json({ ok: true, entitlement, billing: getStripeReadiness() });
   } catch (error) {
     console.error("get-account-entitlement error:", error?.message || error);
     return Response.json(
