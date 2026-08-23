@@ -69,7 +69,27 @@
       "type": "integer",
       "minimum": 0,
       "default": 0,
-      "description": "Purchased generation credits; consumed after the monthly allowance"
+      "description": "Purchased IABT credits; consumed after the monthly allowance and usable for weighted paid-media production"
+    },
+    "ai_usage_hour": {
+      "type": "string",
+      "description": "Current UTC hourly quota bucket"
+    },
+    "ai_hourly_used": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Number of generation requests reserved in the current UTC hour"
+    },
+    "ai_usage_month": {
+      "type": "string",
+      "description": "Current UTC calendar-month quota bucket"
+    },
+    "ai_monthly_used": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Included IABT credits reserved in the current UTC calendar month"
     },
     "project_limit": {
       "type": "integer",
