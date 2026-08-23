@@ -57,7 +57,9 @@ export async function getOrCreateEntitlement(base44: any, user: any) {
     1,
   );
   const current = records?.[0];
-  if (current) return normalizeEntitlement(user, current);
+  if (current) {
+    return resetUsageWindows(service, normalizeEntitlement(user, current));
+  }
 
   const plan = user.role === "admin" ? "pro" : "free";
   const defaults = getPlanDefaults(plan);
