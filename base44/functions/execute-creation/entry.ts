@@ -467,6 +467,7 @@ Deno.serve(async (req) => {
       if (!artifact?.id || !hasArtifactOutput(artifact)) {
         throw new Error("The artifact could not be persisted safely.");
       }
+      committedArtifact = artifact;
 
       job = await service.entities.GenerationJob.update(job.id, {
         status: "succeeded",
@@ -480,19 +481,13 @@ Deno.serve(async (req) => {
         status: "completed",
         execution_job_id: job.id,
       });
-      await service.entities.UsageLedger.create({
-        user_id: user.id,
-        user_email: user.email,
-        plan_id: plan.id,
-        job_id: job.id,
-        event_type: "included_usage",
-        unit: "generation",
-        amount: 1,
-        pricing_version: plan.pricing_version,
-        description: "Completed approved IABT generation. Usage metadata only; no card charge or app-credit deduction was performed. Execution key: " + key,
-        status: "settled",
-        occurred_at: new Date().toISOString(),
-      });
+      if (await captureJobCredits(
+        base44,
+        job,
+        "Completed approved IABT creation; reserved credits captured. Execution key: " + key,
+      )) {
+        job = { ...job, usage_state: "captured" };
+      }
       return Response.json({
         ok: true,
         reused: false,
@@ -501,7 +496,7 @@ Deno.serve(async (req) => {
         artifact,
         complete: true,
         result: { message, artifact_kind: artifact.kind },
-        billing: billing(),
+        billing: billing(job),
       });
     };
 
@@ -571,6 +566,18 @@ Deno.serve(async (req) => {
             error_message: "Luma rendering requires LUMA_AGENTS_API_KEY plus both paid-media safety gates.",
             completed_at: new Date().toISOString(),
           });
+          try {
+            if (await releaseJobCredits(
+              base44,
+              job,
+              "Paid video provider was not configured; reserved credits restored.",
+            )) {
+              job = { ...job, usage_state: "released" };
+            }
+          } catch (releaseError) {
+            console.error("provider setup credit release failed:", releaseError);
+            job = { ...job, usage_state: "release_failed" };
+          }
           plan = await service.entities.CreationPlan.update(plan.id, {
             status: "failed",
             execution_job_id: job.id,
@@ -581,17 +588,18 @@ Deno.serve(async (req) => {
             job,
             artifact: null,
             complete: true,
-            billing: billing(),
+            billing: billing(job),
           }, { status: 409 });
         }
 
-        const submission = await submitLumaVideo(plan.normalized_spec);
+        providerSubmission = await submitLumaVideo(plan.normalized_spec);
+        providerAccepted = true;
         job = await service.entities.GenerationJob.update(job.id, {
           status: "waiting_provider",
           progress: 10,
           stage: "Ray 3.2 render submitted",
           provider_model: LUMA_MODEL,
-          provider_job_id: submission.generation.id,
+          provider_job_id: providerSubmission.generation.id,
           poll_after: new Date(Date.now() + 30_000).toISOString(),
         });
         return Response.json({
@@ -603,9 +611,11 @@ Deno.serve(async (req) => {
           complete: false,
           result: {
             message: "The approved Ray 3.2 render was submitted. It is not complete until the MP4 is copied into private Base44 storage.",
-            provider_status: submission.generation.state || submission.generation.status || "submitted",
+            provider_status: providerSubmission.generation.state ||
+              providerSubmission.generation.status ||
+              "submitted",
           },
-          billing: billing(),
+          billing: billing(job),
         }, { status: 202 });
       }
 
@@ -666,24 +676,161 @@ Deno.serve(async (req) => {
       metadata: { requested_kind: plan.intent },
     }, "IABT created the requested detailed deliverable.");
   } catch (error) {
-    if (error instanceof Response) return error;
-    const message = error instanceof Error ? clean(error.message, 1000) : "Creation failed.";
+    const responseError = error instanceof Response ? error : null;
+    const responsePayload: any = responseError
+      ? await responseError.clone().json().catch(() => ({}))
+      : {};
+    const originalMessage = clean(
+      responsePayload?.error ||
+      (error instanceof Error ? error.message : "Creation failed."),
+      1000,
+    );
+    const errorCode = clean(
+      responsePayload?.code || (error as any)?.code,
+      200,
+    );
+
+    if (committedArtifact && base44 && service && job?.id) {
+      try {
+        job = await service.entities.GenerationJob.update(job.id, {
+          status: "succeeded",
+          progress: 100,
+          stage: "Artifact created; execution reconciled",
+          artifact_id: committedArtifact.id,
+          completed_at: new Date().toISOString(),
+          error_message: "",
+        });
+        if (await captureJobCredits(
+          base44,
+          job,
+          "Durable artifact was created; reserved credits captured during recovery.",
+        )) {
+          job = { ...job, usage_state: "captured" };
+        }
+        if (plan?.id) {
+          plan = await service.entities.CreationPlan.update(plan.id, {
+            status: "completed",
+            execution_job_id: job.id,
+          });
+        }
+        return Response.json({
+          ok: true,
+          recovered: true,
+          plan,
+          job,
+          artifact: committedArtifact,
+          complete: true,
+          result: {
+            message: "The creation completed and its durable artifact was reconciled safely.",
+            artifact_kind: committedArtifact.kind,
+          },
+          billing: billing(job),
+        });
+      } catch (recoveryError) {
+        console.error("durable artifact reconciliation failed:", recoveryError);
+        return Response.json({
+          error: "The artifact was saved, but its completion record needs reconciliation. Credits remain reserved to prevent a duplicate refund.",
+          code: "durable_artifact_reconciliation_required",
+          job,
+          artifact: committedArtifact,
+          billing: billing(job),
+        }, { status: 500 });
+      }
+    }
+
+    if (providerAccepted) {
+      const providerJobId = clean(providerSubmission?.generation?.id, 300);
+      try {
+        if (service && job?.id) {
+          job = await service.entities.GenerationJob.update(job.id, {
+            status: "waiting_provider",
+            progress: 10,
+            stage: "Provider accepted render; tracking recovery required",
+            ...(providerJobId ? { provider_job_id: providerJobId } : {}),
+            poll_after: new Date(Date.now() + 30_000).toISOString(),
+            error_message: originalMessage,
+          });
+        }
+        if (service && plan?.id) {
+          plan = await service.entities.CreationPlan.update(plan.id, {
+            status: "executing",
+            ...(job?.id ? { execution_job_id: job.id } : {}),
+          });
+        }
+      } catch (recoveryError) {
+        console.error("provider submission recovery update failed:", recoveryError);
+      }
+      return Response.json({
+        ok: true,
+        recovered: true,
+        complete: false,
+        code: "provider_submission_tracking_recovery",
+        result: {
+          message: "The provider accepted the render. Credits remain reserved while IABT resumes tracking it.",
+          provider_job_id: providerJobId || null,
+        },
+        plan,
+        job,
+        billing: billing(job),
+      }, { status: 202 });
+    }
+
+    let creditsReleased = false;
+    if (base44 && service && job?.id) {
+      try {
+        const currentJob = await service.entities.GenerationJob.get(job.id);
+        job = currentJob || job;
+        if (["reserved", "release_failed"].includes(String(job.usage_state || ""))) {
+          creditsReleased = await releaseJobCredits(
+            base44,
+            job,
+            "Creation failed before durable provider output; reserved credits restored.",
+          );
+          if (creditsReleased) job = { ...job, usage_state: "released" };
+        }
+      } catch (releaseError) {
+        console.error("creation credit release failed:", releaseError);
+        job = { ...job, usage_state: "release_failed" };
+      }
+    } else if (base44 && creditReservation) {
+      try {
+        creditsReleased = await releaseIabtCredits(base44, creditReservation);
+      } catch (releaseError) {
+        console.error("unattached credit release failed:", releaseError);
+      }
+    }
+
+    const lumaBalanceEmpty = errorCode === "luma_insufficient_balance";
+    const lumaSetupError = [
+      "luma_insufficient_balance",
+      "luma_authentication_failed",
+      "luma_access_denied",
+    ].includes(errorCode);
+    const message = lumaBalanceEmpty
+      ? (
+        creditsReleased
+          ? "Luma did not queue the render because the provider balance is empty. Your reserved IABT credits were restored. Fund Luma or enable auto-reload, then request a new quote."
+          : "Luma did not queue the render because the provider balance is empty. Credit restoration needs administrator review before retrying."
+      )
+      : originalMessage;
+
     if (service && job?.id) {
       try {
         job = await service.entities.GenerationJob.update(job.id, {
-          status: "failed",
+          status: lumaSetupError ? "needs_setup" : "failed",
           progress: 100,
-          stage: "Generation failed",
+          stage: lumaBalanceEmpty ? "Luma provider balance required" : "Generation failed",
           error_message: message,
           completed_at: new Date().toISOString(),
         });
+        if (creditsReleased) job = { ...job, usage_state: "released" };
       } catch {
         // Preserve the original generation error.
       }
     }
     if (service && plan?.id) {
       try {
-        await service.entities.CreationPlan.update(plan.id, {
+        plan = await service.entities.CreationPlan.update(plan.id, {
           status: "failed",
           ...(job?.id ? { execution_job_id: job.id } : {}),
         });
@@ -691,10 +838,18 @@ Deno.serve(async (req) => {
         // Preserve the original generation error.
       }
     }
+
+    const status = lumaBalanceEmpty
+      ? 503
+      : responseError?.status || ((error as any)?.status === 429 ? 429 : 500);
     return Response.json({
+      ...responsePayload,
       error: message,
+      ...(errorCode ? { code: errorCode } : {}),
+      ...(plan ? { plan } : {}),
       ...(job ? { job } : {}),
-      billing: billing(),
-    }, { status: 500 });
+      credits_restored: creditsReleased,
+      billing: billing(job),
+    }, { status });
   }
 });
