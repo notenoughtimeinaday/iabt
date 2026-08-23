@@ -526,9 +526,9 @@ export default function Builder() {
           <Button variant="ghost" size="sm" asChild>
             <Link to="/"><ArrowLeft className="h-4 w-4 mr-1" /> Projects</Link>
           </Button>
-          <div className="iabt-mark">IA</div>
+          <img className="iabt-mark" src="/iabt-mark.svg" alt="" />
           <div>
-            <p className="iabt-eyebrow">Intelligent App Building Technology</p>
+            <p className="iabt-eyebrow">IABT–JERICHO · Visual App Builder</p>
             <h1>{definition.app.name}</h1>
           </div>
         </div>
@@ -553,8 +553,8 @@ export default function Builder() {
       <section className="iabt-ai-bar">
         <div className="iabt-ai-icon"><Sparkles className="h-5 w-5" /></div>
         <div className="iabt-ai-copy">
-          <strong>Build with AI</strong>
-          <span>Describe a SaaS flow, pages, actions, or scanner workflow.</span>
+          <strong>Build with JERICHO</strong>
+          <span>Describe the outcome, SaaS flow, pages, actions, or scanner workflow.</span>
         </div>
         <Textarea
           value={prompt}
