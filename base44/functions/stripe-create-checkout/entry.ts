@@ -51,12 +51,39 @@ export default async function(req: Request): Promise<Response> {
       "-updated_date",
       1,
     );
+    const entitlement = existing?.[0] || null;
     const customerId =
-      existing?.[0]?.billing_provider === "stripe"
-        ? String(existing[0].provider_customer_id || "").trim()
+      entitlement?.billing_provider === "stripe"
+        ? String(entitlement.provider_customer_id || "").trim()
         : "";
+    const subscriptionId =
+      entitlement?.billing_provider === "stripe"
+        ? String(entitlement.provider_subscription_id || "").trim()
+        : "";
+    const subscriptionStatus = String(entitlement?.status || "").toLowerCase();
 
     const origin = getAppOrigin(req);
+    const hasManagedSubscription =
+      customerId.startsWith("cus_") &&
+      subscriptionId.startsWith("sub_") &&
+      ["active", "trialing", "past_due", "paused"].includes(subscriptionStatus);
+    if (hasManagedSubscription) {
+      const portalParams = new URLSearchParams();
+      portalParams.append("customer", customerId);
+      portalParams.append("return_url", origin + "/");
+      const portal = await stripePost(
+        "/billing_portal/sessions",
+        portalParams,
+        newIdempotencyKey(),
+      );
+      return Response.json({
+        ok: true,
+        kind: "portal",
+        url: portal.url,
+        message: "An existing Stripe subscription must be changed through the customer portal.",
+      });
+    }
+
     const params = new URLSearchParams();
     params.append("mode", "subscription");
     params.append("line_items[0][price]", priceId);
@@ -80,7 +107,12 @@ export default async function(req: Request): Promise<Response> {
     params.append("subscription_data[metadata][user_email]", user.email);
 
     const session = await stripePost("/checkout/sessions", params, newIdempotencyKey());
-    return Response.json({ ok: true, url: session.url, session_id: session.id });
+    return Response.json({
+      ok: true,
+      kind: "checkout",
+      url: session.url,
+      session_id: session.id,
+    });
   } catch (error) {
     console.error("stripe-create-checkout error:", error?.message || error);
     return Response.json({ error: error?.message || "Failed to create checkout session." }, { status: 500 });
