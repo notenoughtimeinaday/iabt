@@ -11,6 +11,7 @@ export const IABT_PLANS = [
       "1 cloud project",
       "10 IABT credits each month",
       "Live preview, JSON and standalone HTML",
+      "Paid media available with purchased credits",
     ],
   },
   {
@@ -25,6 +26,7 @@ export const IABT_PLANS = [
       "5 cloud projects",
       "100 IABT credits each month",
       "HTML and static ZIP exports",
+      "Up to $5 monthly provider cost when credits fund media",
     ],
   },
   {
@@ -39,6 +41,7 @@ export const IABT_PLANS = [
       "25 cloud projects",
       "500 IABT credits each month",
       "React exports and commercial-use rights",
+      "Up to $25 monthly provider cost when credits fund media",
     ],
   },
   {
@@ -53,6 +56,7 @@ export const IABT_PLANS = [
       "Unlimited cloud projects",
       "2,000 IABT credits each month",
       "White-label exports and up to 5 team seats",
+      "Up to $100 monthly provider cost when credits fund media",
     ],
   },
 ];
@@ -60,6 +64,7 @@ export const IABT_PLANS = [
 export const AI_CREDIT_PACK = {
   price: 10,
   credits: 100,
+  maxProviderCost: 5,
 };
 
 export function getIabtPlan(planId) {
