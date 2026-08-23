@@ -21,7 +21,7 @@ IABT is an AI-assisted SaaS app builder running on Base44. It preserves the orig
 - Monthly AI allowances, hourly safety limits, and one-time AI credit packs
 - Plan-enforced cloud-project and export access
 - Professional Plans & Billing interface
-- Secure Stripe test-mode subscription/credit Checkout, Customer Portal, and idempotent signed webhooks
+- Secure Stripe subscription/credit Checkout, Customer Portal, and idempotent signed webhooks with explicit test/live mode separation
 - JSON import/export
 - Standalone HTML, static multi-page HTML ZIP, React source, and runnable Vite/React ZIP exports
 - Browser-generated ZIPs with no temporary server filesystem
@@ -36,11 +36,11 @@ IABT is an AI-assisted SaaS app builder running on Base44. It preserves the orig
 - User-readable, administrator-managed `AccountEntitlement` entity
 - AI function at `base44/functions/generate-app/entry.ts`
 - Stripe functions under `base44/functions/stripe-*`
-- Shared test-mode Stripe guard at `base44/shared/stripe.ts`
+- Shared Stripe mode/readiness guard at `base44/shared/stripe.ts`
 - AppDefinition schema version 1.0
 - Local draft recovery plus Base44 cloud persistence
 
-The AI function uses `OPENAI_API_KEY` and the OpenAI Responses API when that secret is configured. Without it, the function falls back to Base44 managed AI, so generation remains usable. Usage is measured per authenticated user in hourly safety and UTC monthly buckets; purchased test credit packs are consumed only after the included monthly allowance.
+The AI function uses `OPENAI_API_KEY` and the OpenAI Responses API when that secret is configured. Without it, the function falls back to Base44 managed AI, so generation remains usable. Usage is measured per authenticated user in hourly safety and UTC monthly buckets; purchased credit packs are consumed only after the included monthly allowance.
 
 ## Local development
 
@@ -85,22 +85,22 @@ This runs lint, JavaScript project validation, and the production Vite build. Ex
 
 One-time AI credit packs add 100 generations for $10. Assisted app-building engagements can be offered separately from $499–$1,500; they are a managed service, not an automated in-app entitlement.
 
-## Stripe test billing
+## Stripe billing
 
-Stripe is intentionally locked to test mode in code. The backend rejects any secret key that does not start with `sk_test_`, and the webhook rejects every Stripe event marked `livemode`.
+Stripe defaults to safe test mode. Set `IABT_STRIPE_MODE=test` (or omit it) with `sk_test_` credentials for testing. Live payment support is code-ready but activates only when `IABT_STRIPE_MODE=live` is explicitly configured with matching `sk_live_` credentials and live Stripe resources. Webhook events whose test/live mode does not match the configured mode are rejected.
 
-Before testing paid checkout:
+Required Stripe secrets for either mode:
 
-1. Create recurring Builder ($29), Pro ($79), and Agency ($199) prices in the connected Stripe test account.
-2. Create a one-time $10 price for the 100-generation AI credit pack.
+1. Create recurring Builder ($29), Pro ($79), and Agency ($199) prices in the selected Stripe mode.
+2. Create a one-time $10 price for the 100-generation AI credit pack in the same mode.
 3. Store their IDs in Base44 Secrets as `STRIPE_BUILDER_PRICE_ID`, `STRIPE_PRO_PRICE_ID`, `STRIPE_AGENCY_PRICE_ID`, and `STRIPE_AI_CREDIT_PACK_PRICE_ID`.
-4. Confirm `STRIPE_SECRET_KEY` is the connected test key and `STRIPE_WEBHOOK_SECRET` is the registered test-endpoint signing secret.
-5. Optionally set `IABT_APP_ORIGIN=https://iabt.insuredspending.org`.
-6. Use Stripe test cards only and verify plan changes and idempotent credit grants from signed webhook events.
+4. Set `STRIPE_SECRET_KEY` to the matching test or live secret key and `STRIPE_WEBHOOK_SECRET` to the signing secret for the matching webhook endpoint.
+5. Set `IABT_APP_ORIGIN=https://iabt.insuredspending.org` and set `IABT_STRIPE_MODE=test` while validating the release.
+6. Verify checkout, plan changes, cancellation, Customer Portal, failed-payment handling, and idempotent credit grants with test resources before switching modes.
 
-Checkout derives the authenticated user on the server. The browser cannot supply a customer identity, price ID, plan metadata, or redirect destination. Customer Portal access is limited to the Stripe customer stored on the signed-in user's entitlement.
+Checkout derives the authenticated user on the server. The browser cannot supply a customer identity, price ID, plan metadata, or redirect destination. Customer Portal access is limited to the Stripe customer stored on the signed-in user's entitlement. The billing UI receives only non-secret readiness booleans and the configured mode.
 
-Do not enable live Stripe charges until pricing, policies, refunds, taxes, support, and production webhook behavior are explicitly approved.
+Do not set `IABT_STRIPE_MODE=live` until pricing, policies, refunds, taxes, support, production price IDs, production webhook behavior, and an end-to-end test release are explicitly approved. Switching to live mode can create real charges.
 
 ## Agentic creation direction
 
