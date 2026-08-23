@@ -4502,3 +4502,116 @@ input, textarea, select { color-scheme: dark; caret-color: var(--jericho-cyan); 
 *::-webkit-scrollbar-track { background: rgba(3,8,19,.82); }
 *::-webkit-scrollbar-thumb { border: 2px solid rgba(3,8,19,.82); border-radius: 999px; background: linear-gradient(180deg, rgba(34,199,255,.62), rgba(139,92,246,.55)); }
 
+/* JERICHO identity and monetization clarity */
+.iabt-mark,
+.creator-brand-mark {
+  display: block;
+  padding: 0;
+  object-fit: cover;
+}
+
+.iabt-credit-badge {
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 138, 31, .28);
+  border-radius: 999px;
+  background: rgba(255, 138, 31, .08);
+  color: #ffb15e !important;
+  font-size: 10px !important;
+  font-weight: 850;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.iabt-hero h1,
+.creator-welcome h1 {
+  background: linear-gradient(105deg, #ffffff 12%, #8fe7ff 46%, #6da4ff 67%, #a875ff 88%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.iabt-hero-emblem {
+  width: 74px;
+  height: 74px;
+  margin-bottom: 5px;
+  border-radius: 18px;
+  box-shadow: 0 0 34px rgba(34, 199, 255, .28), 0 0 54px rgba(139, 92, 246, .16);
+}
+
+.creator-welcome-orb img {
+  width: 72%;
+  height: 72%;
+  border-radius: 22%;
+  box-shadow: 0 0 34px rgba(34, 199, 255, .30);
+}
+
+.iabt-billing-economics {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  align-items: center;
+  gap: 13px;
+  padding: 14px 16px;
+  border: 1px solid rgba(34, 199, 255, .22);
+  border-radius: 16px;
+  background: linear-gradient(110deg, rgba(34, 199, 255, .08), rgba(139, 92, 246, .07));
+}
+
+.iabt-billing-economics > div {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: #06111e;
+  background: linear-gradient(145deg, var(--jericho-cyan), var(--jericho-orange));
+  box-shadow: 0 0 24px rgba(34, 199, 255, .18);
+}
+
+.iabt-billing-economics svg {
+  width: 19px;
+}
+
+.iabt-billing-economics p,
+.iabt-billing-economics strong,
+.iabt-billing-economics span {
+  display: block;
+}
+
+.iabt-billing-economics p {
+  margin: 0;
+}
+
+.iabt-billing-economics strong {
+  color: #f7fbff;
+  font-size: .82rem;
+}
+
+.iabt-billing-economics span {
+  margin-top: 3px;
+  color: var(--jericho-muted);
+  font-size: .72rem;
+  line-height: 1.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .creator-welcome-orb {
+    animation: jericho-breathe 4.8s ease-in-out infinite;
+  }
+}
+
+@keyframes jericho-breathe {
+  0%, 100% { box-shadow: 0 0 52px rgba(34,199,255,.18), 0 0 80px rgba(139,92,246,.10); }
+  50% { box-shadow: 0 0 68px rgba(34,199,255,.28), 0 0 96px rgba(139,92,246,.18); }
+}
+
+@media (max-width: 1120px) {
+  .iabt-credit-badge { display: none; }
+}
+
+@media (max-width: 600px) {
+  .iabt-billing-economics {
+    grid-template-columns: 1fr;
+  }
+}
+
