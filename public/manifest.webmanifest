@@ -1,11 +1,11 @@
 {
-  "name": "IABT — Intelligent App Building Technology",
-  "short_name": "IABT",
-  "description": "AI-assisted SaaS application builder.",
+  "name": "IABT-JERICHO — Autonomous Interactive App Building",
+  "short_name": "JERICHO",
+  "description": "An autonomous project operator for building, operating, and improving software and media.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f7f8fc",
-  "theme_color": "#6d28d9",
+  "background_color": "#030713",
+  "theme_color": "#030713",
   "icons": [
     {
       "src": "/iabt-mark.svg",
