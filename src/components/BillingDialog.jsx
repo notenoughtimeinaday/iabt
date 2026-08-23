@@ -12,10 +12,12 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { AI_CREDIT_PACK, IABT_PLANS } from "@/lib/pricing";
 
-export default function BillingDialog({ open, onOpenChange, entitlement }) {
+export default function BillingDialog({ open, onOpenChange, entitlement, billingStatus }) {
   const { toast } = useToast();
   const [busyPlan, setBusyPlan] = useState("");
   const currentPlan = String(entitlement?.plan || "free").toLowerCase();
+  const billingMode = billingStatus?.mode === "live" ? "live" : "test";
+  const billingReady = Boolean(billingStatus?.ready);
   const foundingAccess =
     currentPlan === "pro" &&
     entitlement?.billing_provider === "none" &&
@@ -32,7 +34,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement }) {
     } catch (error) {
       const message = error.response?.data?.error || error.message || "Checkout could not be started.";
       toast({
-        title: "Stripe test checkout is not ready",
+        title: "Stripe checkout is not ready",
         description: message,
         variant: "destructive",
       });
@@ -52,7 +54,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement }) {
     } catch (error) {
       const message = error.response?.data?.error || error.message || "Credit checkout could not be started.";
       toast({
-        title: "Stripe test credit checkout is not ready",
+        title: "Stripe credit checkout is not ready",
         description: message,
         variant: "destructive",
       });
@@ -85,7 +87,9 @@ export default function BillingDialog({ open, onOpenChange, entitlement }) {
           <div>
             <DialogTitle>Plans & billing</DialogTitle>
             <DialogDescription>
-              Choose the workspace capacity that fits how you build. Stripe remains locked to test mode until launch approval.
+              {billingMode === "live"
+                ? "Secure Stripe billing is configured for live payments."
+                : "Stripe is in safe test mode. Real charges remain disabled until live billing is explicitly configured."}
             </DialogDescription>
           </div>
         </DialogHeader>
@@ -146,7 +150,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement }) {
                     disabled={Boolean(busyPlan)}
                   >
                     {busyPlan === plan.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Try {plan.name} checkout
+                    {billingMode === "live" ? `Choose ${plan.name}` : `Test ${plan.name} checkout`}
                   </Button>
                 )}
               </article>
@@ -162,12 +166,18 @@ export default function BillingDialog({ open, onOpenChange, entitlement }) {
           </div>
           <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan)}>
             {busyPlan === "credits" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Try credit-pack checkout
+            {billingMode === "live" ? "Buy credit pack" : "Test credit-pack checkout"}
           </Button>
         </div>
 
         <p className="iabt-billing-note">
-          All checkout routes are locked to Stripe test mode. Test cards cannot create real charges. Live billing remains disabled until pricing, policies, taxes, support, and production credentials are explicitly approved.
+          {billingMode === "live"
+            ? billingReady
+              ? "Live Stripe configuration is complete. Checkout can create real charges."
+              : "Live billing mode is selected, but one or more Stripe keys, webhook settings, or price IDs are missing. Checkout will remain unavailable until configuration is complete."
+            : billingReady
+              ? "Stripe test mode is fully configured. Test cards cannot create real charges."
+              : "Stripe test mode is selected, but one or more test keys, webhook settings, or price IDs still need configuration."}
         </p>
       </DialogContent>
     </Dialog>
