@@ -206,16 +206,21 @@ async function saveGeneratedProject(service: any, user: any, plan: any, definiti
 }
 
 Deno.serve(async (req) => {
+  let base44: any = null;
   let service: any = null;
   let plan: any = null;
   let job: any = null;
+  let creditReservation: any = null;
+  let providerSubmission: any = null;
+  let providerAccepted = false;
+  let committedArtifact: any = null;
 
   try {
     if (req.method !== "POST") {
       return Response.json({ error: "Method not allowed." }, { status: 405 });
     }
 
-    const base44 = createClientFromRequest(req);
+    base44 = createClientFromRequest(req);
     const user = await requireUser(base44);
     service = base44.asServiceRole;
     const body = await req.json().catch(() => ({}));
@@ -242,7 +247,8 @@ Deno.serve(async (req) => {
       String(currentQuote?.capability?.provider || "") !== String(plan.provider || "") ||
       Boolean(currentQuote?.capability?.render_ready) !== Boolean(plan.render_ready) ||
       Boolean(currentQuote?.capability?.provider_ready) !== Boolean(plan.provider_ready) ||
-      Number(currentQuote?.total_estimated_cost_cents || 0) !== Number(plan.total_estimated_cost_cents || 0)
+      Number(currentQuote?.total_estimated_cost_cents || 0) !== Number(plan.total_estimated_cost_cents || 0) ||
+      Number(currentQuote?.credit_cost || 1) !== Number(plan.credit_cost || 1)
     );
     if (capabilityChanged) {
       return Response.json({
@@ -287,15 +293,9 @@ Deno.serve(async (req) => {
           error_message: "The execution record had no durable output artifact.",
           completed_at: new Date().toISOString(),
         });
-        return Response.json({
-          error: "The prior execution did not produce a durable artifact.",
-          reused: true,
-          job: failed,
-          artifact: null,
-          billing: billing(),
-        }, { status: 409 });
+        return await responseForExisting(base44, failed, null);
       }
-      return responseForExisting(existing, artifact);
+      return await responseForExisting(base44, existing, artifact);
     }
 
     if (String(plan.status) === "expired") {
@@ -319,6 +319,16 @@ Deno.serve(async (req) => {
       }, { status: 422 });
     }
 
+    const paidMedia = plan.provider === "luma-ray-3.2" &&
+      Number(plan.provider_cost_cents || 0) > 0;
+    const credit = await reserveIabtCredits(
+      base44,
+      user,
+      Number(plan.credit_cost || 1),
+      { usageKind: "content_generation", paidMedia },
+    );
+    creditReservation = credit.reservation;
+
     const now = new Date().toISOString();
     const quoteSnapshot = {
       execution_key: key,
@@ -330,8 +340,10 @@ Deno.serve(async (req) => {
       currency: plan.currency,
       quote_expires_at: plan.quote_expires_at,
       approved_at: now,
-      billing_action: "none",
+      billing_action: "reserve_iabt_credits",
+      credit_cost: Number(plan.credit_cost || 1),
       card_charged: false,
+      credits_reserved: true,
       credits_deducted: false,
     };
 
@@ -350,6 +362,8 @@ Deno.serve(async (req) => {
       stage: "Approval recorded; starting generation",
       input_spec: plan.normalized_spec,
       quote_snapshot: quoteSnapshot,
+      usage_state: "reserved",
+      usage_reservation: creditReservation,
       started_at: now,
     });
 
@@ -373,16 +387,42 @@ Deno.serve(async (req) => {
         error_message: "A prior execution already owns this approved plan.",
         completed_at: new Date().toISOString(),
       });
+      try {
+        if (await releaseJobCredits(base44, job, "Duplicate execution suppressed; reserved credits restored.")) {
+          job = { ...job, usage_state: "released" };
+        }
+      } catch (releaseError) {
+        console.error("duplicate job credit release failed:", releaseError);
+        job = { ...job, usage_state: "release_failed" };
+      }
       if (canonicalJobId && canonicalJobId !== job.id) {
         const canonicalJob = await service.entities.GenerationJob.get(canonicalJobId);
-        return responseForExisting(canonicalJob, await loadArtifact(service, canonicalJob));
+        return await responseForExisting(
+          base44,
+          canonicalJob,
+          await loadArtifact(service, canonicalJob),
+        );
       }
       return Response.json({
         error: "This plan is already executing or is no longer eligible for execution.",
         job,
-        billing: billing(),
+        billing: billing(job),
       }, { status: 409 });
     }
+
+    await service.entities.UsageLedger.create({
+      user_id: user.id,
+      user_email: user.email,
+      plan_id: plan.id,
+      job_id: job.id,
+      event_type: "reserve",
+      unit: "media_credit",
+      amount: Number(creditReservation.amount || 0),
+      pricing_version: plan.pricing_version,
+      description: "Reserved IABT credits for an approved creation. Execution key: " + key,
+      status: "pending",
+      occurred_at: now,
+    });
 
     const priorConsents = await service.entities.ConsentGrant.filter(
       { user_id: user.id, plan_id: plan.id, mode },
@@ -399,7 +439,7 @@ Deno.serve(async (req) => {
         pricing_version: plan.pricing_version,
         accepted_total_cents: acceptedTotal,
         currency: plan.currency,
-        acceptance_text: "User explicitly approved the exact server-owned quote. No IABT card charge or app-credit deduction was authorized or performed.",
+        acceptance_text: "User explicitly approved the exact server-owned quote and authorized the listed IABT credit reservation. No separate card charge is made during creation.",
         accepted_at: now,
       });
     }
