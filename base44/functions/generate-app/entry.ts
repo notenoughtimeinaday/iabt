@@ -137,12 +137,15 @@ function parseGeneratedText(value: unknown) {
 }
 
 Deno.serve(async (req) => {
+  let base44: any = null;
+  let creditReservation: any = null;
+  let completed = false;
   try {
     if (req.method !== "POST") {
       return Response.json({ error: "Method not allowed." }, { status: 405 });
     }
 
-    const base44 = createClientFromRequest(req);
+    base44 = createClientFromRequest(req);
     let user;
     try {
       user = await base44.auth.me();
@@ -158,8 +161,14 @@ Deno.serve(async (req) => {
     if (!prompt) return Response.json({ error: "Describe the app you want to generate." }, { status: 400 });
     if (prompt.length > 6000) return Response.json({ error: "Prompt is too long." }, { status: 400 });
 
-    const entitlement = await getOrCreateEntitlement(base44, user);
-    const usage = await enforceRateLimit(base44, user, entitlement);
+    await getOrCreateEntitlement(base44, user);
+    const credit = await reserveIabtCredits(base44, user, 1, {
+      usageKind: "app_generation",
+      paidMedia: false,
+    });
+    creditReservation = credit.reservation;
+    const entitlement = credit.entitlement;
+    const usage = credit.usage;
 
     const existingContext = context
       ? "\n\nExisting app context (preserve or extend when useful):\n" + JSON.stringify(context).slice(0, 12000)
@@ -204,6 +213,7 @@ Deno.serve(async (req) => {
     }
 
     const result = validateGenerated(generated);
+    completed = true;
     return Response.json({
       ok: true,
       provider,
@@ -225,6 +235,13 @@ Deno.serve(async (req) => {
       pages: result.pages,
     });
   } catch (error) {
+    if (creditReservation && base44 && !completed) {
+      try {
+        await releaseIabtCredits(base44, creditReservation);
+      } catch (releaseError) {
+        console.error("generate-app credit release failed:", releaseError);
+      }
+    }
     if (error instanceof Response) return error;
     const message = error instanceof Error ? error.message : String(error);
     return Response.json({ error: message }, { status: 500 });
