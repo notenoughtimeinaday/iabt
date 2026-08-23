@@ -1,5 +1,5 @@
 import { createClientFromRequest } from "npm:@base44/sdk";
-import { requireUser } from "../../shared/creation.ts";
+import { getCreationCapabilities, requireUser } from "../../shared/creation.ts";
 
 function clean(value: unknown, max = 1000) {
   return String(value || "").trim().slice(0, max);
@@ -160,6 +160,16 @@ Deno.serve(async (req) => {
       return Response.json({ error: "Creation status not found." }, { status: 404 });
     }
 
+    const currentCapability = getCreationCapabilities().find((item: any) => item.intent === String(plan.intent)) || null;
+    const capabilityChanged = Boolean(
+      currentCapability && (
+        String(currentCapability.provider || "") !== String(plan.provider || "") ||
+        Boolean(currentCapability.render_ready) !== Boolean(plan.render_ready) ||
+        Boolean(currentCapability.provider_ready) !== Boolean(plan.provider_ready)
+      )
+    );
+    const quoteStale = Boolean(String(plan.status) === "quoted" && capabilityChanged);
+
     const job = await latestJob(service, user.id, plan);
     const artifacts = await service.entities.CreationArtifact.filter(
       { user_id: user.id, plan_id: plan.id },
@@ -182,7 +192,8 @@ Deno.serve(async (req) => {
     const builderProjectId = plan.project_id || job?.project_id || primaryArtifact?.project_id || null;
 
     let nextAction = "No further generation step is currently required.";
-    if (!job) nextAction = "The plan has not been executed in Studio.";
+    if (quoteStale) nextAction = "Provider readiness changed after this quote was created. Request a new plan before approval so the provider, render mode, and price are recalculated.";
+    else if (!job) nextAction = "The plan has not been executed in Studio.";
     else if (refreshable) nextAction = "Call refresh-generation-job with refresh_job_id to check the provider safely.";
     else if (job.status === "failed") nextAction = "Explain the recorded failure and offer to create a revised plan.";
     else if (job.status === "needs_setup") nextAction = "Explain the missing external setup without claiming completion.";
@@ -196,6 +207,13 @@ Deno.serve(async (req) => {
       job: jobSummary(job),
       artifact: primaryArtifact,
       artifacts: artifactSummaries,
+      current_capability: currentCapability ? {
+        id: currentCapability.id,
+        provider: currentCapability.provider,
+        provider_ready: Boolean(currentCapability.provider_ready),
+        render_ready: Boolean(currentCapability.render_ready),
+      } : null,
+      quote_stale: quoteStale,
       continuation: {
         refreshable,
         refresh_job_id: refreshable ? job.id : null,
