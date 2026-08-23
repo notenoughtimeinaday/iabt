@@ -161,6 +161,7 @@ export default function Builder() {
   const [pageDialog, setPageDialog] = useState(null);
   const [pageDeleteTarget, setPageDeleteTarget] = useState(null);
   const [entitlement, setEntitlement] = useState(null);
+  const [billingStatus, setBillingStatus] = useState(null);
   const [billingOpen, setBillingOpen] = useState(false);
 
   useEffect(() => {
@@ -175,6 +176,7 @@ export default function Builder() {
         if (!active) return;
         const entitlementPayload = entitlementResponse?.data || entitlementResponse;
         setEntitlement(entitlementPayload?.entitlement || null);
+        setBillingStatus(entitlementPayload?.billing || null);
         const remoteDefinition = normalizeAppDefinition(remote.app_definition, remote.title);
         let initial = remoteDefinition;
         let recovered = false;
@@ -797,6 +799,7 @@ export default function Builder() {
         open={billingOpen}
         onOpenChange={setBillingOpen}
         entitlement={entitlement}
+        billingStatus={billingStatus}
       />
 
       <NameDialog
