@@ -9,6 +9,10 @@
     "event_type": {
       "type": "string"
     },
+    "checkout_session_id": {
+      "type": "string",
+      "description": "Stripe Checkout Session ID used to prevent duplicate credit-pack grants across delayed-payment events"
+    },
     "user_id": {
       "type": "string"
     },
