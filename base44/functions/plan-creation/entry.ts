@@ -7,6 +7,10 @@ import {
   requireUser,
   selectedCreationIntent,
 } from "../../shared/creation.ts";
+import {
+  entitlementUsageSummary,
+  getOrCreateEntitlement,
+} from "../../shared/usage.ts";
 
 function text(value: unknown, max: number) {
   return String(value || "").trim().slice(0, max);
@@ -69,6 +73,13 @@ Deno.serve(async (req) => {
     const details = await planRequest(base44, requestText, context);
     const quote = quoteFor(details.intent, details.normalized_spec);
     const capability = quote.capability;
+    const entitlement = await getOrCreateEntitlement(base44, user);
+    const usage = entitlementUsageSummary(entitlement);
+    const paidMedia = capability.provider === "luma-ray-3.2" && capability.total_estimated_cost_cents > 0;
+    const availableCredits = paidMedia && usage.plan === "free"
+      ? usage.bonus_remaining
+      : usage.total_remaining;
+    const creditCovered = availableCredits >= quote.credit_cost;
     const service = base44.asServiceRole;
     const videoRenderUnavailable = details.intent === "video" && !capability.render_ready;
     const planSummary = videoRenderUnavailable
@@ -104,7 +115,14 @@ Deno.serve(async (req) => {
           ...(details.warnings || []),
           "VIDEO RENDERER OFFLINE: this approval creates preproduction only. No MP4 will be generated until the Ray 3.2 provider credential and paid-media gates are enabled.",
         ]))
-      : details.warnings;
+      : [...(details.warnings || [])];
+    if (!creditCovered) {
+      planWarnings.push(
+        paidMedia && usage.plan === "free"
+          ? "PAID MEDIA CREDIT REQUIRED: the Free plan's included credits cannot fund Luma. Upgrade or add enough purchased IABT credits before approval."
+          : "IABT CREDIT BALANCE TOO LOW: this plan needs " + quote.credit_cost + " credits, but only " + availableCredits + " are currently available.",
+      );
+    }
 
     const plan = await service.entities.CreationPlan.create({
       user_id: user.id,
@@ -167,14 +185,25 @@ Deno.serve(async (req) => {
         quote_expires_at: quote.quote_expires_at,
         consent_summary: quote.consent_summary,
         requires_explicit_approval: true,
-        billing_action: "none",
+        billing_action: quote.billing_action,
+        credit_coverage: {
+          covered: creditCovered,
+          plan: usage.plan,
+          required: quote.credit_cost,
+          available: availableCredits,
+          included_remaining: usage.monthly_remaining,
+          purchased_remaining: usage.bonus_remaining,
+        },
       },
       capabilities: getCreationCapabilities().map(publicCapability),
       next_action: "Show the exact quote and plan to the user. Call execute-creation only after explicit approval.",
       billing: {
         card_charged: false,
         credits_deducted: false,
-        action: "none",
+        credits_reserved: false,
+        credits_required_on_approval: quote.credit_cost,
+        credit_coverage_ready: creditCovered,
+        action: "quote_only",
       },
     });
   } catch (error) {
