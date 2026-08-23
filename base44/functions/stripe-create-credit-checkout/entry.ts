@@ -3,6 +3,8 @@ import {
   AI_CREDIT_PACK_SIZE,
   getAppOrigin,
   getConfiguredAiCreditPackPriceId,
+  getStripeMode,
+  getStripeReadiness,
   IABT_APP_ID,
   newIdempotencyKey,
   stripePost,
@@ -25,12 +27,17 @@ export default async function(req: Request): Promise<Response> {
       return Response.json({ error: "Authentication required." }, { status: 401 });
     }
 
-    const priceId = getConfiguredAiCreditPackPriceId();
-    if (!priceId) {
+    const readiness = getStripeReadiness();
+    if (!readiness.ready) {
       return Response.json(
-        { error: "AI credit checkout is not configured yet. Add STRIPE_AI_CREDIT_PACK_PRICE_ID in Base44 Secrets." },
+        { error: `Stripe ${getStripeMode()} billing is not fully configured. Verify the matching key, webhook secret, and all product price IDs in Base44 Secrets.` },
         { status: 503 },
       );
+    }
+
+    const priceId = getConfiguredAiCreditPackPriceId();
+    if (!priceId) {
+      return Response.json({ error: "AI credit checkout price is not configured." }, { status: 503 });
     }
 
     const existing = await base44.asServiceRole.entities.AccountEntitlement.filter(
