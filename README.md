@@ -1,6 +1,6 @@
-# IABT — Intelligent App Building Technology
+# IABT-JERICHO — Autonomous Interactive App Building
 
-IABT is an AI-assisted SaaS app builder running on Base44. It preserves the original AppDefinition workflow while replacing the localhost-only Express runtime with Base44 authentication, owner-scoped cloud entities, protected backend functions, and managed hosting.
+IABT-JERICHO is an autonomous project operator and visual SaaS app builder running on Base44. It preserves the original AppDefinition workflow while adding conversational planning, provider-neutral routing, explicit approval and credit controls, verified delivery, Base44 authentication, owner-scoped cloud entities, protected backend functions, and managed hosting.
 
 - Production: https://iabt.insuredspending.org
 - Base44 fallback: https://crazy-creator-flow-hub.base44.app
@@ -20,7 +20,8 @@ IABT is an AI-assisted SaaS app builder running on Base44. It preserves the orig
 - Account entitlements for Free, Builder, Pro, and Agency
 - Monthly IABT credit allowances, hourly safety limits, and one-time credit packs
 - Plan-enforced cloud-project and export access
-- Professional Plans & Billing interface
+- Professional dark-neon JERICHO interface based on the canonical launch artwork
+- Professional Plans & Billing interface with visible IABT credit balances and provider-cost economics
 - Secure Stripe subscription/credit Checkout, Customer Portal, and idempotent signed webhooks with explicit test/live mode separation
 - JSON import/export
 - Standalone HTML, static multi-page HTML ZIP, React source, and runnable Vite/React ZIP exports
