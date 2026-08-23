@@ -113,11 +113,15 @@ export function entitlementUsageSummary(entitlement: any) {
   const hourlyUsed = nonNegative(entitlement?.ai_hourly_used);
   const monthlyUsed = Math.min(monthlyLimit, nonNegative(entitlement?.ai_monthly_used));
   const bonusRemaining = nonNegative(entitlement?.bonus_ai_credits);
+  const hourlyRemaining = Math.max(0, hourlyLimit - hourlyUsed);
   return {
     plan: String(entitlement?.plan || "free"),
+    limit: hourlyLimit,
+    used: hourlyUsed,
+    remaining: hourlyRemaining,
     hourly_limit: hourlyLimit,
     hourly_used: hourlyUsed,
-    hourly_remaining: Math.max(0, hourlyLimit - hourlyUsed),
+    hourly_remaining: hourlyRemaining,
     monthly_limit: monthlyLimit,
     monthly_used: monthlyUsed,
     monthly_remaining: Math.max(0, monthlyLimit - monthlyUsed),
