@@ -9,7 +9,7 @@ export const IABT_PLANS = [
     description: "Validate one app idea before committing.",
     features: [
       "1 cloud project",
-      "10 AI generations each month",
+      "10 IABT credits each month",
       "Live preview, JSON and standalone HTML",
     ],
   },
@@ -23,7 +23,7 @@ export const IABT_PLANS = [
     description: "For makers building and testing several applications.",
     features: [
       "5 cloud projects",
-      "100 AI generations each month",
+      "100 IABT credits each month",
       "HTML and static ZIP exports",
     ],
   },
@@ -37,7 +37,7 @@ export const IABT_PLANS = [
     description: "For founders shipping production-ready SaaS products.",
     features: [
       "25 cloud projects",
-      "500 AI generations each month",
+      "500 IABT credits each month",
       "React exports and commercial-use rights",
     ],
   },
@@ -51,7 +51,7 @@ export const IABT_PLANS = [
     description: "For teams building a portfolio of client applications.",
     features: [
       "Unlimited cloud projects",
-      "2,000 AI generations each month",
+      "2,000 IABT credits each month",
       "White-label exports and up to 5 team seats",
     ],
   },
