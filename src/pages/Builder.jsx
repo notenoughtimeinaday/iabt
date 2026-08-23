@@ -573,7 +573,7 @@ export default function Builder() {
         {aiProvider && (
           <small>
             Provider: {aiProvider}
-            {aiUsage && ` · ${aiUsage.plan} plan · ${aiUsage.monthly_remaining} included generations left this month · ${aiUsage.bonus_remaining} bonus`}
+            {aiUsage && ` · ${aiUsage.plan} plan · ${aiUsage.monthly_remaining} included credits left this month · ${aiUsage.bonus_remaining} bonus`}
           </small>
         )}
       </section>
