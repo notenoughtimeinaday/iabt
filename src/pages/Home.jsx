@@ -82,7 +82,7 @@ export default function Home() {
     if (billing === "success") {
       toast({ title: "Stripe checkout completed", description: "Your plan will update after the verified webhook is processed." });
     } else if (billing === "credits_success") {
-      toast({ title: "Stripe credit purchase completed", description: "Your extra AI credits will appear after the verified webhook is processed." });
+      toast({ title: "Stripe credit purchase completed", description: "Your extra IABT credits will appear after the verified webhook is processed." });
     } else if (billing === "canceled") {
       toast({ title: "Checkout canceled", description: "No changes were made to your plan." });
     }
@@ -90,6 +90,11 @@ export default function Home() {
     url.searchParams.delete("session_id");
     window.history.replaceState({}, "", url.pathname + url.search + url.hash);
     load();
+    if (billing === "success" || billing === "credits_success") {
+      [1500, 4000, 9000].forEach((delay) => {
+        window.setTimeout(() => load(), delay);
+      });
+    }
   }, []);
 
   const filtered = useMemo(() => {
