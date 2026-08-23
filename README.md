@@ -18,7 +18,7 @@ IABT is an AI-assisted SaaS app builder running on Base44. It preserves the orig
 - Keyboard-wedge barcode/QR scanning; Enter dispatches a bubbling `iabt:scan` event
 - AI AppDefinition generation through an authenticated, per-user rate-limited function
 - Account entitlements for Free, Builder, Pro, and Agency
-- Monthly AI allowances, hourly safety limits, and one-time AI credit packs
+- Monthly IABT credit allowances, hourly safety limits, and one-time credit packs
 - Plan-enforced cloud-project and export access
 - Professional Plans & Billing interface
 - Secure Stripe subscription/credit Checkout, Customer Portal, and idempotent signed webhooks with explicit test/live mode separation
@@ -40,7 +40,7 @@ IABT is an AI-assisted SaaS app builder running on Base44. It preserves the orig
 - AppDefinition schema version 1.0
 - Local draft recovery plus Base44 cloud persistence
 
-The AI function uses `OPENAI_API_KEY` and the OpenAI Responses API when that secret is configured. Without it, the function falls back to Base44 managed AI, so generation remains usable. Usage is measured per authenticated user in hourly safety and UTC monthly buckets; purchased credit packs are consumed only after the included monthly allowance.
+The AI functions use `OPENAI_API_KEY` and the OpenAI Responses API when that secret is configured. Without it, app generation falls back to Base44 managed AI. Every creation reserves authenticated-user IABT credits atomically, captures them only after durable output is verified, and restores them when work fails before a durable result. Usage is tracked in hourly safety and UTC monthly buckets; purchased credits are consumed only after an eligible included monthly allowance.
 
 ## Local development
 
@@ -71,19 +71,20 @@ This runs lint, JavaScript project validation, and the production Vite build. Ex
 
 - Authentication is enabled for email/password, Google, Microsoft, Facebook, and Apple.
 - Optional: add `OPENAI_API_KEY` and `OPENAI_MODEL` through Base44 backend secrets.
+- For Luma Ray 3.2 video, add `LUMA_AGENTS_API_KEY`, set `IABT_PAID_MEDIA_ENABLED=true`, and set `IABT_MEDIA_BILLING_READY=true` only after the provider account has a funded balance and spending controls.
 - Publish only after `npm run verify` passes.
 - Keep the production custom domain attached to this one canonical Base44 app.
 
 ## Founding pricing model
 
-| Plan | Monthly price | Projects | Included AI generations | Export/commercial access |
+| Plan | Monthly price | Projects | Included IABT credits | Export/commercial access |
 |---|---:|---:|---:|---|
 | Free | $0 | 1 | 10/month | Preview, JSON, standalone HTML |
 | Builder | $29 | 5 | 100/month | Adds static HTML ZIP |
 | Pro | $79 | 25 | 500/month | Adds React exports and commercial use |
 | Agency | $199 | Unlimited | 2,000/month | Adds white-label exports and 5 team seats |
 
-One-time AI credit packs add 100 generations for $10. Assisted app-building engagements can be offered separately from $499–$1,500; they are a managed service, not an automated in-app entitlement.
+One-time packs add 100 IABT credits for $10. Credits can fund app generation and weighted paid-media rendering. Assisted app-building engagements can be offered separately from $499–$1,500; they are a managed service, not an automated in-app entitlement.
 
 ## Stripe billing
 
@@ -92,15 +93,21 @@ Stripe defaults to safe test mode. Set `IABT_STRIPE_MODE=test` (or omit it) with
 Required Stripe secrets for either mode:
 
 1. Create recurring Builder ($29), Pro ($79), and Agency ($199) prices in the selected Stripe mode.
-2. Create a one-time $10 price for the 100-generation AI credit pack in the same mode.
+2. Create a one-time $10 price for the 100-credit IABT pack in the same mode.
 3. Store their IDs in Base44 Secrets as `STRIPE_BUILDER_PRICE_ID`, `STRIPE_PRO_PRICE_ID`, `STRIPE_AGENCY_PRICE_ID`, and `STRIPE_AI_CREDIT_PACK_PRICE_ID`.
 4. Set `STRIPE_SECRET_KEY` to the matching test or live secret key and `STRIPE_WEBHOOK_SECRET` to the signing secret for the matching webhook endpoint.
 5. Set `IABT_APP_ORIGIN=https://iabt.insuredspending.org` and set `IABT_STRIPE_MODE=test` while validating the release.
-6. Verify checkout, plan changes, cancellation, Customer Portal, failed-payment handling, and idempotent credit grants with test resources before switching modes.
+6. Configure the Customer Portal product catalog, then verify checkout, plan changes, cancellation, failed-payment handling, delayed-payment credit grants, and webhook idempotency with test resources before switching modes.
 
 Checkout derives the authenticated user on the server. The browser cannot supply a customer identity, price ID, plan metadata, or redirect destination. Customer Portal access is limited to the Stripe customer stored on the signed-in user's entitlement. The billing UI receives only non-secret readiness booleans and the configured mode.
 
 Do not set `IABT_STRIPE_MODE=live` until pricing, policies, refunds, taxes, support, production price IDs, production webhook behavior, and an end-to-end test release are explicitly approved. Switching to live mode can create real charges.
+
+## Luma video and IABT credit economics
+
+Stripe and Luma are separate accounts: subscription and credit-pack revenue settles through Stripe, while Ray 3.2 rendering spends the IABT owner's Luma balance. Stripe payments do not directly refill Luma. Keep a controlled Luma balance or enable Luma auto-reload with a conservative threshold and reload amount.
+
+Paid Luma quotes use weighted IABT credits. One IABT credit covers at most 5 cents of quoted provider/platform cost, rounded up. A request reserves its exact credit amount only after explicit approval. Credits are captured after the MP4 is copied to durable private Base44 storage; they are restored when Luma rejects the request before queuing or when no durable result is produced. The Free plan's included credits cannot fund Luma, but a Free user may render with enough purchased credits. Paid-plan included credits are eligible.
 
 ## Agentic creation direction
 
