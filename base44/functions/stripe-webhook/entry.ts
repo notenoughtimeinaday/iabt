@@ -4,6 +4,7 @@ import {
   AI_CREDIT_PACK_SIZE,
   getPlanDefaults,
   getPlanForPriceId,
+  getStripeMode,
   IABT_APP_ID,
   mapStripeStatus,
   stripeGet,
@@ -268,9 +269,11 @@ export default async function(req: Request): Promise<Response> {
       return Response.json({ error: "Invalid signature." }, { status: 400 });
     }
 
-    if (event?.livemode) {
-      console.error("stripe-webhook: live-mode event rejected by test-only billing lock");
-      return Response.json({ error: "Live Stripe events are disabled." }, { status: 400 });
+    const stripeMode = getStripeMode();
+    const expectsLiveEvent = stripeMode === "live";
+    if (Boolean(event?.livemode) !== expectsLiveEvent) {
+      console.error(`stripe-webhook: ${event?.livemode ? "live" : "test"} event rejected while billing mode is ${stripeMode}`);
+      return Response.json({ error: "Stripe event mode does not match configured billing mode." }, { status: 400 });
     }
 
     const base44 = createClientFromRequest(req);
