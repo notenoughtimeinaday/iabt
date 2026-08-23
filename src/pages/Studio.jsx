@@ -34,7 +34,6 @@ import {
   Rocket,
   Sparkles,
   Video,
-  WandSparkles,
   Workflow,
   X,
 } from "lucide-react";
@@ -540,8 +539,8 @@ export default function Studio() {
       <aside className={"creator-sidebar " + (mobileNavOpen ? "is-open" : "")}>
         <div className="creator-sidebar-brand">
           <Link to="/" className="creator-brand-link" aria-label="Return to IABT home">
-            <span className="creator-brand-mark">IA</span>
-            <span><strong>IABT</strong><small>AI project operator</small></span>
+            <img className="creator-brand-mark" src="/iabt-mark.svg" alt="" />
+            <span><strong>IABT–JERICHO</strong><small>Autonomous project operator</small></span>
           </Link>
           <button type="button" className="creator-mobile-close" onClick={() => setMobileNavOpen(false)} aria-label="Close menu">
             <X />
@@ -596,7 +595,7 @@ export default function Studio() {
           </button>
           <div className="creator-topbar-title">
             <span className="creator-live-dot" />
-            <div><strong>AI Project Operator</strong><small>One conversation from idea through verified deliverables.</small></div>
+            <div><strong>JERICHO Studio</strong><small>One objective from idea through verified delivery.</small></div>
           </div>
           <div className="creator-topbar-actions">
             <span className="creator-credit-chip"><Sparkles /> {remainingCredits} credits</span>
@@ -620,13 +619,13 @@ export default function Studio() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35 }}
             >
-              <div className="creator-welcome-orb"><WandSparkles /></div>
-              <p className="creator-kicker">IABT · AI project operator</p>
-              <h1>One conversation. Any connected system. Verified deliverables.</h1>
+              <div className="creator-welcome-orb"><img src="/iabt-mark.svg" alt="" /></div>
+              <p className="creator-kicker">IABT–JERICHO · autonomous interactive app building</p>
+              <h1>Tell JERICHO the objective. It figures out how to get there.</h1>
               <p className="creator-welcome-copy">
-                IABT preserves your objective while it discovers and routes work through the best authorized
-                adapter available. New models, services, enterprise systems, and secure gateways can be added
-                without changing how you work with the operator.
+                JERICHO preserves your objective, discovers the best authorized path, coordinates the connected
+                tools, and verifies the deliverable. Add future models, services, enterprise systems, and secure
+                gateways without changing how you work with the operator.
               </p>
               <div className="creator-fabric-strip">
                 <Network />
@@ -699,7 +698,7 @@ export default function Studio() {
                     </div>
                     <div className="creator-message-body">
                       <div className="creator-message-meta">
-                        <strong>{message.role === "user" ? "You" : "IABT Operator"}</strong>
+                        <strong>{message.role === "user" ? "You" : "JERICHO"}</strong>
                         <span>{formatDate(message.created_date)}</span>
                       </div>
                       <p>{contentText(message.content)}</p>
@@ -720,7 +719,7 @@ export default function Studio() {
               {assistantWorking && (
                 <div className="creator-message creator-message-assistant creator-thinking">
                   <div className="creator-message-avatar"><Sparkles /></div>
-                  <div><span /><span /><span /><small>IABT is planning the work and checking connected capabilities…</small></div>
+                  <div><span /><span /><span /><small>JERICHO is planning the work and checking connected capabilities…</small></div>
                 </div>
               )}
               <div ref={messageEndRef} />
@@ -745,7 +744,7 @@ export default function Studio() {
               maxLength={12000}
             />
             <div className="creator-composer-foot">
-              <span><Check /> IABT plans first. Decisions, credentials and approvals stay yours.</span>
+              <span><Check /> JERICHO plans first. Decisions, credentials and approvals stay yours.</span>
               <Button type="submit" disabled={!prompt.trim() || sending || conversationBusy}>
                 {sending ? <Loader2 className="animate-spin" /> : <Sparkles />}
                 Develop plan
@@ -767,7 +766,7 @@ export default function Studio() {
           <div className="creator-plan-empty">
             <div><Braces /></div>
             <strong>Your plan will appear here</strong>
-            <p>IABT will show the work, provider readiness, credits and any outside cost before asking for approval.</p>
+            <p>JERICHO will show the work, provider readiness, credits and any outside cost before asking for approval.</p>
           </div>
         ) : (
           <motion.section
