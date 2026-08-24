@@ -140,8 +140,8 @@ function builtInAdapters() {
       source: "system",
     },
     {
-      adapter_id: "luma-ray-3-2",
-      display_name: "Ray 3.2 video renderer",
+      adapter_id: "iabt-managed-video",
+      display_name: "IABT managed video renderer",
       description: videoReady
         ? "Paid video rendering is configured behind exact quote and approval gates."
         : "Video rendering adapter is installed but provider credentials and paid-media gates are not all enabled.",
@@ -156,7 +156,7 @@ function builtInAdapters() {
       pricing_mode: "quoted",
       verification_mode: "provider_status",
       risk_tier: "medium",
-      version: "ray-3.2",
+      version: "managed-current",
       enabled: true,
       priority: 30,
       source: "system",
