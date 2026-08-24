@@ -27,7 +27,7 @@ export default function Legal() {
   return (
     <div className="iabt-legal-page">
       <header className="iabt-legal-header">
-        <Link to="/" className="iabt-legal-brand"><img src="/iabt-mark.svg" alt="" /><span><strong>IABT–JERICHO</strong><small>Trust & Legal Center</small></span></Link>
+        <Link to="/" className="iabt-legal-brand"><img src="/iabt-mark.svg" alt="" /><span><strong>Intelligent Application Building Tool</strong><small>IABT · Trust & Legal Center</small></span></Link>
         <Link to="/" className="iabt-legal-back"><ArrowLeft /> Return to IABT</Link>
       </header>
       <main className="iabt-legal-shell">
