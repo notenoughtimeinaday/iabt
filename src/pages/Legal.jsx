@@ -91,7 +91,7 @@ export default function Legal() {
           </Section>
 
           <Section id="credits" title="Plans, production credits, cancellations, and refunds">
-            <p>Monthly plan credits support planning and ordinary IABT creation. Paid third-party production requires purchased production credits unless a future plan expressly states otherwise. Before execution, IABT presents the exact credit amount, records approval, reserves that amount, and does not make a separate card charge during the job.</p>
+            <p>Builder, Pro, and Agency subscriptions may use their included IABT credits for eligible paid third-party production. Free-plan paid production and usage beyond a paid plan's remaining included allowance require purchased credits. Before execution, IABT presents the exact credit amount, records approval, reserves that amount, and does not make a separate card charge during the job.</p>
             <p>Reserved credits are captured only after durable output is verified. If no durable output is produced, the reservation is restored when the failure qualifies under IABT's credit policy. Restoration of IABT credits is not automatically a cash refund. Subscription changes and cancellations are managed through the billing portal and remain subject to the checkout terms and applicable consumer law.</p>
             <p>IABT credits are service units, not currency, deposits, securities, stored value, or ownership in IABT. They cannot be transferred or redeemed for cash except where required by law.</p>
           </Section>
