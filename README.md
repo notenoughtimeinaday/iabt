@@ -21,8 +21,10 @@ IABT-JERICHO is an autonomous project operator and visual SaaS app builder runni
 - Monthly IABT credit allowances, hourly safety limits, and one-time credit packs
 - Plan-enforced cloud-project and export access
 - Professional dark-neon JERICHO interface based on the canonical launch artwork
-- Professional Plans & Billing interface with visible IABT credit balances and provider-cost economics
+- Professional Plans & Billing interface with visible IABT credit balances and private supplier economics
 - Secure Stripe subscription/credit Checkout, Customer Portal, and idempotent signed webhooks with explicit test/live mode separation
+- Owner-only Profit & Compliance Control Center with supplier-admission, margin, spending, billing, and launch gates
+- Public Trust & Legal Center plus versioned in-app Terms, Privacy, and Acceptable Use acceptance
 - JSON import/export
 - Standalone HTML, static multi-page HTML ZIP, React source, and runnable Vite/React ZIP exports
 - Browser-generated ZIPs with no temporary server filesystem
@@ -72,7 +74,7 @@ This runs lint, JavaScript project validation, and the production Vite build. Ex
 
 - Authentication is enabled for email/password, Google, Microsoft, Facebook, and Apple.
 - Optional: add `OPENAI_API_KEY` and `OPENAI_MODEL` through Base44 backend secrets.
-- For Luma Ray 3.2 video, add `LUMA_AGENTS_API_KEY`, set `IABT_PAID_MEDIA_ENABLED=true`, and set `IABT_MEDIA_BILLING_READY=true` only after the provider account has a funded balance and spending controls.
+- For managed Luma video, add `LUMA_AGENTS_API_KEY`, set `IABT_ENABLE_PAID_MEDIA=true`, and set `IABT_MEDIA_BILLING_READY=true` only after the provider account has a funded balance and spending controls. Set `IABT_LUMA_COMMERCIAL_APPROVED=true` only after the ProviderAgreement record documents embedded use, white-label permission, commercial output rights, privacy/DPA approval, and accepted billing terms.
 - Publish only after `npm run verify` passes.
 - Keep the production custom domain attached to this one canonical Base44 app.
 
@@ -85,7 +87,7 @@ This runs lint, JavaScript project validation, and the production Vite build. Ex
 | Pro | $79 | 25 | 500/month | Adds React exports and commercial use |
 | Agency | $199 | Unlimited | 2,000/month | Adds white-label exports and 5 team seats |
 
-One-time packs add 100 IABT credits for $10. Credits can fund app generation and weighted paid-media rendering. Assisted app-building engagements can be offered separately from $499–$1,500; they are a managed service, not an automated in-app entitlement.
+One-time packs add 100 IABT credits for $10. Monthly plan credits fund planning and ordinary creation. Paid third-party production requires purchased production credits and an approved supplier agreement. Assisted app-building engagements can be offered separately from $499–$1,500; they are a managed service, not an automated in-app entitlement.
 
 ## Stripe billing
 
@@ -108,7 +110,13 @@ Do not set `IABT_STRIPE_MODE=live` until pricing, policies, refunds, taxes, supp
 
 Stripe and Luma are separate accounts: subscription and credit-pack revenue settles through Stripe, while Ray 3.2 rendering spends the IABT owner's Luma balance. Stripe payments do not directly refill Luma. Keep a controlled Luma balance or enable Luma auto-reload with a conservative threshold and reload amount.
 
-Paid Luma quotes use weighted IABT credits. One IABT credit covers at most 5 cents of quoted provider/platform cost, rounded up. A request reserves its exact credit amount only after explicit approval. Credits are captured after the MP4 is copied to durable private Base44 storage; they are restored when Luma rejects the request before queuing or when no durable result is produced. The Free plan's included credits cannot fund Luma, but a Free user may render with enough purchased credits. Paid-plan included credits are eligible.
+Paid supplier quotes use weighted IABT production credits. One production credit represents at most 3 cents of supplier cost while its current retail value is 10 cents, targeting roughly 70% gross margin before platform, payment, support, tax, and refund costs. A request reserves its exact purchased-credit amount only after explicit approval. Credits are captured after the MP4 is copied to durable private Base44 storage; they are restored when no durable result is produced under the credit policy. Monthly plan credits do not fund paid third-party production.
+
+## Commercial and legal control
+
+Paid supplier execution is fail-closed. It requires a current approved ProviderAgreement, an active CommercialPolicy, adequate purchased production credits, the minimum margin floor, the per-job cost ceiling, daily and monthly spend capacity, supplier credentials, funded billing, and an explicit commercial-approval secret. Provider commitments and settlements are recorded separately from the customer credit ledger.
+
+The public Trust & Legal Center is a prelaunch operational policy set. Before live paid launch, licensed counsel must review it and the owner must publish verified legal-entity, governing-law, privacy, legal, and support contact details.
 
 ## Agentic creation direction
 
