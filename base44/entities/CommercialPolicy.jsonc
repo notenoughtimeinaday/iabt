@@ -1,0 +1,114 @@
+{
+  "name": "CommercialPolicy",
+  "type": "object",
+  "properties": {
+    "policy_id": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "provider_id": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "capability_id": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "suspended",
+        "retired"
+      ],
+      "default": "draft"
+    },
+    "pricing_version": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "retail_credit_value_cents": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10
+    },
+    "provider_cost_per_credit_cents": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 3
+    },
+    "target_margin_bps": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000,
+      "default": 7000
+    },
+    "minimum_margin_bps": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000,
+      "default": 6000
+    },
+    "maximum_job_cost_cents": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 500
+    },
+    "daily_spend_limit_cents": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 2500
+    },
+    "monthly_spend_limit_cents": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 10000
+    },
+    "purchased_credits_required": {
+      "type": "boolean",
+      "default": true
+    },
+    "effective_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "next_review_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 4000
+    }
+  },
+  "required": [
+    "policy_id",
+    "provider_id",
+    "capability_id",
+    "status",
+    "pricing_version"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
