@@ -36,7 +36,7 @@ The initial IABT version of this concept must remain a no-real-money prototype a
 
 - Stripe live-mode readiness is implemented with recurring Builder, Pro, and Agency subscriptions plus one-time IABT credit packs.
 - Approved creations reserve the exact quoted IABT credits, capture them after durable verified output, and restore them when no durable output is produced.
-- Monthly plan credits fund planning and ordinary creation. Paid third-party production requires purchased production credits. The default rate maps no more than 3 cents of supplier cost to a 10-cent production credit, targeting roughly 70% gross margin before other expenses.
+- Builder, Pro, and Agency subscriptions can apply included credits to eligible paid third-party production. Free-plan production and paid-plan overage require purchased credits. The default rate maps no more than 3 cents of supplier cost to a 10-cent production credit, targeting roughly 70% gross margin before other expenses.
 - Supplier execution is blocked unless agreement rights, privacy/DPA review, margin floor, per-job ceiling, and daily/monthly spend limits pass.
 - Customers buy plans and credits from IABT through Stripe. IABT owns the customer relationship, quote, markup, credit ledger, delivery, and refund/restoration policy. Paid supplier work uses private IABT-managed accounts only after an approved job requires it; supplier brands remain internal unless disclosure is legally or contractually required.
 - The Luma Ray 3.2 path reached the provider successfully during live testing, then failed with `insufficient funds`. This proves the request path but not a successful MP4 delivery. The IABT owner must fund or auto-reload the Luma master provider account before another live renderer acceptance test.
