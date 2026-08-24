@@ -13,7 +13,8 @@ import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import Home from '@/pages/Home';
 import Studio from '@/pages/Studio';
-import Builder from '@/pages/Builder';
+import ProjectDetail from '@/pages/ProjectDetail';
+import Deliverables from '@/pages/Deliverables';
 import Legal from '@/pages/Legal';
 import AdminCompliance from '@/pages/AdminCompliance';
 import LegalAcceptanceGate from '@/components/LegalAcceptanceGate';
@@ -70,7 +71,8 @@ const AuthenticatedApp = () => {
         <Route element={<LegalAcceptanceGate />}>
           <Route path="/" element={<Home />} />
           <Route path="/studio" element={<Studio />} />
-          <Route path="/projects/:id" element={<Builder />} />
+          <Route path="/deliverables" element={<Deliverables />} />
+          <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/admin/compliance" element={<AdminCompliance />} />
         </Route>
       </Route>
