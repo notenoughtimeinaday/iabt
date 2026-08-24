@@ -111,7 +111,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
 
         <div className="iabt-billing-economics">
           <div><Zap /></div>
-          <p><strong>Customers buy from IABT.</strong><span>Monthly plan credits support planning and ordinary creation. Paid third-party production uses purchased production credits after an exact quote and approval. IABT privately pays approved, replaceable suppliers and restores reserved credits when no durable result is produced.</span></p>
+          <p><strong>Customers buy from IABT.</strong><span>Paid subscriptions include credits that can cover eligible third-party production after an exact quote and approval. Free-plan production and paid-plan overages use purchased credits. IABT privately pays approved, replaceable suppliers and restores reserved credits when no durable result is produced.</span></p>
         </div>
 
         <div className="iabt-plan-grid">
@@ -180,7 +180,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
           <div>
             <span className="iabt-credit-pack-kicker">Flexible creation capacity</span>
             <strong>{AI_CREDIT_PACK.credits} extra IABT credits for {"$" + AI_CREDIT_PACK.price}</strong>
-            <p>Purchased credits remain available until used and are required for paid third-party production. Every production job receives an exact IABT credit quote before approval.</p>
+            <p>Purchased credits remain available until used. They cover Free-plan paid production and overages after a paid plan's included credits are used. Every production job receives an exact IABT credit quote before approval.</p>
           </div>
           <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan) || !billingReady}>
             {busyPlan === "credits" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
