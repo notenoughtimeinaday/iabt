@@ -563,7 +563,7 @@ Deno.serve(async (req) => {
             status: "needs_setup",
             progress: 0,
             stage: "Paid video provider setup required",
-            error_message: "Luma rendering requires LUMA_AGENTS_API_KEY plus both paid-media safety gates.",
+            error_message: "IABT's managed video renderer is not operational. Reserved credits will be restored.",
             completed_at: new Date().toISOString(),
           });
           try {
@@ -597,7 +597,7 @@ Deno.serve(async (req) => {
         job = await service.entities.GenerationJob.update(job.id, {
           status: "waiting_provider",
           progress: 10,
-          stage: "Ray 3.2 render submitted",
+          stage: "IABT video render submitted",
           provider_model: LUMA_MODEL,
           provider_job_id: providerSubmission.generation.id,
           poll_after: new Date(Date.now() + 30_000).toISOString(),
@@ -610,7 +610,7 @@ Deno.serve(async (req) => {
           artifact: null,
           complete: false,
           result: {
-            message: "The approved Ray 3.2 render was submitted. It is not complete until the MP4 is copied into private Base44 storage.",
+            message: "The approved IABT video render was submitted. It is not complete until the MP4 is secured in private storage.",
             provider_status: providerSubmission.generation.state ||
               providerSubmission.generation.status ||
               "submitted",
@@ -809,8 +809,8 @@ Deno.serve(async (req) => {
     const message = lumaBalanceEmpty
       ? (
         creditsReleased
-          ? "Luma did not queue the render because the provider balance is empty. Your reserved IABT credits were restored. Fund Luma or enable auto-reload, then request a new quote."
-          : "Luma did not queue the render because the provider balance is empty. Credit restoration needs administrator review before retrying."
+          ? "IABT's managed renderer could not accept the job. Your reserved IABT credits were restored. Please try again later; no customer payment was sent to a production supplier for this failed submission."
+          : "IABT's managed renderer could not accept the job. Credit restoration needs administrator review before retrying."
       )
       : originalMessage;
 
@@ -819,7 +819,7 @@ Deno.serve(async (req) => {
         job = await service.entities.GenerationJob.update(job.id, {
           status: lumaSetupError ? "needs_setup" : "failed",
           progress: 100,
-          stage: lumaBalanceEmpty ? "Luma provider balance required" : "Generation failed",
+          stage: lumaBalanceEmpty ? "IABT managed renderer temporarily unavailable" : "Generation failed",
           error_message: message,
           completed_at: new Date().toISOString(),
         });
@@ -845,7 +845,7 @@ Deno.serve(async (req) => {
     return Response.json({
       ...responsePayload,
       error: message,
-      ...(errorCode ? { code: errorCode } : {}),
+      ...(errorCode ? { code: lumaSetupError ? "managed_renderer_unavailable" : errorCode } : {}),
       ...(plan ? { plan } : {}),
       ...(job ? { job } : {}),
       credits_restored: creditsReleased,
