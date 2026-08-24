@@ -428,7 +428,7 @@ export default function Home() {
       </main>
 
       <footer className="iabt-home-footer">
-        <span>© 2026 IABT–JERICHO · Autonomous project operations with explicit authority and verified delivery.</span>
+        <span>© 2026 Intelligent Application Building Tool (IABT) · Powered by JERICHO Studio.</span>
         <nav aria-label="Legal">
           <button type="button" onClick={() => navigate("/legal")}>Trust & Legal Center</button>
           <button type="button" onClick={() => navigate("/privacy")}>Privacy</button>
