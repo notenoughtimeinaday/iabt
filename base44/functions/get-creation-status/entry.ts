@@ -204,7 +204,7 @@ Deno.serve(async (req) => {
     else if (job.status === "failed") nextAction = "Explain the recorded failure and offer to create a revised plan.";
     else if (job.status === "needs_setup") nextAction = "Explain the missing external setup without claiming completion.";
     else if (privateArtifact) nextAction = "Call get-artifact-access-url with access_artifact_id when the user wants to open the private file.";
-    else if (builderProjectId) nextAction = "The generated project is ready to fine-tune in the App Editor.";
+    else if (builderProjectId) nextAction = "The generated app project is available for review, files, and delivery.";
 
     return Response.json({
       ok: true,
