@@ -149,6 +149,10 @@
     "consent_summary": {
       "type": "string"
     },
+    "commercial_summary": {
+      "type": "object",
+      "description": "Server-owned snapshot of margin, supplier approval, and purchased-credit controls at quote time"
+    },
     "approved_at": {
       "type": "string",
       "format": "date-time"
