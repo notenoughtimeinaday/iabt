@@ -766,7 +766,7 @@ export default function Studio() {
           <div className="creator-plan-empty">
             <div><Braces /></div>
             <strong>Your plan will appear here</strong>
-            <p>JERICHO will show the work, provider readiness, credits and any outside cost before asking for approval.</p>
+            <p>JERICHO will show production readiness, IABT credits, and the exact customer total before asking for approval.</p>
           </div>
         ) : (
           <motion.section
@@ -786,7 +786,7 @@ export default function Studio() {
                 <span className={activePlan.provider_ready ? "is-ready" : "is-limited"}>
                   {activePlan.provider_ready ? <CheckCircle2 /> : <Clock3 />}
                 </span>
-                <p><strong>{activePlan.provider_ready ? (activePlan.render_ready ? "Production provider configured" : "Preproduction provider configured") : "Provider setup required"}</strong><small>{activePlan.provider || "IABT managed production"}</small></p>
+                <p><strong>{activePlan.provider_ready ? (activePlan.render_ready ? "IABT production route configured" : "IABT preproduction configured") : "Production setup required"}</strong><small>IABT managed production</small></p>
               </div>
               <div>
                 <span className={activePlan.render_ready ? "is-ready" : "is-prepare"}>{activePlan.render_ready ? <Play /> : <FileText />}</span>
@@ -800,7 +800,7 @@ export default function Studio() {
                 <p>
                   <strong>{activePlan.intent === "video" ? "VIDEO RENDERER OFFLINE — no MP4 will be created." : "No pretend output."}</strong>
                   {activePlan.intent === "video"
-                    ? " JERICHO will create the complete renderer-ready production package only. Ray 3.2 is installed in IABT, but its provider credential and paid-media gates must be enabled before final video rendering becomes available."
+                    ? " JERICHO will create the complete renderer-ready production package only. IABT's managed renderer and paid-media gates must be active before final video rendering becomes available."
                     : <> Approval creates the complete preproduction package described below. It will not label a script, storyboard or plan as a finished {activePlan.intent}.</>}
                 </p>
               </div>
@@ -847,8 +847,8 @@ export default function Studio() {
               </div>
               <dl>
                 <div><dt>IABT credits</dt><dd>{Number(activePlan.credit_cost || 0)}</dd></div>
-                <div><dt>Provider cost</dt><dd>{formatMoney(activePlan.provider_cost_cents)}</dd></div>
-                <div><dt>Platform fee</dt><dd>{formatMoney(activePlan.platform_fee_cents)}</dd></div>
+                <div><dt>IABT production cost</dt><dd>{formatMoney(activePlan.provider_cost_cents)}</dd></div>
+                <div><dt>IABT service fee</dt><dd>{formatMoney(activePlan.platform_fee_cents)}</dd></div>
                 <div className="is-total"><dt>Estimated total</dt><dd>{formatMoney(activePlan.total_estimated_cost_cents)}</dd></div>
               </dl>
               <p>{activePlan.consent_summary || "The quote is an estimate. No billing action occurs until you explicitly approve."}</p>
@@ -883,7 +883,7 @@ export default function Studio() {
               <article key={job.id}>
                 <div className="creator-job-head">
                   <span className="creator-job-kind">{job.intent === "video" ? <Video /> : job.mode === "prepare" ? <FileText /> : <Rocket />}</span>
-                  <div><strong>{job.stage || readable(job.intent) + " production"}</strong><small>{readable(job.provider)} · {readable(job.mode)}</small></div>
+                  <div><strong>{job.stage || readable(job.intent) + " production"}</strong><small>IABT managed production · {readable(job.mode)}</small></div>
                   <StatusPill status={job.status} />
                 </div>
                 <div className="creator-progress-track"><span style={{ width: Math.max(3, Number(job.progress || 0)) + "%" }} /></div>
@@ -922,7 +922,7 @@ export default function Studio() {
                   <div className="creator-artifact-info">
                     <span className="creator-artifact-kind">{readable(artifact.kind)}</span>
                     <strong>{artifact.name}</strong>
-                    <small>{artifact.mime_type || "IABT deliverable"} · {readable(artifact.provider)}</small>
+                    <small>{artifact.mime_type || "IABT deliverable"} · IABT verified delivery</small>
                     <div>
                       {deliveryUrl && (
                         <a href={deliveryUrl} target="_blank" rel="noreferrer">
