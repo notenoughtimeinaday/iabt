@@ -10,6 +10,7 @@ import {
   captureJobCredits,
   releaseJobCredits,
 } from "../../shared/usage.ts";
+import { settleProviderCommitment } from "../../shared/commercial-governance.ts";
 
 function clean(value: unknown, max = 600) {
   return String(value || "").trim().slice(0, max);
@@ -82,6 +83,11 @@ async function markComplete(base44: any, service: any, job: any, artifact: any) 
     "Video completed and was secured in private Base44 storage; reserved credits captured.",
   )) {
     completedJob = { ...completedJob, usage_state: "captured" };
+  }
+  try {
+    await settleProviderCommitment(base44, completedJob);
+  } catch (error) {
+    console.error("provider spend settlement ledger failed:", error);
   }
   return completedJob;
 }
