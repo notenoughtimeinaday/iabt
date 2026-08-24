@@ -15,7 +15,7 @@ The current app is Base44-native. The historical Node/Express implementation rem
 
 ## Preserved capabilities
 
-Pages, components, routing, inspector editing, ScannerInput, local recovery, AI generation, project persistence, JSON import/export, HTML/ZIP exports, React exports, and live preview are all represented in the Base44 implementation.
+The former Visual App Builder remains preserved only as unreachable historical source. JERICHO Studio is the sole customer-facing creation experience. Generated app projects remain available as reviewable records with AppDefinition metadata, files, manifests, and delivery history. A permanent Deliverable Library recovers documents, code, G-code, private media, and preproduction packages independently of conversation history.
 
 ## Founding product origin
 
