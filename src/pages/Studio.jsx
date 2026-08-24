@@ -844,7 +844,7 @@ export default function Studio() {
               <dl>
                 <div className="is-total"><dt>IABT credit quote</dt><dd>{Number(activePlan.credit_cost || 0)} credits</dd></div>
                 <div><dt>Approval action</dt><dd>Reserve credits only</dd></div>
-                <div><dt>Paid production funding</dt><dd>{activePlan.commercial_summary?.paid_provider ? "Purchased credits" : "Plan credits eligible"}</dd></div>
+                <div><dt>Paid production funding</dt><dd>{activePlan.commercial_summary?.purchased_credits_required ? "Purchased credits required" : "Paid-plan credits eligible"}</dd></div>
                 <div><dt>Delivery rule</dt><dd>Capture after verification</dd></div>
               </dl>
               <p>{activePlan.consent_summary || "The quote is an estimate. No billing action occurs until you explicitly approve."}</p>
