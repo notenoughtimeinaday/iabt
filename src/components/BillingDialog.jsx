@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { Check, CreditCard, Loader2, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -110,7 +111,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
 
         <div className="iabt-billing-economics">
           <div><Zap /></div>
-          <p><strong>Customers buy from IABT.</strong><span>Plans and credits are sold by IABT through Stripe. JERICHO shows the exact IABT quote before approval, reserves only the approved credits, captures them after verified delivery, and restores them if no durable result is produced. IABT privately pays replaceable production suppliers only when approved work uses them.</span></p>
+          <p><strong>Customers buy from IABT.</strong><span>Monthly plan credits support planning and ordinary creation. Paid third-party production uses purchased production credits after an exact quote and approval. IABT privately pays approved, replaceable suppliers and restores reserved credits when no durable result is produced.</span></p>
         </div>
 
         <div className="iabt-plan-grid">
@@ -179,7 +180,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
           <div>
             <span className="iabt-credit-pack-kicker">Flexible creation capacity</span>
             <strong>{AI_CREDIT_PACK.credits} extra IABT credits for {"$" + AI_CREDIT_PACK.price}</strong>
-            <p>One-time credits never expire, are used after the monthly allowance, and can cover up to ${AI_CREDIT_PACK.maxProviderCost} in weighted provider cost per pack.</p>
+            <p>Purchased credits remain available until used and are required for paid third-party production. Every production job receives an exact IABT credit quote before approval.</p>
           </div>
           <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan) || !billingReady}>
             {busyPlan === "credits" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -195,6 +196,10 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
             : billingReady
               ? "Stripe test mode is fully configured. Test cards cannot create real charges."
               : "Stripe test mode is selected, but one or more test keys, webhook settings, or price IDs still need configuration."}
+        </p>
+        <p className="iabt-billing-legal">
+          Purchases are subject to the <Link to="/terms">Terms</Link>,{" "}
+          <Link to="/privacy">Privacy Notice</Link>, and <Link to="/acceptable-use">Acceptable Use Policy</Link>.
         </p>
       </DialogContent>
     </Dialog>
