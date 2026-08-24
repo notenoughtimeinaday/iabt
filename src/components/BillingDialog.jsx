@@ -110,7 +110,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
 
         <div className="iabt-billing-economics">
           <div><Zap /></div>
-          <p><strong>Subscriptions fund the work.</strong><span>JERICHO shows the exact credit and provider-cost quote before approval, reserves only the approved credits, captures them after verified delivery, and restores them if no durable result is produced. IABT pays connected providers from its managed provider accounts.</span></p>
+          <p><strong>Customers buy from IABT.</strong><span>Plans and credits are sold by IABT through Stripe. JERICHO shows the exact IABT quote before approval, reserves only the approved credits, captures them after verified delivery, and restores them if no durable result is produced. IABT privately pays replaceable production suppliers only when approved work uses them.</span></p>
         </div>
 
         <div className="iabt-plan-grid">
