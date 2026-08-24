@@ -1,0 +1,146 @@
+{
+  "name": "ProviderAgreement",
+  "type": "object",
+  "properties": {
+    "provider_id": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "display_name": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "service_category": {
+      "type": "string",
+      "enum": [
+        "intelligence",
+        "image",
+        "video",
+        "audio",
+        "software",
+        "hosting",
+        "storage",
+        "payments",
+        "business",
+        "other"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_review",
+        "standard_terms_approved",
+        "contract_approved",
+        "suspended",
+        "rejected"
+      ],
+      "default": "pending_review"
+    },
+    "embedded_use_allowed": {
+      "type": "boolean",
+      "default": false
+    },
+    "white_label_allowed": {
+      "type": "boolean",
+      "default": false
+    },
+    "attribution_required": {
+      "type": "boolean",
+      "default": false
+    },
+    "commercial_output_allowed": {
+      "type": "boolean",
+      "default": false
+    },
+    "customer_data_allowed": {
+      "type": "boolean",
+      "default": false
+    },
+    "dpa_status": {
+      "type": "string",
+      "enum": [
+        "not_required",
+        "pending",
+        "accepted",
+        "rejected"
+      ],
+      "default": "pending"
+    },
+    "billing_mode": {
+      "type": "string",
+      "enum": [
+        "included",
+        "prepaid",
+        "pay_as_you_go",
+        "monthly_invoice",
+        "committed_spend",
+        "custom"
+      ],
+      "default": "pay_as_you_go"
+    },
+    "payment_terms": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "terms_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "privacy_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "agreement_reference": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "effective_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "next_review_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string",
+      "maxLength": 4000
+    }
+  },
+  "required": [
+    "provider_id",
+    "display_name",
+    "service_category",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
