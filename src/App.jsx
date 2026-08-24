@@ -17,14 +17,26 @@ import Builder from '@/pages/Builder';
 import Legal from '@/pages/Legal';
 import AdminCompliance from '@/pages/AdminCompliance';
 import LegalAcceptanceGate from '@/components/LegalAcceptanceGate';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 // Add page imports here
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { pathname } = useLocation();
+  const publicPaths = new Set([
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/reset-password",
+    "/legal",
+    "/privacy",
+    "/terms",
+    "/acceptable-use",
+  ]);
+  const isPublicPath = publicPaths.has(pathname);
 
-  // Show loading spinner while checking app public settings or auth
-  if (isLoadingPublicSettings || isLoadingAuth) {
+  // Public policy pages stay available even when account authentication is required.
+  if (isLoadingPublicSettings || (isLoadingAuth && !isPublicPath)) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
@@ -33,7 +45,7 @@ const AuthenticatedApp = () => {
   }
 
   // Handle authentication errors
-  if (authError) {
+  if (authError && !isPublicPath) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
