@@ -43,7 +43,7 @@ IABT-JERICHO is an autonomous project operator and visual SaaS app builder runni
 - AppDefinition schema version 1.0
 - Local draft recovery plus Base44 cloud persistence
 
-The AI functions use `OPENAI_API_KEY` and the OpenAI Responses API when that secret is configured. Without it, app generation falls back to Base44 managed AI. Every creation reserves authenticated-user IABT credits atomically, captures them only after durable output is verified, and restores them when work fails before a durable result. Usage is tracked in hourly safety and UTC monthly buckets; purchased credits are consumed only after an eligible included monthly allowance.
+The AI functions use `OPENAI_API_KEY` and the OpenAI Responses API when that secret is configured. Without it, app generation falls back to Base44 managed AI. Every creation reserves authenticated-user IABT credits atomically, captures them only after durable output is verified, and restores them when work fails before a durable result. Usage is tracked in hourly safety and UTC monthly buckets. Paid subscriptions use eligible included credits first; Free-plan paid production and paid-plan overages use purchased credits.
 
 ## Local development
 
@@ -87,7 +87,7 @@ This runs lint, JavaScript project validation, and the production Vite build. Ex
 | Pro | $79 | 25 | 500/month | Adds React exports and commercial use |
 | Agency | $199 | Unlimited | 2,000/month | Adds white-label exports and 5 team seats |
 
-One-time packs add 100 IABT credits for $10. Monthly plan credits fund planning and ordinary creation. Paid third-party production requires purchased production credits and an approved supplier agreement. Assisted app-building engagements can be offered separately from $499–$1,500; they are a managed service, not an automated in-app entitlement.
+One-time packs add 100 IABT credits for $10. Paid Builder, Pro, and Agency subscriptions can use their included IABT credits for eligible third-party production. Free-plan paid production and usage beyond a paid plan's remaining allowance require purchased credits and an approved supplier agreement. Assisted app-building engagements can be offered separately from $499–$1,500; they are a managed service, not an automated in-app entitlement.
 
 ## Stripe billing
 
@@ -110,11 +110,11 @@ Do not set `IABT_STRIPE_MODE=live` until pricing, policies, refunds, taxes, supp
 
 Stripe and Luma are separate accounts: subscription and credit-pack revenue settles through Stripe, while Ray 3.2 rendering spends the IABT owner's Luma balance. Stripe payments do not directly refill Luma. Keep a controlled Luma balance or enable Luma auto-reload with a conservative threshold and reload amount.
 
-Paid supplier quotes use weighted IABT production credits. One production credit represents at most 3 cents of supplier cost while its current retail value is 10 cents, targeting roughly 70% gross margin before platform, payment, support, tax, and refund costs. A request reserves its exact purchased-credit amount only after explicit approval. Credits are captured after the MP4 is copied to durable private Base44 storage; they are restored when no durable result is produced under the credit policy. Monthly plan credits do not fund paid third-party production.
+Paid supplier quotes use weighted IABT production credits. One production credit represents at most 3 cents of supplier cost while its current retail value is 10 cents, targeting roughly 70% gross margin before platform, payment, support, tax, and refund costs. A request reserves its exact eligible credit amount only after explicit approval. Paid plans use included credits first and purchased credits for overage; the Free plan requires purchased credits for paid production. Credits are captured after the MP4 is copied to durable private Base44 storage and restored when no durable result is produced under the credit policy.
 
 ## Commercial and legal control
 
-Paid supplier execution is fail-closed. It requires a current approved ProviderAgreement, an active CommercialPolicy, adequate purchased production credits, the minimum margin floor, the per-job cost ceiling, daily and monthly spend capacity, supplier credentials, funded billing, and an explicit commercial-approval secret. Provider commitments and settlements are recorded separately from the customer credit ledger.
+Paid supplier execution is fail-closed. It requires a current approved ProviderAgreement, an active CommercialPolicy, adequate eligible IABT credits, the minimum margin floor, the per-job cost ceiling, daily and monthly spend capacity, supplier credentials, funded billing, and an explicit commercial-approval secret. Provider commitments and settlements are recorded separately from the customer credit ledger.
 
 The public Trust & Legal Center is a prelaunch operational policy set. Before live paid launch, licensed counsel must review it and the owner must publish verified legal-entity, governing-law, privacy, legal, and support contact details.
 
