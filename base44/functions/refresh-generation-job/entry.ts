@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
         status: "needs_setup",
         progress: 0,
         stage: "Provider job was not submitted",
-        error_message: "No Luma generation ID exists for this job. Request a new creation plan.",
+        error_message: "No managed-renderer job ID exists for this request. Request a new creation plan.",
       });
       job = await restoreJobCredits(
         base44,
@@ -218,12 +218,12 @@ Deno.serve(async (req) => {
     if (!getMediaReadiness().luma_key_configured) {
       job = await service.entities.GenerationJob.update(job.id, {
         status: "needs_setup",
-        stage: "Luma credential required to retrieve the render",
-        error_message: "LUMA_AGENTS_API_KEY is not configured. The provider job cannot be checked or copied yet.",
+        stage: "IABT renderer access required to retrieve the render",
+        error_message: "IABT's managed renderer connection is unavailable. The job cannot be checked or copied yet.",
         poll_after: new Date(Date.now() + 60_000).toISOString(),
       });
       return Response.json({
-        error: "Luma credentials are required to refresh this render. No artifact is being claimed.",
+        error: "IABT's managed renderer connection is required to refresh this job. No artifact is being claimed.",
         job,
         artifact: null,
         complete: false,
@@ -248,7 +248,7 @@ Deno.serve(async (req) => {
         "The video provider reported a failed render.",
         1000,
       );
-      const providerFailure = failureCode ? failureCode + ": " + reason : reason;
+      console.error("managed video supplier failure:", failureCode || "unknown", reason);\n      const providerFailure = "IABT's managed video renderer could not complete this job.";
       job = await service.entities.GenerationJob.update(job.id, {
         status: "failed",
         progress: 100,
@@ -284,7 +284,7 @@ Deno.serve(async (req) => {
       job = await service.entities.GenerationJob.update(job.id, {
         status: "waiting_provider",
         progress,
-        stage: "Ray 3.2 render in progress",
+        stage: "IABT video render in progress",
         error_message: "",
         poll_after: new Date(Date.now() + 30_000).toISOString(),
       });
@@ -361,7 +361,7 @@ Deno.serve(async (req) => {
       job_id: job.id,
       ...(job.conversation_id ? { conversation_id: job.conversation_id } : {}),
       ...(job.project_id ? { project_id: job.project_id } : {}),
-      name: "IABT Ray 3.2 video.mp4",
+      name: "IABT video.mp4",
       kind: "video",
       mime_type: stored.mime_type || "video/mp4",
       file_uri: stored.file_uri,
@@ -389,7 +389,7 @@ Deno.serve(async (req) => {
       job,
       artifact,
       complete: true,
-      result: { message: "The Ray 3.2 MP4 is complete and stored as a private Base44 artifact." },
+      result: { message: "The IABT MP4 is complete and stored as a private artifact." },
       billing: billing(job),
     });
   } catch (error) {
