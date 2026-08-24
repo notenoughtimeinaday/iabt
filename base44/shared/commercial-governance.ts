@@ -1,4 +1,4 @@
-export const COMMERCIAL_POLICY_VERSION = "iabt-commercial-2026-08-24.1";
+export const COMMERCIAL_POLICY_VERSION = "iabt-commercial-2026-08-24.2";
 
 export const DEFAULT_COMMERCIAL_POLICY = {
   policy_id: "default-paid-production",
