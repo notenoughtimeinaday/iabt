@@ -36,7 +36,7 @@ The initial IABT version of this concept must remain a no-real-money prototype a
 
 - Stripe live-mode readiness is implemented with recurring Builder, Pro, and Agency subscriptions plus one-time IABT credit packs.
 - Approved creations reserve the exact quoted IABT credits, capture them after durable verified output, and restore them when no durable output is produced.
-- Paid provider work uses IABT-managed provider accounts. Customer subscriptions and credit packs fund customer allowances; they do not directly refill a provider balance.
+- Customers buy plans and credits from IABT through Stripe. IABT owns the customer relationship, quote, markup, credit ledger, delivery, and refund/restoration policy. Paid supplier work uses private IABT-managed accounts only after an approved job requires it; supplier brands remain internal unless disclosure is legally or contractually required.
 - The Luma Ray 3.2 path reached the provider successfully during live testing, then failed with `insufficient funds`. This proves the request path but not a successful MP4 delivery. The IABT owner must fund or auto-reload the Luma master provider account before another live renderer acceptance test.
 - Do not market video rendering as unlimited. The published plan allowances and exact per-job quotes remain the commercial control.
 
