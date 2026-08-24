@@ -248,7 +248,8 @@ Deno.serve(async (req) => {
         "The video provider reported a failed render.",
         1000,
       );
-      console.error("managed video supplier failure:", failureCode || "unknown", reason);\n      const providerFailure = "IABT's managed video renderer could not complete this job.";
+      console.error("managed video supplier failure:", failureCode || "unknown", reason);
+      const providerFailure = "IABT's managed video renderer could not complete this job.";
       job = await service.entities.GenerationJob.update(job.id, {
         status: "failed",
         progress: 100,
