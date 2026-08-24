@@ -21,6 +21,7 @@ import {
   Plus,
   Repeat2,
   Search,
+  ShieldCheck,
   Sparkles,
   Trash2,
   Upload,
@@ -285,6 +286,11 @@ export default function Home() {
           <Button variant="outline" size="sm" onClick={() => setBillingOpen(true)}>
             <CreditCard className="h-4 w-4 mr-1" /> Plans & billing
           </Button>
+          {user?.role === "admin" && (
+            <Button variant="outline" size="sm" onClick={() => navigate("/admin/compliance")}>
+              <ShieldCheck className="h-4 w-4 mr-1" /> Profit & compliance
+            </Button>
+          )}
           <span>{user?.full_name || user?.email || "Builder"}</span>
           <Button variant="ghost" size="sm" onClick={() => logout(true)}><LogOut className="h-4 w-4 mr-1" /> Sign out</Button>
         </div>
@@ -454,6 +460,16 @@ export default function Home() {
           )}
         </section>
       </main>
+
+      <footer className="iabt-home-footer">
+        <span>© 2026 IABT–JERICHO · Autonomous project operations with explicit authority and verified delivery.</span>
+        <nav aria-label="Legal">
+          <button type="button" onClick={() => navigate("/legal")}>Trust & Legal Center</button>
+          <button type="button" onClick={() => navigate("/privacy")}>Privacy</button>
+          <button type="button" onClick={() => navigate("/terms")}>Terms</button>
+          <button type="button" onClick={() => navigate("/acceptable-use")}>Acceptable Use</button>
+        </nav>
+      </footer>
 
       <BillingDialog
         open={billingOpen}
