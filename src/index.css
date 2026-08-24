@@ -5075,7 +5075,9 @@ input, textarea, select { color-scheme: dark; caret-color: var(--jericho-cyan); 
   .iabt-control-panel { overflow-x: auto; }
 }
 @media (max-width: 680px) {
-  .iabt-home-footer, .iabt-legal-header, .iabt-control-header { align-items: flex-start; flex-direction: column; }
+  .iabt-home-footer, .iabt-legal-header, .iabt-control-header, .iabt-library-heading { align-items: flex-start; flex-direction: column; }
+  .iabt-library-heading { padding-top: 30px; }
+  .iabt-library-search { width: 100%; }
   .iabt-legal-shell, .iabt-control-main { width: min(100% - 24px, 1280px); }
   .iabt-legal-title, .iabt-legal-section { padding: 24px 20px; }
   .iabt-subprocessor-list div { grid-template-columns: 1fr; gap: 4px; }
