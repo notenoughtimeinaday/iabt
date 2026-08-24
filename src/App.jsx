@@ -14,6 +14,9 @@ import ResetPassword from '@/pages/ResetPassword';
 import Home from '@/pages/Home';
 import Studio from '@/pages/Studio';
 import Builder from '@/pages/Builder';
+import Legal from '@/pages/Legal';
+import AdminCompliance from '@/pages/AdminCompliance';
+import LegalAcceptanceGate from '@/components/LegalAcceptanceGate';
 import { Navigate } from 'react-router-dom';
 // Add page imports here
 
@@ -47,10 +50,17 @@ const AuthenticatedApp = () => {
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/legal" element={<Legal />} />
+      <Route path="/privacy" element={<Legal />} />
+      <Route path="/terms" element={<Legal />} />
+      <Route path="/acceptable-use" element={<Legal />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
-        <Route path="/" element={<Home />} />
-        <Route path="/studio" element={<Studio />} />
-        <Route path="/projects/:id" element={<Builder />} />
+        <Route element={<LegalAcceptanceGate />}>
+          <Route path="/" element={<Home />} />
+          <Route path="/studio" element={<Studio />} />
+          <Route path="/projects/:id" element={<Builder />} />
+          <Route path="/admin/compliance" element={<AdminCompliance />} />
+        </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
