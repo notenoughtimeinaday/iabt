@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -171,6 +171,8 @@ function ArtifactPreview({ artifact }) {
 export default function Studio() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const targetProjectId = (searchParams.get("project_id") || "").trim().slice(0, 200);
   const reduceMotion = useReducedMotion();
   const messageEndRef = useRef(null);
   const artifactAccessRef = useRef({});
@@ -308,7 +310,10 @@ export default function Studio() {
     try {
       const created = await base44.agents.createConversation({
         agent_name: CREATOR_AGENT,
-        metadata: { surface: "creator_studio" },
+        metadata: {
+          surface: "creator_studio",
+          ...(targetProjectId ? { project_id: targetProjectId } : {}),
+        },
       });
       setConversation(created);
       setMessages(created.messages || []);
@@ -325,7 +330,7 @@ export default function Studio() {
     } finally {
       setConversationBusy(false);
     }
-  }, [refreshConversationList, toast]);
+  }, [refreshConversationList, targetProjectId, toast]);
 
   useEffect(() => {
     let active = true;
@@ -367,7 +372,10 @@ export default function Studio() {
         } else {
           const created = await base44.agents.createConversation({
             agent_name: CREATOR_AGENT,
-            metadata: { surface: "creator_studio" },
+            metadata: {
+              surface: "creator_studio",
+              ...(targetProjectId ? { project_id: targetProjectId } : {}),
+            },
           });
           if (!active) return;
           setConversation(created);
@@ -383,7 +391,7 @@ export default function Studio() {
 
     void bootstrap();
     return () => { active = false; };
-  }, [openConversation, user?.id]);
+  }, [openConversation, targetProjectId, user?.id]);
 
   useEffect(() => {
     if (!conversation?.id) return undefined;
@@ -452,11 +460,12 @@ export default function Studio() {
         content: request,
         custom_context: [{
           type: "iabt_creation_request",
-          message: "The user selected " + mode + " mode. Use this exact conversation_id when calling plan-creation: " + target.id + ". Plan and quote first. Never execute without explicit approval.",
+          message: "The user selected " + mode + " mode. Use this exact conversation_id when calling plan-creation: " + target.id + "." + (targetProjectId ? " Revise the existing app by passing this exact top-level project_id to plan-creation: " + targetProjectId + "." : "") + " Plan and quote first. Never execute without explicit approval.",
           data: {
             mode,
             selected_mode: mode,
             conversation_id: target.id,
+            ...(targetProjectId ? { project_id: targetProjectId } : {}),
             approval_required: true,
             surface: "creator_studio",
           },
@@ -536,7 +545,7 @@ export default function Studio() {
         <div className="creator-sidebar-brand">
           <Link to="/" className="creator-brand-link" aria-label="Return to IABT home">
             <img className="creator-brand-mark" src="/iabt-mark.svg" alt="" />
-            <span><strong>IABT–JERICHO</strong><small>Autonomous project operator</small></span>
+            <span><strong>Intelligent Application Building Tool</strong><small>IABT · JERICHO Studio</small></span>
           </Link>
           <button type="button" className="creator-mobile-close" onClick={() => setMobileNavOpen(false)} aria-label="Close menu">
             <X />
@@ -591,11 +600,11 @@ export default function Studio() {
           </button>
           <div className="creator-topbar-title">
             <span className="creator-live-dot" />
-            <div><strong>JERICHO Studio</strong><small>One objective from idea through verified delivery.</small></div>
+            <div><strong>JERICHO Studio</strong><small>{targetProjectId ? "Revision mode · updates stay with this app project." : "One objective from idea through verified delivery."}</small></div>
           </div>
           <div className="creator-topbar-actions">
             <span className="creator-credit-chip"><Sparkles /> {remainingCredits} credits</span>
-            <Link to="/" className="creator-builder-link"><AppWindow /> Visual app builder</Link>
+            <Link to="/" className="creator-builder-link"><AppWindow /> App projects</Link>
             <span className="creator-user">{user?.full_name || user?.email || "Creator"}</span>
           </div>
         </header>
@@ -616,7 +625,7 @@ export default function Studio() {
               transition={{ duration: 0.35 }}
             >
               <div className="creator-welcome-orb"><img src="/iabt-mark.svg" alt="" /></div>
-              <p className="creator-kicker">IABT–JERICHO · autonomous interactive app building</p>
+              <p className="creator-kicker">Intelligent Application Building Tool · JERICHO Studio</p>
               <h1>Tell JERICHO the objective. It figures out how to get there.</h1>
               <p className="creator-welcome-copy">
                 JERICHO preserves your objective, discovers the best authorized path, coordinates the connected
@@ -931,7 +940,7 @@ export default function Studio() {
                         </a>
                       )}
                       {artifact.project_id && (
-                        <Link to={"/projects/" + artifact.project_id}><AppWindow /> Open in builder</Link>
+                        <Link to={"/projects/" + artifact.project_id}><AppWindow /> Fine-tune in App Editor</Link>
                       )}
                     </div>
                   </div>
