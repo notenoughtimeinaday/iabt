@@ -1,10 +1,10 @@
 import { secrets } from "base44:runtime";
 
-export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-21.1";
+export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-24.2";
 export const CREATION_QUOTE_TTL_MS = 30 * 60 * 1000;
 export const LUMA_MODEL = "ray-3.2";
 export const LUMA_API_BASE = "https://agents.lumalabs.ai/v1";
-export const PROVIDER_COST_PER_IABT_CREDIT_CENTS = 5;
+export const PROVIDER_COST_PER_IABT_CREDIT_CENTS = 3;
 
 const INTENTS = [
   "app",
@@ -43,16 +43,20 @@ export function getMediaReadiness() {
   const lumaKeyRaw = String(secrets.get("LUMA_AGENTS_API_KEY") || "").trim();
   const paidMediaRaw = String(secrets.get("IABT_ENABLE_PAID_MEDIA") || "").trim();
   const mediaBillingRaw = String(secrets.get("IABT_MEDIA_BILLING_READY") || "").trim();
+  const commercialApprovalRaw = String(secrets.get("IABT_LUMA_COMMERCIAL_APPROVED") || "").trim();
   const lumaKeyConfigured = Boolean(lumaKeyRaw);
   const paidMediaEnabled = /^(1|true|yes|on)$/i.test(paidMediaRaw);
   const mediaBillingReady = /^(1|true|yes|on)$/i.test(mediaBillingRaw);
+  const commercialApproved = /^(1|true|yes|on)$/i.test(commercialApprovalRaw);
   return {
     luma_key_configured: lumaKeyConfigured,
     paid_media_gate_configured: Boolean(paidMediaRaw),
     paid_media_enabled: paidMediaEnabled,
     media_billing_gate_configured: Boolean(mediaBillingRaw),
     media_billing_ready: mediaBillingReady,
-    luma_ready: lumaKeyConfigured && paidMediaEnabled && mediaBillingReady,
+    commercial_approval_gate_configured: Boolean(commercialApprovalRaw),
+    commercial_approved: commercialApproved,
+    luma_ready: lumaKeyConfigured && paidMediaEnabled && mediaBillingReady && commercialApproved,
   };
 }
 
@@ -178,7 +182,7 @@ function heuristicDetails(requestText: string, intent: string) {
   } else if (intent === "video") {
     base.steps = [
       step(1, "Direction package", "Create a production-ready concept, script, shot list, motion, camera, lighting, and pacing.", "IABT planner", "Video direction package"),
-      step(2, "Render or preproduction", "Render with Ray 3.2 when explicitly enabled and approved; otherwise produce detailed preproduction.", "Luma Ray 3.2 or IABT preproduction", "MP4 or clearly labeled preproduction document"),
+      step(2, "Render or preproduction", "Render through IABT managed production when commercially approved and explicitly authorized; otherwise produce detailed preproduction.", "IABT managed production", "MP4 or clearly labeled preproduction document"),
     ];
     base.deliverables = ["Video direction package", "Rendered MP4 when the paid provider is ready; otherwise storyboard-ready preproduction"];
   } else if (intent === "audio") {
@@ -401,9 +405,7 @@ export function quoteFor(intent: string, spec: any = {}) {
   const expiresAt = new Date(Date.now() + CREATION_QUOTE_TTL_MS).toISOString();
   const creditLabel = capability.credit_cost === 1 ? "1 IABT credit" : capability.credit_cost + " IABT credits";
   const noChargeMessage = capability.total_estimated_cost_cents > 0
-    ? creditLabel + " will be reserved only after approval. The displayed " +
-      "$" + (capability.total_estimated_cost_cents / 100).toFixed(2) +
-      " provider cost is covered by those credits and is not a separate card charge. If Luma rejects the request before it is queued, the reservation is restored."
+    ? creditLabel + " will be reserved only after approval. Paid production uses purchased IABT credits; IABT pays its approved suppliers privately. If no durable output is produced, the reservation is restored under the IABT credit policy."
     : creditLabel + " will be reserved only after approval. No separate card charge will occur.";
   return {
     capability,
@@ -826,7 +828,7 @@ export function publicCapability(capability: any) {
     intent: capability.intent,
     name: capability.name,
     description: capability.description,
-    provider: capability.provider,
+    provider: capability.provider === "iabt-preproduction" ? "iabt-preproduction" : "iabt-managed-production",
     provider_ready: capability.provider_ready,
     render_ready: capability.render_ready,
     fallback_available: capability.fallback_available,
