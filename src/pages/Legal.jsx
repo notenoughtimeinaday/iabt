@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, Bot, Database, Scale, ShieldCheck, WalletCards } from "lucide-react";
 import { IABT_LEGAL_NAME, IABT_POLICY_UPDATED, IABT_POLICY_VERSION } from "@/lib/legal";
@@ -17,6 +17,12 @@ function Section({ id, title, children }) {
 export default function Legal() {
   const { pathname } = useLocation();
   const initial = pathname.includes("privacy") ? "privacy" : pathname.includes("acceptable") ? "acceptable-use" : pathname.includes("terms") ? "terms" : "overview";
+
+  useEffect(() => {
+    window.requestAnimationFrame(() => {
+      document.getElementById(initial)?.scrollIntoView({ block: "start" });
+    });
+  }, [initial]);
 
   return (
     <div className="iabt-legal-page">
