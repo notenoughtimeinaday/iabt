@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     const service = base44.asServiceRole;
     const videoRenderUnavailable = details.intent === "video" && !capability.render_ready;
     const planSummary = videoRenderUnavailable
-      ? "JERICHO can prepare the complete video production package, but the installed Ray 3.2 renderer is not active yet. Approving this plan will not create or imply an MP4."
+      ? "JERICHO can prepare the complete video production package, but IABT's managed renderer is not active yet. Approving this plan will not create or imply an MP4."
       : details.assistant_summary;
     const planSteps = videoRenderUnavailable
       ? [
@@ -113,13 +113,13 @@ Deno.serve(async (req) => {
     const planWarnings = videoRenderUnavailable
       ? Array.from(new Set([
           ...(details.warnings || []),
-          "VIDEO RENDERER OFFLINE: this approval creates preproduction only. No MP4 will be generated until the Ray 3.2 provider credential and paid-media gates are enabled.",
+          "VIDEO RENDERER OFFLINE: this approval creates preproduction only. No MP4 will be generated until IABT's managed renderer and paid-media gates are enabled.",
         ]))
       : [...(details.warnings || [])];
     if (!creditCovered) {
       planWarnings.push(
         paidMedia && usage.plan === "free"
-          ? "PAID MEDIA CREDIT REQUIRED: the Free plan's included credits cannot fund Luma. Upgrade or add enough purchased IABT credits before approval."
+          ? "PAID MEDIA CREDIT REQUIRED: the Free plan's included credits cannot fund managed video production. Upgrade or add enough purchased IABT credits before approval."
           : "IABT CREDIT BALANCE TOO LOW: this plan needs " + quote.credit_cost + " credits, but only " + availableCredits + " are currently available.",
       );
     }
