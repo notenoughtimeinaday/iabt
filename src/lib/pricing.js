@@ -26,7 +26,7 @@ export const IABT_PLANS = [
       "5 cloud projects",
       "100 IABT credits each month",
       "HTML and static ZIP exports",
-      "Paid production available through purchased credits",
+      "Included credits cover eligible paid production",
     ],
   },
   {
@@ -41,7 +41,7 @@ export const IABT_PLANS = [
       "25 cloud projects",
       "500 IABT credits each month",
       "React exports and commercial-use rights",
-      "Commercial exports plus production-credit access",
+      "Included credits cover commercial production",
     ],
   },
   {
@@ -56,7 +56,7 @@ export const IABT_PLANS = [
       "Unlimited cloud projects",
       "2,000 IABT credits each month",
       "White-label exports and up to 5 team seats",
-      "Team controls plus production-credit access",
+      "Included credits cover team production",
     ],
   },
 ];
