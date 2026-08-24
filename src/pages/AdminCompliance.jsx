@@ -113,7 +113,7 @@ export default function AdminCompliance() {
             <div><span>Production credit retail value</span><strong>{money(policy.retail_credit_value_cents)} / credit</strong></div>
             <div><span>Maximum supplier cost represented</span><strong>{money(policy.provider_cost_per_credit_cents)} / credit</strong></div>
             <div><span>Maximum ordinary job cost</span><strong>{money(policy.maximum_job_cost_cents)}</strong></div>
-            <div><span>Production funding source</span><strong>{policy.purchased_credits_required ? "Purchased credits only" : "All eligible credits"}</strong></div>
+            <div><span>Production funding source</span><strong>{policy.purchased_credits_required ? "Purchased credits only" : "Paid-plan allowance + purchased overage"}</strong></div>
           </div>
         </section>
 
