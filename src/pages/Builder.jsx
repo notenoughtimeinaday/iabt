@@ -148,12 +148,7 @@ export default function Builder() {
   const [loading, setLoading] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [aiBusy, setAiBusy] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
-  const [prompt, setPrompt] = useState("");
-  const [aiMode, setAiMode] = useState("replace");
-  const [aiProvider, setAiProvider] = useState("");
-  const [aiUsage, setAiUsage] = useState(null);
   const [device, setDevice] = useState("phone");
   const [lastScan, setLastScan] = useState("");
   const [history, setHistory] = useState([]);
@@ -410,64 +405,6 @@ export default function Builder() {
     }
   }
 
-  async function generateApp() {
-    if (!prompt.trim()) {
-      toast({ title: "Describe the app first" });
-      return;
-    }
-    setAiBusy(true);
-    setAiProvider("");
-    setAiUsage(null);
-    try {
-      const response = await base44.functions.invoke("generate-app", {
-        prompt: prompt.trim(),
-        context: {
-          app: definition.app,
-          pages: definition.pages.map((page) => ({
-            name: page.name,
-            route: page.route,
-            components: page.components.map((component) => component.type),
-          })),
-        },
-      });
-      const payload = response?.data || response;
-      if (payload?.error) throw new Error(payload.error);
-      const generated = normalizeAppDefinition(
-        {
-          app: payload.app,
-          pages: payload.pages,
-          theme: definition.theme,
-          data: definition.data,
-          workflows: definition.workflows,
-          integrations: definition.integrations,
-          permissions: definition.permissions,
-        },
-        definition.app.name,
-      );
-
-      if (aiMode === "append") {
-        commit({
-          ...definition,
-          app: generated.app,
-          pages: [...definition.pages, ...generated.pages],
-        });
-      } else {
-        commit(generated);
-      }
-      setSelectedPageId(generated.pages[0]?.id || null);
-      setSelectedComponentId(null);
-      setPreviewRoute(generated.pages[0]?.route || "/");
-      setAiProvider(payload.provider || "AI");
-      setAiUsage(payload.usage ? { ...payload.usage, plan: payload.entitlement?.plan || "free" } : null);
-      toast({ title: "App flow generated", description: generated.pages.length + " pages are ready to edit." });
-    } catch (error) {
-      const message = error.response?.data?.error || error.message || "AI generation failed.";
-      toast({ title: "AI generation failed", description: message, variant: "destructive" });
-    } finally {
-      setAiBusy(false);
-    }
-  }
-
   async function importJson(event) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -528,7 +465,7 @@ export default function Builder() {
           </Button>
           <img className="iabt-mark" src="/iabt-mark.svg" alt="" />
           <div>
-            <p className="iabt-eyebrow">IABT–JERICHO · Visual App Builder</p>
+            <p className="iabt-eyebrow">Intelligent Application Building Tool · App Editor</p>
             <h1>{definition.app.name}</h1>
           </div>
         </div>
@@ -540,6 +477,17 @@ export default function Builder() {
           <span className={"iabt-save-state " + (dirty ? "is-dirty" : "")}>
             {dirty ? "Local draft" : <><Check className="h-3.5 w-3.5" /> Cloud saved</>}
           </span>
+          {dirty ? (
+            <Button variant="outline" disabled title="Save this draft before asking JERICHO to revise it.">
+              <Sparkles className="h-4 w-4 mr-1" /> Save before JERICHO
+            </Button>
+          ) : (
+            <Button variant="outline" asChild>
+              <Link to={"/studio?project_id=" + encodeURIComponent(id)}>
+                <Sparkles className="h-4 w-4 mr-1" /> Ask JERICHO
+              </Link>
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setBillingOpen(true)}>
             <CreditCard className="h-4 w-4 mr-1" /> {entitlement?.plan || "free"}
           </Button>
@@ -549,34 +497,6 @@ export default function Builder() {
           </Button>
         </div>
       </header>
-
-      <section className="iabt-ai-bar">
-        <div className="iabt-ai-icon"><Sparkles className="h-5 w-5" /></div>
-        <div className="iabt-ai-copy">
-          <strong>Build with JERICHO</strong>
-          <span>Describe the outcome, SaaS flow, pages, actions, or scanner workflow.</span>
-        </div>
-        <Textarea
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          placeholder="Example: Build a three-page inventory intake app with a scanner, product details, and confirmation page."
-          rows={2}
-        />
-        <select value={aiMode} onChange={(event) => setAiMode(event.target.value)} aria-label="AI generation mode">
-          <option value="replace">Replace flow</option>
-          <option value="append">Add pages</option>
-        </select>
-        <Button onClick={generateApp} disabled={aiBusy}>
-          {aiBusy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
-          Generate
-        </Button>
-        {aiProvider && (
-          <small>
-            Provider: {aiProvider}
-            {aiUsage && ` · ${aiUsage.plan} plan · ${aiUsage.monthly_remaining} included credits left this month · ${aiUsage.bonus_remaining} bonus`}
-          </small>
-        )}
-      </section>
 
       <div className="iabt-workspace">
         <aside className="iabt-sidebar iabt-leftbar">
