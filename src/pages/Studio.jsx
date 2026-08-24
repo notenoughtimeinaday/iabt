@@ -45,7 +45,7 @@ const MODE_OPTIONS = [
   { id: "website", label: "Website", icon: Globe2, description: "Marketable sites with a clear purpose" },
   { id: "image", label: "Image", icon: ImageIcon, description: "Original visual concepts and assets" },
   { id: "video", label: "Video", icon: Video, description: "MP4 rendering when active · preproduction otherwise" },
-  { id: "audio", label: "Audio", icon: Music2, description: "Audio direction, scripts and production assets" },
+  { id: "audio", label: "Audio brief", icon: Music2, description: "Preproduction only — no playable audio renderer connected" },
   { id: "document", label: "Document", icon: FileText, description: "Detailed, useful written deliverables" },
   { id: "code", label: "Code", icon: Code2, description: "Implementation-ready source and technical plans" },
   { id: "design", label: "Design", icon: Palette, description: "Professional visual systems and specifications" },
@@ -123,6 +123,39 @@ function formatDate(value) {
 
 function readable(value = "") {
   return String(value).replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function downloadInlineArtifact(artifact) {
+  if (!artifact?.content) return;
+  const blob = new Blob([artifact.content], { type: artifact.mime_type || "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = artifact.name || "iabt-deliverable.txt";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function listCreatorConversations() {
+  try {
+    const filtered = await base44.agents.listConversations({
+      q: { agent_name: CREATOR_AGENT },
+      sort: "-updated_date",
+      limit: 30,
+      skip: 0,
+    });
+    if (Array.isArray(filtered) && filtered.length) return filtered;
+  } catch {
+    // Fall through to the unfiltered endpoint for recovery.
+  }
+
+  const all = await base44.agents.getConversations();
+  return (Array.isArray(all) ? all : [])
+    .filter((item) => item?.agent_name === CREATOR_AGENT)
+    .sort((left, right) => new Date(right.updated_date || right.created_date || 0) - new Date(left.updated_date || left.created_date || 0))
+    .slice(0, 30);
 }
 
 function stepText(step, index) {
@@ -296,14 +329,9 @@ export default function Studio() {
   }, [loadResources, toast]);
 
   const refreshConversationList = useCallback(async () => {
-    const rows = await base44.agents.listConversations({
-      q: { agent_name: CREATOR_AGENT },
-      sort: "-updated_date",
-      limit: 30,
-      skip: 0,
-    });
-    setConversations(rows || []);
-    return rows || [];
+    const rows = await listCreatorConversations();
+    setConversations(rows);
+    return rows;
   }, []);
 
   const createConversation = useCallback(async () => {
@@ -341,12 +369,7 @@ export default function Studio() {
       setLoadError("");
       try {
         const [conversationRows, capabilityResponse, fabricResponse, autonomyResponse, entitlementResponse] = await Promise.all([
-          base44.agents.listConversations({
-            q: { agent_name: CREATOR_AGENT },
-            sort: "-updated_date",
-            limit: 30,
-            skip: 0,
-          }),
+          listCreatorConversations(),
           base44.functions.invoke("get-creation-capabilities", {}).catch(() => null),
           base44.functions.invoke("get-connection-fabric", {}).catch(() => null),
           base44.functions.invoke("get-autonomy-profile", {}).catch(() => null),
@@ -590,6 +613,7 @@ export default function Studio() {
               <small>{readable(entitlement?.plan || "free")} plan · usage shown before approval</small>
             </span>
           </div>
+          <Link to="/deliverables"><Download /> Deliverable library</Link>
           <Link to="/"><ArrowLeft /> App projects</Link>
         </div>
       </aside>
@@ -605,6 +629,7 @@ export default function Studio() {
           </div>
           <div className="creator-topbar-actions">
             <span className="creator-credit-chip"><Sparkles /> {remainingCredits} credits</span>
+            <Link to="/deliverables" className="creator-builder-link"><Download /> Deliverables</Link>
             <Link to="/" className="creator-builder-link"><AppWindow /> App projects</Link>
             <span className="creator-user">{user?.full_name || user?.email || "Creator"}</span>
           </div>
@@ -874,7 +899,13 @@ export default function Studio() {
                   disabled={!quoteAccepted || approvalBusy || quoteExpired || activePlan.clarification_questions?.length > 0}
                 >
                   {approvalBusy ? <Loader2 className="animate-spin" /> : executionMode === "render" ? <Play /> : <FileText />}
-                  {executionMode === "render" ? "Approve & produce" : activePlan.intent === "video" ? "Approve preproduction only" : "Approve preparation package"}
+                  {executionMode === "render"
+                    ? "Approve & produce"
+                    : activePlan.intent === "video"
+                      ? "Approve video brief only"
+                      : activePlan.intent === "audio"
+                        ? "Approve audio brief only"
+                        : "Approve preparation package"}
                 </Button>
                 <small>{activePlan.intent === "video" && !activePlan.render_ready ? "This approval cannot generate an MP4 while the renderer is offline." : "Approval is recorded. IABT will not silently start a paid tool."}</small>
               </div>
@@ -929,6 +960,11 @@ export default function Studio() {
                     <span className="creator-artifact-kind">{readable(artifact.kind)}</span>
                     <strong>{artifact.name}</strong>
                     <small>{artifact.mime_type || "IABT deliverable"} · IABT verified delivery</small>
+                    {artifact.metadata?.rendered === false && (
+                      <p className="creator-artifact-limitation">
+                        This is a {artifact.metadata?.requested_kind || "media"} preproduction document. No playable media file was rendered.
+                      </p>
+                    )}
                     <div>
                       {deliveryUrl && (
                         <a href={deliveryUrl} target="_blank" rel="noreferrer">
@@ -940,8 +976,13 @@ export default function Studio() {
                           <Download /> Download
                         </a>
                       )}
+                      {!deliveryUrl && artifact.content && (
+                        <button type="button" onClick={() => downloadInlineArtifact(artifact)}>
+                          <Download /> Download file
+                        </button>
+                      )}
                       {artifact.project_id && (
-                        <Link to={"/projects/" + artifact.project_id}><AppWindow /> Fine-tune in App Editor</Link>
+                        <Link to={"/projects/" + artifact.project_id}><AppWindow /> Open app project</Link>
                       )}
                     </div>
                   </div>
