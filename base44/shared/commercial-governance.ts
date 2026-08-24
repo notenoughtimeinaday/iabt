@@ -241,6 +241,23 @@ export async function recordProviderCommitment(base44: any, job: any, plan: any)
   });
 }
 
+export async function settleProviderCommitment(base44: any, job: any) {
+  if (!job?.id) return null;
+  const service = base44.asServiceRole;
+  const records = await service.entities.ProviderSpendLedger.filter(
+    { event_id: "provider-commit:" + job.id },
+    "-occurred_at",
+    1,
+  );
+  const commitment = records?.[0];
+  if (!commitment || commitment.status === "settled") return commitment || null;
+  return service.entities.ProviderSpendLedger.update(commitment.id, {
+    event_type: "settled",
+    status: "settled",
+    description: "Supplier cost settled after IABT secured and verified the durable production artifact.",
+  });
+}
+
 export async function commercialControlSnapshot(base44: any) {
   const service = base44.asServiceRole;
   const [agreements, policies, spend] = await Promise.all([
