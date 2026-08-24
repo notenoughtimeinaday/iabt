@@ -324,8 +324,7 @@ Deno.serve(async (req) => {
       }, { status: 422 });
     }
 
-    const paidMedia = plan.provider === "luma-ray-3.2" &&
-      Number(plan.provider_cost_cents || 0) > 0;
+    const paidMedia = Number(plan.provider_cost_cents || 0) > 0;
     const commercialAssessment = await evaluateCommercialExecution(base44, {
       provider: String(plan.provider || ""),
       capabilityId: String(plan.capability_id || ""),
