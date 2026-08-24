@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
       media,
       commercial,
       acceptance: {
-        policy_version: "2026-08-24.1",
+        policy_version: "2026-08-24.2",
         recorded_count: policyAcceptances.length,
       },
       readiness: {
