@@ -91,9 +91,12 @@ Deno.serve(async (req) => {
     });
     const service = base44.asServiceRole;
     const videoRenderUnavailable = details.intent === "video" && !capability.render_ready;
+    const audioRenderUnavailable = details.intent === "audio" && !capability.render_ready;
     const planSummary = videoRenderUnavailable
       ? "JERICHO can prepare the complete video production package, but IABT's managed renderer is not active yet. Approving this plan will not create or imply an MP4."
-      : details.assistant_summary;
+      : audioRenderUnavailable
+        ? "JERICHO can create a downloadable audio preproduction package, but no audio renderer is connected. Approving this plan will not create or imply WAV, MP3, stems, or MIDI files."
+        : details.assistant_summary;
     const planSteps = videoRenderUnavailable
       ? [
           {
@@ -111,20 +114,54 @@ Deno.serve(async (req) => {
             deliverable: "Storyboard-ready preproduction document",
           },
         ]
-      : details.steps;
+      : audioRenderUnavailable
+        ? [
+            {
+              order: 1,
+              title: "Audio direction",
+              description: "Define structure, timing, voice, instrumentation, lyrics or script, arrangement, and mix direction.",
+              tool: "JERICHO planner",
+              deliverable: "Audio production specification",
+            },
+            {
+              order: 2,
+              title: "Downloadable preproduction package",
+              description: "Create a detailed production document for use with a compatible audio renderer or human producer. No playable audio is generated.",
+              tool: "IABT preproduction",
+              deliverable: "Audio preproduction document",
+            },
+          ]
+        : details.steps;
     const planDeliverables = videoRenderUnavailable
       ? [
           "Video direction package",
           "Storyboard-ready preproduction document",
           "Final render prompt for a compatible video renderer",
         ]
-      : details.deliverables;
+      : audioRenderUnavailable
+        ? [
+            "Downloadable audio preproduction document",
+            "Timing, cue sheet, arrangement, voice, and mix direction",
+            "Renderer-ready instructions for a compatible audio production service",
+          ]
+        : details.deliverables;
+    const planSuccessCriteria = audioRenderUnavailable
+      ? [
+          "A downloadable audio preproduction document is delivered.",
+          "The result does not claim that playable audio, stems, or MIDI files were rendered.",
+        ]
+      : details.success_criteria;
     const planWarnings = videoRenderUnavailable
       ? Array.from(new Set([
           ...(details.warnings || []),
           "VIDEO RENDERER OFFLINE: this approval creates preproduction only. No MP4 will be generated until IABT's managed renderer and paid-media gates are enabled.",
         ]))
-      : [...(details.warnings || [])];
+      : audioRenderUnavailable
+        ? Array.from(new Set([
+            ...(details.warnings || []),
+            "AUDIO RENDERER NOT CONNECTED: this approval creates a downloadable production document only. No WAV, MP3, stems, or MIDI files will be generated.",
+          ]))
+        : [...(details.warnings || [])];
     if (!creditCovered) {
       planWarnings.push(
         creditPolicy.purchased_credits_only
@@ -156,7 +193,7 @@ Deno.serve(async (req) => {
       normalized_spec: details.normalized_spec,
       steps: planSteps,
       deliverables: planDeliverables,
-      success_criteria: details.success_criteria,
+      success_criteria: planSuccessCriteria,
       clarification_questions: details.clarification_questions,
       warnings: planWarnings,
       credit_cost: quote.credit_cost,
