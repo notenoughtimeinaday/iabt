@@ -67,7 +67,7 @@
     },
     "purchased_credits_required": {
       "type": "boolean",
-      "default": true
+      "default": false
     },
     "effective_at": {
       "type": "string",
