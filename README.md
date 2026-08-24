@@ -1,6 +1,6 @@
 # Intelligent Application Building Tool (IABT) — JERICHO Studio
 
-The Intelligent Application Building Tool (IABT) is an autonomous creation and project-operations platform running on Base44. JERICHO Studio is the single creation front door: it preserves context, plans and quotes work, routes to authorized providers, requires explicit approval, and verifies delivery. Generated app projects can then be fine-tuned in the focused App Editor without exposing a second competing creation workflow.
+The Intelligent Application Building Tool (IABT) is an autonomous creation and project-operations platform running on Base44. JERICHO Studio is the single creation front door: it preserves context, plans and quotes work, routes to authorized providers, requires explicit approval, and verifies delivery. Generated app projects are preserved as reviewable project records and deliverable artifacts. The former Visual App Builder is retired from the customer-facing product.
 
 - Production: https://iabt.insuredspending.org
 - Base44 fallback: https://crazy-creator-flow-hub.base44.app
@@ -11,11 +11,11 @@ The Intelligent Application Building Tool (IABT) is an autonomous creation and p
 - Cloud load, save, rename, duplicate, delete, import, and search
 - Recovery of unsaved local drafts
 - User-controlled migration of legacy `iabt.projectsIndex` projects without deleting local originals
-- Post-generation App Editor with page add, rename, duplicate, delete, and reorder
-- Text, Input, Button, and ScannerInput components
-- Component selection, inspector editing, deletion, reorder, undo, and redo
-- Page routing and live phone/tablet preview
-- Keyboard-wedge barcode/QR scanning; Enter dispatches a bubbling `iabt:scan` event
+- Generated app project records with AppDefinition metadata, files, manifests, and delivery history
+- A permanent Deliverable Library independent of conversation history
+- Download recovery for inline documents, code, G-code, and preproduction packages
+- Private signed-link retrieval for stored media artifacts
+- The former Visual App Builder is retained only as unreachable historical source and is not part of the customer experience
 - AI AppDefinition creation through JERICHO Studio's authenticated plan, quote, approval, and verification workflow
 - Account entitlements for Free, Builder, Pro, and Agency
 - Monthly IABT credit allowances, hourly safety limits, and one-time credit packs
@@ -120,7 +120,7 @@ The public Trust & Legal Center is a prelaunch operational policy set. Before li
 
 ## Agentic creation direction
 
-JERICHO Studio is IABT's creation surface. The AppDefinition App Editor is a focused post-generation tool for precise page, component, preview, scanner, and export changes—not a competing builder. Capability modules connect software development, integrations, original image/video/audio generation, documents, floor plans, simulators, and CAD/G-code workflows through an auditable planner → permission → sandbox → verification pipeline. Physical-output workflows require simulation and safety checks, and every provider remains subject to its technical, legal, and content-policy boundaries.
+JERICHO Studio is IABT's single creation surface. Generated AppDefinition projects are preserved for review and delivery; the former Visual App Builder is retired from customer-facing routes. Capability modules connect software development, integrations, original image/video/audio generation, documents, floor plans, simulators, and CAD/G-code workflows through an auditable planner → permission → sandbox → verification pipeline. Physical-output workflows require simulation and safety checks, and every provider remains subject to its technical, legal, and content-policy boundaries.
 
 ## Domain
 
