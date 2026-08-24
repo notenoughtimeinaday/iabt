@@ -13,7 +13,7 @@ export const DEFAULT_COMMERCIAL_POLICY = {
   maximum_job_cost_cents: 500,
   daily_spend_limit_cents: 2500,
   monthly_spend_limit_cents: 10000,
-  purchased_credits_required: true,
+  purchased_credits_required: false,
 };
 
 function nonNegativeInteger(value: unknown, fallback = 0) {
