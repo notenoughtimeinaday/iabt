@@ -405,7 +405,7 @@ export function quoteFor(intent: string, spec: any = {}) {
   const expiresAt = new Date(Date.now() + CREATION_QUOTE_TTL_MS).toISOString();
   const creditLabel = capability.credit_cost === 1 ? "1 IABT credit" : capability.credit_cost + " IABT credits";
   const noChargeMessage = capability.total_estimated_cost_cents > 0
-    ? creditLabel + " will be reserved only after approval. Paid production uses purchased IABT credits; IABT pays its approved suppliers privately. If no durable output is produced, the reservation is restored under the IABT credit policy."
+    ? creditLabel + " will be reserved only after approval. Eligible paid-plan credits are used first; Free-plan production and paid-plan overages use purchased IABT credits. IABT pays approved suppliers privately, and restores the reservation if no durable output is produced."
     : creditLabel + " will be reserved only after approval. No separate card charge will occur.";
   return {
     capability,
