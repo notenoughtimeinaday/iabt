@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 export default function AuthLayout({ icon: Icon, title, subtitle, footer, children }) {
   return (
@@ -17,6 +18,11 @@ export default function AuthLayout({ icon: Icon, title, subtitle, footer, childr
         {footer && (
           <p className="text-center text-sm text-muted-foreground mt-6">{footer}</p>
         )}
+        <nav className="iabt-auth-legal" aria-label="Legal">
+          <Link to="/privacy">Privacy</Link>
+          <Link to="/terms">Terms</Link>
+          <Link to="/acceptable-use">Acceptable Use</Link>
+        </nav>
       </div>
     </div>
   );
