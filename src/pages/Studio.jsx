@@ -114,10 +114,6 @@ function titleFromConversation(conversation) {
   return "New project conversation";
 }
 
-function formatMoney(cents = 0) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(cents || 0) / 100);
-}
-
 function formatDate(value) {
   if (!value) return "Just now";
   const date = new Date(value);
@@ -846,10 +842,10 @@ export default function Studio() {
                 <small>{activePlan.pricing_version}</small>
               </div>
               <dl>
-                <div><dt>IABT credits</dt><dd>{Number(activePlan.credit_cost || 0)}</dd></div>
-                <div><dt>IABT production cost</dt><dd>{formatMoney(activePlan.provider_cost_cents)}</dd></div>
-                <div><dt>IABT service fee</dt><dd>{formatMoney(activePlan.platform_fee_cents)}</dd></div>
-                <div className="is-total"><dt>Estimated total</dt><dd>{formatMoney(activePlan.total_estimated_cost_cents)}</dd></div>
+                <div className="is-total"><dt>IABT credit quote</dt><dd>{Number(activePlan.credit_cost || 0)} credits</dd></div>
+                <div><dt>Approval action</dt><dd>Reserve credits only</dd></div>
+                <div><dt>Paid production funding</dt><dd>{activePlan.commercial_summary?.paid_provider ? "Purchased credits" : "Plan credits eligible"}</dd></div>
+                <div><dt>Delivery rule</dt><dd>Capture after verification</dd></div>
               </dl>
               <p>{activePlan.consent_summary || "The quote is an estimate. No billing action occurs until you explicitly approve."}</p>
               <small className={quoteExpired ? "is-expired" : ""}>
@@ -861,7 +857,7 @@ export default function Studio() {
               <div className="creator-approval">
                 <label>
                   <input type="checkbox" checked={quoteAccepted} onChange={(event) => setQuoteAccepted(event.target.checked)} />
-                  <span>I approve this plan and the exact quote shown above.</span>
+                  <span>I approve this plan and the exact IABT credit quote shown above.</span>
                 </label>
                 <Button
                   onClick={approvePlan}
