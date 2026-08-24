@@ -18,7 +18,6 @@ import {
   Loader2,
   Network,
   LogOut,
-  Plus,
   Repeat2,
   Search,
   ShieldCheck,
@@ -28,7 +27,6 @@ import {
 } from "lucide-react";
 import {
   cloneValue,
-  createDefaultAppDefinition,
   createId,
   normalizeAppDefinition,
 } from "@/lib/appDefinition";
@@ -116,33 +114,6 @@ export default function Home() {
       description: `Your ${entitlement?.plan || "free"} plan includes ${limit} cloud project${limit === 1 ? "" : "s"}. Choose a larger plan to add more.`,
     });
     return false;
-  }
-
-  async function createProject(title) {
-    if (!ensureProjectCapacity()) return;
-    setWorking(true);
-    try {
-      const definition = createDefaultAppDefinition(title);
-      const project = await base44.entities.Project.create({
-        user_id: user.id,
-        user_email: user.email,
-        title: definition.app.name,
-        description: definition.app.description,
-        category: "SaaS",
-        status: "draft",
-        color: definition.theme.primary,
-        tags: [],
-        schema_version: definition.schemaVersion,
-        app_definition: definition,
-        last_opened_at: new Date().toISOString(),
-      });
-      setNameDialog(null);
-      navigate("/projects/" + project.id);
-    } catch (error) {
-      toast({ title: "Project creation failed", description: error.message, variant: "destructive" });
-    } finally {
-      setWorking(false);
-    }
   }
 
   async function renameProject(project, title) {
@@ -277,7 +248,7 @@ export default function Home() {
       <header className="iabt-home-nav">
         <div className="iabt-home-brand">
           <img className="iabt-mark" src="/iabt-mark.svg" alt="" />
-          <div><strong>IABT–JERICHO</strong><span>Autonomous Interactive App Building</span></div>
+          <div><strong>Intelligent Application Building Tool</strong><span>IABT · Powered by JERICHO Studio</span></div>
         </div>
         <div className="iabt-home-user">
           <Button size="sm" onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-1" /> JERICHO Studio</Button>
@@ -299,16 +270,12 @@ export default function Home() {
       <main className="iabt-home-main">
         <section className="iabt-hero">
           <div>
-            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> IABT–JERICHO · autonomous project operator</p>
+            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> Intelligent Application Building Tool · JERICHO</p>
             <h1>You define the objective. JERICHO gets it done.</h1>
             <p>Describe the outcome once. JERICHO keeps the context, selects the best authorized tools, builds the workflow, verifies the result, and returns a usable deliverable—without making you manually connect every step.</p>
             <div className="iabt-hero-actions">
               <Button size="lg" onClick={() => navigate("/studio")}>
                 <Sparkles className="h-4 w-4 mr-2" /> Tell JERICHO the objective
-              </Button>
-              <Button size="lg" variant="outline" onClick={() => ensureProjectCapacity() && setNameDialog({ mode: "create" })} disabled={working}>
-                {working ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
-                Open visual app builder
               </Button>
               <input ref={importRef} type="file" hidden accept=".json,application/json" onChange={importProject} />
               <Button size="lg" variant="ghost" onClick={() => importRef.current?.click()} disabled={working}>
@@ -420,11 +387,10 @@ export default function Home() {
             <div className="iabt-project-empty">
               <div><FolderOpen /></div>
               <h3>{query ? "No projects match that search" : "Create your first SaaS app"}</h3>
-              <p>{query ? "Try a different name or clear the search." : "Start in Creator Studio for conversational production, or open the specialist visual builder for an AppDefinition project."}</p>
+              <p>{query ? "Try a different name or clear the search." : "Start in JERICHO Studio. It plans, quotes, creates, and verifies the app before handing it to the App Editor for fine-tuning."}</p>
               {!query && (
                 <div className="iabt-empty-actions">
-                  <Button onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-2" /> Start with the AI operator</Button>
-                  <Button variant="outline" onClick={() => ensureProjectCapacity() && setNameDialog({ mode: "create" })}><Plus className="h-4 w-4 mr-2" /> New visual app</Button>
+                  <Button onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-2" /> Create with JERICHO Studio</Button>
                 </div>
               )}
             </div>
@@ -446,7 +412,7 @@ export default function Home() {
                         <div><dt>Components</dt><dd>{definition.pages.reduce((sum, page) => sum + page.components.length, 0)}</dd></div>
                         <div><dt>Updated</dt><dd>{project.updated_date ? new Date(project.updated_date).toLocaleDateString() : "Today"}</dd></div>
                       </dl>
-                      <span className="iabt-open-link">Open builder <ArrowRight /></span>
+                      <span className="iabt-open-link">Open app editor <ArrowRight /></span>
                     </button>
                     <div className="iabt-project-actions">
                       <button type="button" onClick={() => setNameDialog({ mode: "rename", project })}>Rename</button>
@@ -479,21 +445,17 @@ export default function Home() {
       />
 
       <NameDialog
-        open={Boolean(nameDialog)}
+        open={nameDialog?.mode === "rename"}
         onOpenChange={(open) => { if (!open && !working) setNameDialog(null); }}
-        title={nameDialog?.mode === "rename" ? "Rename project" : "Create a new app"}
-        description={nameDialog?.mode === "rename"
-          ? "Choose a clear, memorable name for this app project."
-          : "Start with a project name. You can refine the app name and description inside the builder."}
+        title="Rename project"
+        description="Choose a clear, memorable name for this app project."
         label="App name"
-        initialValue={nameDialog?.mode === "rename" ? nameDialog.project?.title || "" : "My SaaS App"}
+        initialValue={nameDialog?.project?.title || ""}
         placeholder="Customer portal, inventory app, booking platform…"
-        submitLabel={nameDialog?.mode === "rename" ? "Save name" : "Create app"}
+        submitLabel="Save name"
         busy={working}
         maxLength={100}
-        onSubmit={(value) => nameDialog?.mode === "rename"
-          ? renameProject(nameDialog.project, value)
-          : createProject(value)}
+        onSubmit={(value) => renameProject(nameDialog.project, value)}
       />
 
       <ConfirmActionDialog
