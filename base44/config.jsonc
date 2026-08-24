@@ -1,5 +1,5 @@
 {
-  "name": "IABT-JERICHO",
+  "name": "Intelligent Application Building Tool",
   "site": {
     "installCommand": "npm install",
     "buildCommand": "npm run build",
