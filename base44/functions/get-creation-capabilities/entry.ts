@@ -16,11 +16,18 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     await requireUser(base44);
 
+    const media = getMediaReadiness();
     return Response.json({
       ok: true,
       pricing_version: CREATION_PRICING_VERSION,
       capabilities: getCreationCapabilities().map(publicCapability),
-      media: getMediaReadiness(),
+      media: {
+        renderer_connection_configured: media.luma_key_configured,
+        paid_production_enabled: media.paid_media_enabled,
+        billing_ready: media.media_billing_ready,
+        commercial_approved: media.commercial_approved,
+        render_ready: media.luma_ready,
+      },
       billing: {
         card_charged: false,
         credits_deducted: false,
