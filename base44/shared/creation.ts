@@ -334,10 +334,10 @@ export function getCreationCapabilities() {
   const media = getMediaReadiness();
   const video = media.luma_ready
     ? {
-        id: "video-luma-ray-3-2",
+        id: "video-iabt-managed",
         intent: "video",
         name: "Video generation",
-        description: "Generate a 5- or 10-second MP4 with Luma Ray 3.2 after an exact quote is explicitly approved.",
+        description: "Generate a short MP4 through IABT managed production after an exact quote is explicitly approved.",
         provider: "luma-ray-3.2",
         provider_ready: true,
         render_ready: true,
@@ -713,7 +713,7 @@ function lumaKey() {
 
 async function lumaRequest(path: string, init: RequestInit) {
   const key = lumaKey();
-  if (!key) throw new Error("Luma Agents is not configured.");
+  if (!key) throw new Error("IABT's managed renderer is not configured.");
   const response = await fetch(LUMA_API_BASE + path, {
     ...init,
     headers: {
@@ -725,7 +725,8 @@ async function lumaRequest(path: string, init: RequestInit) {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const detail = payload?.detail || payload?.error?.message || payload?.message || "Luma request failed with status " + response.status + ".";
+    const detail = payload?.detail || payload?.error?.message || payload?.message || "Supplier request failed with status " + response.status + ".";
+    console.error("managed video supplier request failed:", response.status, String(detail).slice(0, 800));
     const code =
       response.status === 402 ? "luma_insufficient_balance" :
       response.status === 401 ? "luma_authentication_failed" :
@@ -733,7 +734,7 @@ async function lumaRequest(path: string, init: RequestInit) {
       response.status === 429 ? "luma_rate_limited" :
       response.status >= 500 ? "luma_provider_unavailable" :
       "luma_invalid_request";
-    const error: any = new Error(String(detail).slice(0, 800));
+    const error: any = new Error("IABT's managed renderer request failed.");
     error.status = response.status;
     error.code = code;
     error.request_id = String(response.headers.get("x-request-id") || "");
@@ -745,7 +746,7 @@ async function lumaRequest(path: string, init: RequestInit) {
 
 export async function submitLumaVideo(spec: any) {
   const readiness = getMediaReadiness();
-  if (!readiness.luma_ready) throw new Error("Paid Luma rendering is not fully enabled.");
+  if (!readiness.luma_ready) throw new Error("IABT's paid video rendering is not fully enabled.");
   const settings = videoSettings(spec);
   const payload = {
     model: LUMA_MODEL,
@@ -762,13 +763,13 @@ export async function submitLumaVideo(spec: any) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!result?.id) throw new Error("Luma accepted the request without returning a generation ID.");
+  if (!result?.id) throw new Error("IABT's managed renderer accepted the request without returning a job ID.");
   return { generation: result, settings };
 }
 
 export async function getLumaGeneration(generationId: string) {
   const id = String(generationId || "").trim();
-  if (!/^[a-zA-Z0-9_-]{8,160}$/.test(id)) throw new Error("Invalid Luma generation ID.");
+  if (!/^[a-zA-Z0-9_-]{8,160}$/.test(id)) throw new Error("Invalid managed-renderer job ID.");
   return lumaRequest("/generations/" + encodeURIComponent(id), { method: "GET" });
 }
 
