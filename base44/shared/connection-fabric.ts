@@ -9,7 +9,8 @@ function enabled(name: string) {
 function lumaReady() {
   return Boolean(String(secrets.get("LUMA_AGENTS_API_KEY") || "").trim()) &&
     enabled("IABT_ENABLE_PAID_MEDIA") &&
-    enabled("IABT_MEDIA_BILLING_READY");
+    enabled("IABT_MEDIA_BILLING_READY") &&
+    enabled("IABT_LUMA_COMMERCIAL_APPROVED");
 }
 
 function openAiKeyConfigured() {
