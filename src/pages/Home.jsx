@@ -13,6 +13,7 @@ import {
   Cloud,
   Copy,
   CreditCard,
+  Download,
   FolderOpen,
   LayoutTemplate,
   Loader2,
@@ -252,6 +253,7 @@ export default function Home() {
         </div>
         <div className="iabt-home-user">
           <Button size="sm" onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-1" /> JERICHO Studio</Button>
+          <Button variant="outline" size="sm" onClick={() => navigate("/deliverables")}><Download className="h-4 w-4 mr-1" /> Deliverables</Button>
           {entitlement && <span className="iabt-plan-badge">{entitlement.plan} plan</span>}
           {entitlement && <span className="iabt-credit-badge">{Number(entitlement.total_iabt_credits_remaining || 0).toLocaleString()} credits</span>}
           <Button variant="outline" size="sm" onClick={() => setBillingOpen(true)}>
@@ -262,7 +264,7 @@ export default function Home() {
               <ShieldCheck className="h-4 w-4 mr-1" /> Profit & compliance
             </Button>
           )}
-          <span>{user?.full_name || user?.email || "Builder"}</span>
+          <span>{user?.full_name || user?.email || "Creator"}</span>
           <Button variant="ghost" size="sm" onClick={() => logout(true)}><LogOut className="h-4 w-4 mr-1" /> Sign out</Button>
         </div>
       </header>
@@ -373,7 +375,7 @@ export default function Home() {
           <div className="iabt-projects-heading">
             <div>
               <p className="iabt-eyebrow"><Cloud className="h-4 w-4" /> Base44 cloud workspace</p>
-              <h2>Your app projects</h2>
+              <h2>Your generated app projects</h2>
             </div>
             <div className="iabt-search">
               <Search className="h-4 w-4" />
@@ -387,7 +389,7 @@ export default function Home() {
             <div className="iabt-project-empty">
               <div><FolderOpen /></div>
               <h3>{query ? "No projects match that search" : "Create your first SaaS app"}</h3>
-              <p>{query ? "Try a different name or clear the search." : "Start in JERICHO Studio. It plans, quotes, creates, and verifies the app before handing it to the App Editor for fine-tuning."}</p>
+              <p>{query ? "Try a different name or clear the search." : "Start in JERICHO Studio. It plans, quotes, creates, and verifies the generated app package for review and delivery."}</p>
               {!query && (
                 <div className="iabt-empty-actions">
                   <Button onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-2" /> Create with JERICHO Studio</Button>
@@ -412,7 +414,7 @@ export default function Home() {
                         <div><dt>Components</dt><dd>{definition.pages.reduce((sum, page) => sum + page.components.length, 0)}</dd></div>
                         <div><dt>Updated</dt><dd>{project.updated_date ? new Date(project.updated_date).toLocaleDateString() : "Today"}</dd></div>
                       </dl>
-                      <span className="iabt-open-link">Open app editor <ArrowRight /></span>
+                      <span className="iabt-open-link">View generated project <ArrowRight /></span>
                     </button>
                     <div className="iabt-project-actions">
                       <button type="button" onClick={() => setNameDialog({ mode: "rename", project })}>Rename</button>
