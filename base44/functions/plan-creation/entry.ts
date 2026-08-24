@@ -7,6 +7,7 @@ import {
   requireUser,
   selectedCreationIntent,
 } from "../../shared/creation.ts";
+import { creditEligibility } from "../../shared/credit-policy.ts";
 import {
   entitlementUsageSummary,
   getOrCreateEntitlement,
@@ -77,7 +78,10 @@ Deno.serve(async (req) => {
     const entitlement = await getOrCreateEntitlement(base44, user);
     const usage = entitlementUsageSummary(entitlement);
     const paidMedia = Number(capability.total_estimated_cost_cents || 0) > 0;
-    const availableCredits = paidMedia ? usage.bonus_remaining : usage.total_remaining;
+    const creditPolicy = creditEligibility(usage.plan, paidMedia);
+    const availableCredits = creditPolicy.included_credits_eligible
+      ? usage.total_remaining
+      : usage.bonus_remaining;
     const creditCovered = availableCredits >= quote.credit_cost;
     const commercialAssessment = await evaluateCommercialExecution(base44, {
       provider: capability.provider,
@@ -123,9 +127,9 @@ Deno.serve(async (req) => {
       : [...(details.warnings || [])];
     if (!creditCovered) {
       planWarnings.push(
-        paidMedia
-          ? "PURCHASED PRODUCTION CREDITS REQUIRED: paid supplier work cannot consume monthly plan credits. Add enough production credits before approval."
-          : "IABT CREDIT BALANCE TOO LOW: this plan needs " + quote.credit_cost + " credits, but only " + availableCredits + " are currently available.",
+        creditPolicy.purchased_credits_only
+          ? "PURCHASED PRODUCTION CREDITS REQUIRED: Free-plan paid production needs purchased IABT credits before approval."
+          : "IABT CREDIT BALANCE TOO LOW: this plan needs " + quote.credit_cost + " credits, but only " + availableCredits + " eligible credits are currently available.",
       );
     }
     if (!commercialAssessment.allowed) {
@@ -170,7 +174,8 @@ Deno.serve(async (req) => {
         margin_floor_met: commercialAssessment.margin.floor_met,
         blocker_codes: commercialAssessment.blockers,
         policy_version: commercialAssessment.policy.pricing_version,
-        purchased_credits_required: Boolean(commercialAssessment.policy.purchased_credits_required),
+        included_credits_eligible: creditPolicy.included_credits_eligible,
+        purchased_credits_required: creditPolicy.purchased_credits_only,
       },
     });
 
@@ -212,7 +217,8 @@ Deno.serve(async (req) => {
           available: availableCredits,
           included_remaining: usage.monthly_remaining,
           purchased_remaining: usage.bonus_remaining,
-          purchased_credits_required: paidMedia,
+          included_credits_eligible: creditPolicy.included_credits_eligible,
+          purchased_credits_required: creditPolicy.purchased_credits_only,
         },
         commercial: {
           ready: commercialAssessment.allowed,
