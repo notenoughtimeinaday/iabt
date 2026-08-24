@@ -1,0 +1,80 @@
+{
+  "name": "PolicyAcceptance",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "user_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "policy_version": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "terms_accepted": {
+      "type": "boolean"
+    },
+    "privacy_acknowledged": {
+      "type": "boolean"
+    },
+    "acceptable_use_accepted": {
+      "type": "boolean"
+    },
+    "acceptance_text": {
+      "type": "string",
+      "maxLength": 1200
+    },
+    "accepted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "in_app",
+        "support",
+        "migration"
+      ],
+      "default": "in_app"
+    }
+  },
+  "required": [
+    "user_id",
+    "user_email",
+    "policy_version",
+    "terms_accepted",
+    "privacy_acknowledged",
+    "acceptable_use_accepted",
+    "acceptance_text",
+    "accepted_at"
+  ],
+  "rls": {
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
