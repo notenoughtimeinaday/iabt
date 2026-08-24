@@ -1,3 +1,4 @@
+import { creditEligibility } from "./credit-policy.ts";
 import { getPlanDefaults } from "./stripe.ts";
 
 const ACTIVE_STATUSES = new Set(["active", "trialing"]);
@@ -229,20 +230,24 @@ export async function reserveIabtCredits(
       });
     }
 
-    const mayUseIncluded = !paidMedia;
-    const includedAvailable = mayUseIncluded ? summary.monthly_remaining : 0;
+    const creditPolicy = creditEligibility(summary.plan, paidMedia);
+    const includedAvailable = creditPolicy.included_credits_eligible ? summary.monthly_remaining : 0;
     const includedCredits = Math.min(amount, includedAvailable);
     const bonusCredits = amount - includedCredits;
     if (bonusCredits > summary.bonus_remaining) {
+      const paidPlanOverage = paidMedia && creditPolicy.paid_subscription;
       throw jsonError(402, {
-        error: paidMedia
-          ? "Paid production requires enough purchased IABT production credits. Monthly plan credits remain available for planning and ordinary creation."
-          : "Your IABT credit allowance is not large enough for this creation.",
+        error: creditPolicy.purchased_credits_only
+          ? "Paid production on the Free plan requires enough purchased IABT production credits."
+          : paidPlanOverage
+            ? "This production exceeds the IABT credits remaining in your paid plan allowance and purchased balance."
+            : "Your IABT credit allowance is not large enough for this creation.",
         code: paidMedia
-          ? "purchased_production_credits_required"
+          ? "iabt_production_credits_required"
           : "iabt_credits_required",
         plan: summary.plan,
         required_credits: amount,
+        included_credits_eligible: creditPolicy.included_credits_eligible,
         included_remaining: includedAvailable,
         bonus_remaining: summary.bonus_remaining,
         total_remaining: includedAvailable + summary.bonus_remaining,
