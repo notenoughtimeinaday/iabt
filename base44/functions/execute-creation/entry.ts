@@ -19,6 +19,11 @@ import {
   releaseJobCredits,
   reserveIabtCredits,
 } from "../../shared/usage.ts";
+import {
+  commercialBlockResponse,
+  evaluateCommercialExecution,
+  recordProviderCommitment,
+} from "../../shared/commercial-governance.ts";
 
 function clean(value: unknown, max = 300) {
   return String(value || "").trim().slice(0, max);
@@ -321,6 +326,15 @@ Deno.serve(async (req) => {
 
     const paidMedia = plan.provider === "luma-ray-3.2" &&
       Number(plan.provider_cost_cents || 0) > 0;
+    const commercialAssessment = await evaluateCommercialExecution(base44, {
+      provider: String(plan.provider || ""),
+      capabilityId: String(plan.capability_id || ""),
+      providerCostCents: Number(plan.provider_cost_cents || 0),
+      creditCost: Number(plan.credit_cost || 1),
+    });
+    if (paidMedia && !commercialAssessment.allowed) {
+      return commercialBlockResponse(commercialAssessment);
+    }
     const credit = await reserveIabtCredits(
       base44,
       user,
@@ -345,6 +359,9 @@ Deno.serve(async (req) => {
       card_charged: false,
       credits_reserved: true,
       credits_deducted: false,
+      commercial_policy_version: commercialAssessment.policy.pricing_version,
+      estimated_margin_bps: commercialAssessment.margin.estimated_margin_bps,
+      purchased_credits_required: Boolean(commercialAssessment.policy.purchased_credits_required),
     };
 
     job = await service.entities.GenerationJob.create({
@@ -594,6 +611,11 @@ Deno.serve(async (req) => {
 
         providerSubmission = await submitLumaVideo(plan.normalized_spec);
         providerAccepted = true;
+        try {
+          await recordProviderCommitment(base44, job, plan);
+        } catch (spendError) {
+          console.error("provider spend commitment ledger failed:", spendError);
+        }
         job = await service.entities.GenerationJob.update(job.id, {
           status: "waiting_provider",
           progress: 10,
