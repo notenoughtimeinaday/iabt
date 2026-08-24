@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
     const capability = quote.capability;
     const entitlement = await getOrCreateEntitlement(base44, user);
     const usage = entitlementUsageSummary(entitlement);
-    const paidMedia = capability.provider === "luma-ray-3.2" && capability.total_estimated_cost_cents > 0;
+    const paidMedia = Number(capability.total_estimated_cost_cents || 0) > 0;
     const availableCredits = paidMedia ? usage.bonus_remaining : usage.total_remaining;
     const creditCovered = availableCredits >= quote.credit_cost;
     const commercialAssessment = await evaluateCommercialExecution(base44, {
