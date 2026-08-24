@@ -11,6 +11,7 @@ import {
   entitlementUsageSummary,
   getOrCreateEntitlement,
 } from "../../shared/usage.ts";
+import { evaluateCommercialExecution } from "../../shared/commercial-governance.ts";
 
 function text(value: unknown, max: number) {
   return String(value || "").trim().slice(0, max);
@@ -76,10 +77,14 @@ Deno.serve(async (req) => {
     const entitlement = await getOrCreateEntitlement(base44, user);
     const usage = entitlementUsageSummary(entitlement);
     const paidMedia = capability.provider === "luma-ray-3.2" && capability.total_estimated_cost_cents > 0;
-    const availableCredits = paidMedia && usage.plan === "free"
-      ? usage.bonus_remaining
-      : usage.total_remaining;
+    const availableCredits = paidMedia ? usage.bonus_remaining : usage.total_remaining;
     const creditCovered = availableCredits >= quote.credit_cost;
+    const commercialAssessment = await evaluateCommercialExecution(base44, {
+      provider: capability.provider,
+      capabilityId: capability.id,
+      providerCostCents: quote.provider_cost_cents,
+      creditCost: quote.credit_cost,
+    });
     const service = base44.asServiceRole;
     const videoRenderUnavailable = details.intent === "video" && !capability.render_ready;
     const planSummary = videoRenderUnavailable
@@ -118,9 +123,14 @@ Deno.serve(async (req) => {
       : [...(details.warnings || [])];
     if (!creditCovered) {
       planWarnings.push(
-        paidMedia && usage.plan === "free"
-          ? "PAID MEDIA CREDIT REQUIRED: the Free plan's included credits cannot fund managed video production. Upgrade or add enough purchased IABT credits before approval."
+        paidMedia
+          ? "PURCHASED PRODUCTION CREDITS REQUIRED: paid supplier work cannot consume monthly plan credits. Add enough production credits before approval."
           : "IABT CREDIT BALANCE TOO LOW: this plan needs " + quote.credit_cost + " credits, but only " + availableCredits + " are currently available.",
+      );
+    }
+    if (!commercialAssessment.allowed) {
+      planWarnings.push(
+        "COMMERCIAL APPROVAL REQUIRED: final paid production is blocked until its supplier agreement, privacy review, margin floor, and spending limits all pass.",
       );
     }
 
@@ -153,6 +163,15 @@ Deno.serve(async (req) => {
       pricing_version: quote.pricing_version,
       quote_expires_at: quote.quote_expires_at,
       consent_summary: quote.consent_summary,
+      commercial_summary: {
+        ready: commercialAssessment.allowed,
+        paid_provider: commercialAssessment.paid_provider,
+        margin_target_met: commercialAssessment.margin.target_met,
+        margin_floor_met: commercialAssessment.margin.floor_met,
+        blocker_codes: commercialAssessment.blockers,
+        policy_version: commercialAssessment.policy.pricing_version,
+        purchased_credits_required: Boolean(commercialAssessment.policy.purchased_credits_required),
+      },
     });
 
     await service.entities.UsageLedger.create({
@@ -193,6 +212,14 @@ Deno.serve(async (req) => {
           available: availableCredits,
           included_remaining: usage.monthly_remaining,
           purchased_remaining: usage.bonus_remaining,
+          purchased_credits_required: paidMedia,
+        },
+        commercial: {
+          ready: commercialAssessment.allowed,
+          margin_target_met: commercialAssessment.margin.target_met,
+          margin_floor_met: commercialAssessment.margin.floor_met,
+          blocker_codes: commercialAssessment.blockers,
+          policy_version: commercialAssessment.policy.pricing_version,
         },
       },
       capabilities: getCreationCapabilities().map(publicCapability),
