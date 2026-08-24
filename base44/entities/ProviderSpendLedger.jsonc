@@ -1,0 +1,106 @@
+{
+  "name": "ProviderSpendLedger",
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "maxLength": 240
+    },
+    "provider_id": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "capability_id": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "plan_id": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "quote",
+        "committed",
+        "settled",
+        "refunded",
+        "adjusted"
+      ]
+    },
+    "amount_cents": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "USD"
+      ],
+      "default": "USD"
+    },
+    "pricing_version": {
+      "type": "string"
+    },
+    "day_key": {
+      "type": "string"
+    },
+    "month_key": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "preview",
+        "pending",
+        "settled",
+        "reversed"
+      ],
+      "default": "pending"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1200
+    }
+  },
+  "required": [
+    "event_id",
+    "provider_id",
+    "event_type",
+    "amount_cents",
+    "currency",
+    "pricing_version",
+    "day_key",
+    "month_key",
+    "status",
+    "occurred_at"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
