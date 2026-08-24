@@ -37,7 +37,13 @@ export function normalizeEntitlement(user: any, current: any) {
     current?.billing_provider === "none",
   );
   const normalized = foundingAdmin
-    ? { ...defaults, ...current, plan }
+    ? {
+        ...current,
+        ...defaults,
+        plan,
+        ai_hourly_limit: Math.max(200, nonNegative(current?.ai_hourly_limit)),
+        project_limit: 0,
+      }
     : { ...current, ...defaults, plan };
 
   return {
