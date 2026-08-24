@@ -229,17 +229,17 @@ export async function reserveIabtCredits(
       });
     }
 
-    const mayUseIncluded = !(paidMedia && summary.plan === "free");
+    const mayUseIncluded = !paidMedia;
     const includedAvailable = mayUseIncluded ? summary.monthly_remaining : 0;
     const includedCredits = Math.min(amount, includedAvailable);
     const bonusCredits = amount - includedCredits;
     if (bonusCredits > summary.bonus_remaining) {
       throw jsonError(402, {
-        error: paidMedia && summary.plan === "free"
-          ? "Paid media rendering requires a paid plan or enough purchased IABT credits."
+        error: paidMedia
+          ? "Paid production requires enough purchased IABT production credits. Monthly plan credits remain available for planning and ordinary creation."
           : "Your IABT credit allowance is not large enough for this creation.",
-        code: paidMedia && summary.plan === "free"
-          ? "paid_media_requires_plan_or_credits"
+        code: paidMedia
+          ? "purchased_production_credits_required"
           : "iabt_credits_required",
         plan: summary.plan,
         required_credits: amount,
