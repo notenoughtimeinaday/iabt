@@ -1,7 +1,7 @@
 {
-  "name": "IABT-JERICHO — Autonomous Interactive App Building",
-  "short_name": "JERICHO",
-  "description": "An autonomous project operator for building, operating, and improving software and media.",
+  "name": "Intelligent Application Building Tool (IABT) — JERICHO Studio",
+  "short_name": "IABT",
+  "description": "The Intelligent Application Building Tool, powered by JERICHO Studio, builds, operates, and improves software and media.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#030713",
