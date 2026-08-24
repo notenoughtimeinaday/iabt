@@ -199,7 +199,8 @@ export default function Studio() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [loadError, setLoadError] = useState("");
 
-  const currentMode = MODE_OPTIONS.find((item) => item.id === mode) || MODE_OPTIONS[0];
+  const effectiveMode = targetProjectId ? "app" : mode;
+  const currentMode = MODE_OPTIONS.find((item) => item.id === effectiveMode) || MODE_OPTIONS[0];
   const activePlan = plans[0] || null;
   const visibleMessages = messages.filter((message) => !message.hidden && message.role !== "system");
   const latestMessage = visibleMessages.at(-1);
@@ -460,10 +461,10 @@ export default function Studio() {
         content: request,
         custom_context: [{
           type: "iabt_creation_request",
-          message: "The user selected " + mode + " mode. Use this exact conversation_id when calling plan-creation: " + target.id + "." + (targetProjectId ? " Revise the existing app by passing this exact top-level project_id to plan-creation: " + targetProjectId + "." : "") + " Plan and quote first. Never execute without explicit approval.",
+          message: "The user selected " + effectiveMode + " mode. Use this exact conversation_id when calling plan-creation: " + target.id + "." + (targetProjectId ? " Revise the existing app by passing this exact top-level project_id to plan-creation: " + targetProjectId + "." : "") + " Plan and quote first. Never execute without explicit approval.",
           data: {
-            mode,
-            selected_mode: mode,
+            mode: effectiveMode,
+            selected_mode: effectiveMode,
             conversation_id: target.id,
             ...(targetProjectId ? { project_id: targetProjectId } : {}),
             approval_required: true,
@@ -651,7 +652,7 @@ export default function Studio() {
               </div>
 
               <div className="creator-mode-grid" role="list" aria-label="Creation modes">
-                {MODE_OPTIONS.map((item) => {
+                {(targetProjectId ? MODE_OPTIONS.filter((item) => item.id === "app") : MODE_OPTIONS).map((item) => {
                   const Icon = item.icon;
                   const capability = capabilityForMode(capabilities, item.id);
                   const ready = capability?.provider_ready ?? capability?.ready;
@@ -661,7 +662,7 @@ export default function Studio() {
                     <button
                       type="button"
                       key={item.id}
-                      className={mode === item.id ? "is-active" : ""}
+                      className={effectiveMode === item.id ? "is-active" : ""}
                       onClick={() => setMode(item.id)}
                     >
                       <span className="creator-mode-icon"><Icon /></span>
@@ -676,7 +677,7 @@ export default function Studio() {
 
               <div className="creator-starters">
                 <span>Try a detailed starting point</span>
-                {(STARTERS[mode] || STARTERS.app).map((starter) => (
+                {(STARTERS[effectiveMode] || STARTERS.app).map((starter) => (
                   <button type="button" key={starter} onClick={() => setPrompt(starter)}>
                     {starter}<ArrowUpRight />
                   </button>
@@ -733,9 +734,9 @@ export default function Studio() {
 
           <form className="creator-composer" onSubmit={sendPrompt}>
             <div className="creator-composer-mode">
-              <span>Creating</span>
-              <select value={mode} onChange={(event) => setMode(event.target.value)} aria-label="Creation mode">
-                {MODE_OPTIONS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+              <span>{targetProjectId ? "Revising app" : "Creating"}</span>
+              <select value={effectiveMode} onChange={(event) => setMode(event.target.value)} aria-label="Creation mode" disabled={Boolean(targetProjectId)}>
+                {(targetProjectId ? MODE_OPTIONS.filter((item) => item.id === "app") : MODE_OPTIONS).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
             </div>
             <textarea
