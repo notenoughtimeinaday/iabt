@@ -485,10 +485,18 @@ Deno.serve(async (req) => {
       }
       committedArtifact = artifact;
 
+      const requestedKind = clean(artifactData?.metadata?.requested_kind, 20);
+      const completionStage = artifactData?.metadata?.rendered === false
+        ? (requestedKind === "video"
+            ? "Video preproduction document created — no video rendered"
+            : "Audio preproduction document created — no audio rendered")
+        : artifactData?.kind === "document"
+          ? "Document created and ready to download"
+          : "Deliverable created and verified";
       job = await service.entities.GenerationJob.update(job.id, {
         status: "succeeded",
         progress: 100,
-        stage: "Artifact created",
+        stage: completionStage,
         artifact_id: artifact.id,
         completed_at: new Date().toISOString(),
         error_message: "",
