@@ -549,7 +549,7 @@ Deno.serve(async (req) => {
           project_id: project.id,
           builder_ready: true,
         },
-      }, "IABT created an app project ready to fine-tune in the App Editor, plus an importable AppDefinition artifact.");
+      }, "IABT created a generated app project record plus an importable AppDefinition artifact for review and delivery.");
     }
 
     if (plan.intent === "image" || plan.intent === "design") {
