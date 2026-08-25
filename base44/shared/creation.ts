@@ -511,12 +511,39 @@ export function getCreationCapabilities() {
         pricing: { currency: "USD", from_cents: 0, default_cents: 0, maximum_cents: 0, platform_fee_cents: 0 },
       };
 
+  const audioReady = getAudioReadiness().audio_ready;
+  const audio = audioReady
+    ? {
+        id: "audio-iabt-managed",
+        intent: "audio",
+        name: "Playable audio generation",
+        description: "Render a playable MP3 through IABT managed music production after an exact quote and commercial approval.",
+        provider: "elevenlabs-music-v2",
+        provider_ready: true,
+        render_ready: true,
+        fallback_available: true,
+        output_kinds: ["audio", "document"],
+        pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 },
+      }
+    : {
+        id: "audio-preproduction",
+        intent: "audio",
+        name: "Audio preproduction",
+        description: "Create renderer-ready audio direction and production notes. No playable audio is claimed until the managed renderer is fully enabled.",
+        provider: "iabt-preproduction",
+        provider_ready: true,
+        render_ready: false,
+        fallback_available: true,
+        output_kinds: ["document"],
+        pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 },
+      };
+
   return [
     { id: "app-production", intent: "app", name: "Application generation", description: "Create an importable AppDefinition plus data, workflows, integrations, permissions, and implementation notes.", provider: "base44-managed-ai", provider_ready: true, render_ready: true, fallback_available: true, output_kinds: ["app"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
     { id: "website-production", intent: "website", name: "Website generation", description: "Create an importable multi-page website AppDefinition and implementation blueprint.", provider: "base44-managed-ai", provider_ready: true, render_ready: true, fallback_available: true, output_kinds: ["app"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
     { id: "image-production", intent: "image", name: "Image generation", description: "Render an original image from the approved production prompt.", provider: "base44-core-image", provider_ready: true, render_ready: true, fallback_available: true, output_kinds: ["image", "document"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
     video,
-    { id: "audio-preproduction", intent: "audio", name: "Audio preproduction", description: "Create lyrics, narration, timing, arrangement, sound design, and production notes. No audio renderer is connected yet.", provider: "iabt-preproduction", provider_ready: true, render_ready: false, fallback_available: true, output_kinds: ["document"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
+    audio,
     { id: "document-production", intent: "document", name: "Document generation", description: "Write a detailed, structured document tailored to the requested audience and purpose.", provider: "base44-managed-ai", provider_ready: true, render_ready: true, fallback_available: true, output_kinds: ["document"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
     { id: "code-production", intent: "code", name: "Code generation", description: "Create a structured source bundle with files, setup steps, and verification instructions.", provider: "base44-managed-ai", provider_ready: true, render_ready: true, fallback_available: true, output_kinds: ["code"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
     { id: "design-production", intent: "design", name: "Visual design generation", description: "Render a conceptual visual design and include its production prompt. Technical plans require qualified review.", provider: "base44-core-image", provider_ready: true, render_ready: true, fallback_available: true, output_kinds: ["image", "document"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
@@ -532,9 +559,12 @@ export function capabilityFor(intent: string, spec: any = {}) {
   const exact = capabilities.find((capability) => capability.intent === normalized);
   const capability = exact || capabilities.find((item) => item.intent === "other");
   const video = videoSettings(spec);
+  const audio = audioSettings(spec);
   const providerCost = normalized === "video" && capability?.render_ready
     ? video.provider_cost_cents
-    : Number(capability?.pricing?.default_cents || 0);
+    : normalized === "audio" && capability?.render_ready
+      ? audio.provider_cost_cents
+      : Number(capability?.pricing?.default_cents || 0);
   const platformFee = Number(capability?.pricing?.platform_fee_cents || 0);
   const creditCost = providerCost > 0
     ? Math.max(1, Math.ceil((providerCost + platformFee) / PROVIDER_COST_PER_IABT_CREDIT_CENTS))
@@ -916,6 +946,58 @@ export async function submitLumaVideo(spec: any) {
   });
   if (!result?.id) throw new Error("IABT's managed renderer accepted the request without returning a job ID.");
   return { generation: result, settings };
+}
+
+export async function submitElevenMusic(base44: any, spec: any, title: string) {
+  const readiness = getAudioReadiness();
+  if (!readiness.audio_ready) throw new Error("IABT's paid audio rendering is not fully enabled.");
+  const settings = audioSettings(spec);
+  const response = await fetch(ELEVENLABS_MUSIC_API + "?output_format=mp3_44100_128", {
+    method: "POST",
+    headers: {
+      Accept: "audio/mpeg",
+      "Content-Type": "application/json",
+      "xi-api-key": String(secrets.get("ELEVENLABS_API_KEY") || "").trim(),
+    },
+    body: JSON.stringify({
+      prompt: clampText(spec?.creative_prompt, 4100, "Create a polished original music track."),
+      music_length_ms: settings.music_length_ms,
+      model_id: ELEVENLABS_MUSIC_MODEL,
+      force_instrumental: settings.force_instrumental,
+    }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const detail = payload?.detail?.message || payload?.detail || payload?.message || "Managed audio supplier request failed.";
+    console.error("managed audio supplier request failed:", response.status, String(detail).slice(0, 800));
+    const error: any = new Error("IABT's managed audio renderer request failed.");
+    error.status = response.status;
+    error.code =
+      response.status === 402 ? "elevenlabs_insufficient_balance" :
+      response.status === 401 ? "elevenlabs_authentication_failed" :
+      response.status === 403 ? "elevenlabs_access_denied" :
+      response.status === 429 ? "elevenlabs_rate_limited" :
+      response.status >= 500 ? "elevenlabs_provider_unavailable" :
+      "elevenlabs_invalid_request";
+    throw error;
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength < 1024) throw new Error("The managed audio renderer returned an empty or invalid MP3.");
+  const hasId3 = bytes.length >= 3 && bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33;
+  const hasFrame = bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0;
+  if (!hasId3 && !hasFrame) throw new Error("The managed audio renderer did not return a valid MP3 file.");
+  const fileName = clampText(title, 140, "IABT audio") + ".mp3";
+  const file = new File([bytes], fileName, { type: "audio/mpeg" });
+  const stored = await base44.asServiceRole.integrations.Core.UploadPrivateFile({ file });
+  const fileUri = String(stored?.file_uri || "").trim();
+  if (!fileUri) throw new Error("Base44 private storage did not return an audio file URI.");
+  return {
+    file_uri: fileUri,
+    mime_type: "audio/mpeg",
+    size_bytes: bytes.byteLength,
+    song_id: String(response.headers.get("song-id") || ""),
+    settings,
+  };
 }
 
 export async function getLumaGeneration(generationId: string) {
