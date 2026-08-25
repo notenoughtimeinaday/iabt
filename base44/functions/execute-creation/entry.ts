@@ -478,33 +478,47 @@ Deno.serve(async (req) => {
       execution_job_id: job.id,
     });
 
-    const finish = async (artifactData: any, message: string) => {
-      const payload = {
+    const finish = async (artifactInput: any, message: string) => {
+      const artifactItems = Array.isArray(artifactInput) ? artifactInput : [artifactInput];
+      if (!artifactItems.length) throw new Error("Generation returned no artifact definitions.");
+      const payloads = artifactItems.map((artifactData: any) => ({
         ...artifactBase(user, plan, job, key),
         ...artifactData,
         metadata: {
           ...artifactBase(user, plan, job, key).metadata,
           ...(artifactData.metadata || {}),
         },
-      };
-      if (!hasArtifactOutput(payload)) {
-        throw new Error("Generation returned no durable artifact output.");
+      }));
+      if (payloads.some((payload: any) => !hasArtifactOutput(payload))) {
+        throw new Error("Generation returned an incomplete durable artifact set.");
       }
 
-      const artifact = await service.entities.CreationArtifact.create(payload);
-      if (!artifact?.id || !hasArtifactOutput(artifact)) {
-        throw new Error("The artifact could not be persisted safely.");
+      const artifacts: any[] = [];
+      for (const payload of payloads) {
+        const created = await service.entities.CreationArtifact.create(payload);
+        if (!created?.id || !hasArtifactOutput(created)) {
+          throw new Error("The complete artifact set could not be persisted safely.");
+        }
+        artifacts.push(created);
       }
+      const artifact = artifacts[0];
       committedArtifact = artifact;
 
-      const requestedKind = clean(artifactData?.metadata?.requested_kind, 20);
-      const completionStage = artifactData?.metadata?.rendered === false
+      const primaryData = artifactItems[0] || {};
+      const requestedKind = clean(primaryData?.metadata?.requested_kind, 20);
+      const completionStage = primaryData?.metadata?.rendered === false
         ? (requestedKind === "video"
             ? "Video preproduction document created — no video rendered"
             : "Audio preproduction document created — no audio rendered")
-        : artifactData?.kind === "document"
-          ? "Document created and ready to download"
-          : "Deliverable created and verified";
+        : artifacts.length > 1 && plan.intent === "document"
+          ? "Document created in Markdown, DOCX, and PDF"
+          : artifacts.length > 1 && (plan.intent === "app" || plan.intent === "website")
+            ? "App project, source ZIP, and verification report created"
+            : primaryData?.kind === "audio"
+              ? "Playable audio created and secured"
+              : primaryData?.kind === "document"
+                ? "Document created and ready to download"
+                : "Deliverable created and verified";
       job = await service.entities.GenerationJob.update(job.id, {
         status: "succeeded",
         progress: 100,
@@ -524,14 +538,22 @@ Deno.serve(async (req) => {
       )) {
         job = { ...job, usage_state: "captured" };
       }
+      if (Number(plan.provider_cost_cents || 0) > 0) {
+        try {
+          await settleProviderCommitment(base44, job);
+        } catch (spendError) {
+          console.error("provider spend settlement ledger failed:", spendError);
+        }
+      }
       return Response.json({
         ok: true,
         reused: false,
         plan,
         job,
         artifact,
+        artifacts,
         complete: true,
-        result: { message, artifact_kind: artifact.kind },
+        result: { message, artifact_kind: artifact.kind, artifact_count: artifacts.length },
         billing: billing(job),
       });
     };
