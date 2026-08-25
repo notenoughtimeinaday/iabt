@@ -1,6 +1,6 @@
 import { secrets } from "base44:runtime";
 
-export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-25.1";
+export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-25.2";
 export const CREATION_QUOTE_TTL_MS = 30 * 60 * 1000;
 export const LUMA_MODEL = "ray-3.2";
 export const LUMA_API_BASE = "https://agents.lumalabs.ai/v1";
@@ -50,6 +50,13 @@ export function getMediaReadiness() {
   const paidMediaEnabled = /^(1|true|yes|on)$/i.test(paidMediaRaw);
   const mediaBillingReady = /^(1|true|yes|on)$/i.test(mediaBillingRaw);
   const commercialApproved = /^(1|true|yes|on)$/i.test(commercialApprovalRaw);
+  const lumaTechnicalReady = lumaKeyConfigured && paidMediaEnabled && mediaBillingReady;
+  const blockerCodes = [
+    ...(!lumaKeyConfigured ? ["luma_key_missing"] : []),
+    ...(!paidMediaEnabled ? ["paid_media_disabled"] : []),
+    ...(!mediaBillingReady ? ["media_billing_not_ready"] : []),
+    ...(!commercialApproved ? ["commercial_approval_pending"] : []),
+  ];
   return {
     luma_key_configured: lumaKeyConfigured,
     paid_media_gate_configured: Boolean(paidMediaRaw),
@@ -58,7 +65,10 @@ export function getMediaReadiness() {
     media_billing_ready: mediaBillingReady,
     commercial_approval_gate_configured: Boolean(commercialApprovalRaw),
     commercial_approved: commercialApproved,
-    luma_ready: lumaKeyConfigured && paidMediaEnabled && mediaBillingReady && commercialApproved,
+    luma_technical_ready: lumaTechnicalReady,
+    luma_commercial_ready: lumaTechnicalReady && commercialApproved,
+    luma_ready: lumaTechnicalReady && commercialApproved,
+    blocker_codes: blockerCodes,
   };
 }
 
@@ -468,7 +478,7 @@ export async function planRequest(base44: any, requestText: string, context: any
       steps: Array.isArray(value?.steps) && value.steps.length ? value.steps.slice(0, 12) : fallback.steps,
       deliverables: stringList(value?.deliverables, fallback.deliverables, 12),
       success_criteria: stringList(value?.success_criteria, fallback.success_criteria, 12),
-      clarification_questions: stringList(value?.clarification_questions, [], 5),
+      clarification_questions: intent === "gcode" ? stringList(value?.clarification_questions, [], 5) : [],
       warnings: stringList(value?.warnings, fallback.warnings, 12),
     });
   } catch (error) {
@@ -483,17 +493,24 @@ export async function planRequest(base44: any, requestText: string, context: any
   }
 }
 
-export function getCreationCapabilities() {
+export function getCreationCapabilities(options: { ownerDemo?: boolean } = {}) {
   const media = getMediaReadiness();
-  const video = media.luma_ready
+  const ownerDemo = options.ownerDemo === true && media.luma_technical_ready && !media.luma_commercial_ready;
+  const videoRenderReady = media.luma_commercial_ready || ownerDemo;
+  const video = videoRenderReady
     ? {
-        id: "video-iabt-managed",
+        id: ownerDemo ? "video-iabt-owner-demo" : "video-iabt-managed",
         intent: "video",
-        name: "Video generation",
-        description: "Generate a short MP4 through IABT managed production after an exact quote is explicitly approved.",
+        name: ownerDemo ? "Owner video demo" : "Video generation",
+        description: ownerDemo
+          ? "Generate a private owner-test MP4 through IABT managed production. This is not approval for customer production, resale, or white-label release."
+          : "Generate a short MP4 through IABT managed production after an exact quote is explicitly approved.",
         provider: "luma-ray-3.2",
         provider_ready: true,
         render_ready: true,
+        owner_demo_only: ownerDemo,
+        commercial_ready: media.luma_commercial_ready,
+        readiness_blockers: media.blocker_codes,
         fallback_available: true,
         output_kinds: ["video", "document"],
         pricing: { currency: "USD", from_cents: 6, default_cents: 30, maximum_cents: 360, platform_fee_cents: 0 },
@@ -506,6 +523,9 @@ export function getCreationCapabilities() {
         provider: "iabt-preproduction",
         provider_ready: true,
         render_ready: false,
+        owner_demo_only: false,
+        commercial_ready: media.luma_commercial_ready,
+        readiness_blockers: media.blocker_codes,
         fallback_available: true,
         output_kinds: ["document"],
         pricing: { currency: "USD", from_cents: 0, default_cents: 0, maximum_cents: 0, platform_fee_cents: 0 },
@@ -553,9 +573,9 @@ export function getCreationCapabilities() {
   ];
 }
 
-export function capabilityFor(intent: string, spec: any = {}) {
+export function capabilityFor(intent: string, spec: any = {}, options: { ownerDemo?: boolean } = {}) {
   const normalized = normalizeIntent(intent);
-  const capabilities = getCreationCapabilities();
+  const capabilities = getCreationCapabilities(options);
   const exact = capabilities.find((capability) => capability.intent === normalized);
   const capability = exact || capabilities.find((item) => item.intent === "other");
   const video = videoSettings(spec);
@@ -579,8 +599,8 @@ export function capabilityFor(intent: string, spec: any = {}) {
   };
 }
 
-export function quoteFor(intent: string, spec: any = {}) {
-  const capability = capabilityFor(intent, spec);
+export function quoteFor(intent: string, spec: any = {}, options: { ownerDemo?: boolean } = {}) {
+  const capability = capabilityFor(intent, spec, options);
   const expiresAt = new Date(Date.now() + CREATION_QUOTE_TTL_MS).toISOString();
   const creditLabel = capability.credit_cost === 1 ? "1 IABT credit" : capability.credit_cost + " IABT credits";
   const noChargeMessage = capability.total_estimated_cost_cents > 0
@@ -927,9 +947,10 @@ async function lumaRequest(path: string, init: RequestInit) {
   return payload;
 }
 
-export async function submitLumaVideo(spec: any) {
+export async function submitLumaVideo(spec: any, options: { ownerDemo?: boolean } = {}) {
   const readiness = getMediaReadiness();
-  if (!readiness.luma_ready) throw new Error("IABT's paid video rendering is not fully enabled.");
+  const ownerDemoAllowed = options.ownerDemo === true && readiness.luma_technical_ready;
+  if (!readiness.luma_ready && !ownerDemoAllowed) throw new Error("IABT's paid video rendering is not fully enabled.");
   const settings = videoSettings(spec);
   const payload = {
     model: LUMA_MODEL,
@@ -1065,6 +1086,9 @@ export function publicCapability(capability: any) {
     provider_ready: capability.provider_ready,
     render_ready: capability.render_ready,
     fallback_available: capability.fallback_available,
+    owner_demo_only: Boolean(capability.owner_demo_only),
+    commercial_ready: capability.commercial_ready !== false,
+    readiness_blockers: Array.isArray(capability.readiness_blockers) ? capability.readiness_blockers : [],
     output_kinds: capability.output_kinds,
     pricing: capability.pricing,
   };
