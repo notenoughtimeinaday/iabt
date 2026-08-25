@@ -459,7 +459,7 @@ export async function planRequest(base44: any, requestText: string, context: any
     });
     const value = parseStructured(raw);
     const intent = forcedIntent || normalizeIntent(value?.intent, requestText);
-    return {
+    return enforceProductionContract({
       ...fallback,
       title: clampText(value?.title, 140, fallback.title),
       intent,
@@ -470,16 +470,16 @@ export async function planRequest(base44: any, requestText: string, context: any
       success_criteria: stringList(value?.success_criteria, fallback.success_criteria, 12),
       clarification_questions: stringList(value?.clarification_questions, [], 5),
       warnings: stringList(value?.warnings, fallback.warnings, 12),
-    };
+    });
   } catch (error) {
-    return {
+    return enforceProductionContract({
       ...fallback,
       warnings: [
         ...fallback.warnings,
         "IABT used its deterministic planning fallback because the planning model was temporarily unavailable.",
       ],
       planning_error: error instanceof Error ? error.message.slice(0, 300) : "Planning model unavailable.",
-    };
+    });
   }
 }
 
