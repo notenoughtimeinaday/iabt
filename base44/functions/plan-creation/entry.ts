@@ -73,8 +73,10 @@ Deno.serve(async (req) => {
 
     await verifyProjectAccess(base44, user, projectId);
     const details = await planRequest(base44, requestText, context);
-    const quote = quoteFor(details.intent, details.normalized_spec);
+    const ownerDemoRequested = user.role === "admin";
+    const quote = quoteFor(details.intent, details.normalized_spec, { ownerDemo: ownerDemoRequested });
     const capability = quote.capability;
+    const ownerDemoOnly = Boolean(capability.owner_demo_only && ownerDemoRequested);
     const entitlement = await getOrCreateEntitlement(base44, user);
     const usage = entitlementUsageSummary(entitlement);
     const paidMedia = Number(capability.total_estimated_cost_cents || 0) > 0;
@@ -89,11 +91,15 @@ Deno.serve(async (req) => {
       providerCostCents: quote.provider_cost_cents,
       creditCost: quote.credit_cost,
     });
+    const ownerDemoExecutionAllowed = ownerDemoOnly &&
+      commercialAssessment.blockers.every((code: string) => code === "provider_agreement_not_approved");
     const service = base44.asServiceRole;
     const videoRenderUnavailable = details.intent === "video" && !capability.render_ready;
     const audioRenderUnavailable = details.intent === "audio" && !capability.render_ready;
-    const planSummary = videoRenderUnavailable
-      ? "JERICHO can prepare the complete video production package, but IABT's managed renderer is not active yet. Approving this plan will not create or imply an MP4."
+    const planSummary = ownerDemoOnly
+      ? "JERICHO will create a private owner-test MP4 through IABT managed production. This demo is AI-generated and is not approved for customer production, resale, or white-label release."
+      : videoRenderUnavailable
+        ? "JERICHO can prepare the complete video production package, but IABT's managed renderer is not active yet. Approving this plan will not create or imply an MP4."
       : audioRenderUnavailable
         ? "JERICHO can create a downloadable audio preproduction package, but IABT managed audio production is not fully enabled. Approving this plan will not create or imply WAV, MP3, stems, or MIDI files."
         : details.assistant_summary;
@@ -169,7 +175,11 @@ Deno.serve(async (req) => {
           : "IABT CREDIT BALANCE TOO LOW: this plan needs " + quote.credit_cost + " credits, but only " + availableCredits + " eligible credits are currently available.",
       );
     }
-    if (!commercialAssessment.allowed) {
+    if (ownerDemoExecutionAllowed) {
+      planWarnings.push(
+        "OWNER DEMO ONLY: this private AI-generated test render is not approval for customer production, resale, public white-label release, or a commercial Luma launch.",
+      );
+    } else if (!commercialAssessment.allowed) {
       planWarnings.push(
         "COMMERCIAL APPROVAL REQUIRED: final paid production is blocked until its supplier agreement, privacy review, margin floor, and spending limits all pass.",
       );
@@ -206,6 +216,8 @@ Deno.serve(async (req) => {
       consent_summary: quote.consent_summary,
       commercial_summary: {
         ready: commercialAssessment.allowed,
+        execution_ready: commercialAssessment.allowed || ownerDemoExecutionAllowed,
+        owner_demo_only: ownerDemoOnly,
         paid_provider: commercialAssessment.paid_provider,
         margin_target_met: commercialAssessment.margin.target_met,
         margin_floor_met: commercialAssessment.margin.floor_met,
@@ -259,13 +271,15 @@ Deno.serve(async (req) => {
         },
         commercial: {
           ready: commercialAssessment.allowed,
+          execution_ready: commercialAssessment.allowed || ownerDemoExecutionAllowed,
+          owner_demo_only: ownerDemoOnly,
           margin_target_met: commercialAssessment.margin.target_met,
           margin_floor_met: commercialAssessment.margin.floor_met,
           blocker_codes: commercialAssessment.blockers,
           policy_version: commercialAssessment.policy.pricing_version,
         },
       },
-      capabilities: getCreationCapabilities().map(publicCapability),
+      capabilities: getCreationCapabilities({ ownerDemo: ownerDemoRequested }).map(publicCapability),
       next_action: "Show the exact quote and plan to the user. Call execute-creation only after explicit approval.",
       billing: {
         card_charged: false,
