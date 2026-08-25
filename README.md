@@ -2,7 +2,7 @@
 
 The Intelligent Application Building Tool (IABT) is an autonomous creation and project-operations platform running on Base44. JERICHO Studio is the single creation front door: it preserves context, plans and quotes work, routes to authorized providers, requires explicit approval, and verifies delivery. Generated app projects are preserved as reviewable project records and deliverable artifacts. The former Visual App Builder is retired from the customer-facing product.
 
-- Production: https://iabt.insuredspending.org
+- Production: https://insuredspending.org
 - Base44 fallback: https://crazy-creator-flow-hub.base44.app
 
 ## What works
@@ -99,7 +99,7 @@ Required Stripe secrets for either mode:
 2. Create a one-time $10 price for the 100-credit IABT pack in the same mode.
 3. Store their IDs in Base44 Secrets as `STRIPE_BUILDER_PRICE_ID`, `STRIPE_PRO_PRICE_ID`, `STRIPE_AGENCY_PRICE_ID`, and `STRIPE_AI_CREDIT_PACK_PRICE_ID`.
 4. Set `STRIPE_SECRET_KEY` to the matching test or live secret key and `STRIPE_WEBHOOK_SECRET` to the signing secret for the matching webhook endpoint.
-5. Set `IABT_APP_ORIGIN=https://iabt.insuredspending.org` and set `IABT_STRIPE_MODE=test` while validating the release.
+5. Set `IABT_APP_ORIGIN=https://insuredspending.org` and set `IABT_STRIPE_MODE=test` while validating the release.
 6. Configure the Customer Portal product catalog, then verify checkout, plan changes, cancellation, failed-payment handling, delayed-payment credit grants, and webhook idempotency with test resources before switching modes.
 
 Checkout derives the authenticated user on the server. The browser cannot supply a customer identity, price ID, plan metadata, or redirect destination. Customer Portal access is limited to the Stripe customer stored on the signed-in user's entitlement. The billing UI receives only non-secret readiness booleans and the configured mode.
@@ -124,7 +124,7 @@ JERICHO Studio is IABT's single creation surface. Generated AppDefinition projec
 
 ## Domain
 
-`iabt.insuredspending.org` is connected and live. The Base44 address remains a fallback. DNS changes are outside this repository.
+`insuredspending.org` is the verified canonical production domain. `iabt.insuredspending.org` remains a verified redirect to the canonical root, and the Base44 address remains an emergency fallback. DNS and Base44 custom-domain changes are managed outside this repository.
 
 ## Historical baseline
 
