@@ -779,6 +779,15 @@ Deno.serve(async (req) => {
       }, "IABT created a simulation-first G-code draft. It is not machine-ready.");
     }
 
+    if (plan.intent === "document") {
+      const content = await generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, "document");
+      const artifacts = await createDocumentArtifactSet(base44, plan.title, content);
+      return await finish(
+        artifacts,
+        "IABT created and stored the document as an in-app Markdown preview, Microsoft Word DOCX, and PDF.",
+      );
+    }
+
     const content = await generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, plan.intent);
     return await finish({
       name: clean(plan.title, 160) + ".md",
