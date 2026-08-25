@@ -15,20 +15,25 @@ Deno.serve(async (req) => {
     }
 
     const base44 = createClientFromRequest(req);
-    await requireUser(base44);
+    const user = await requireUser(base44);
+    const ownerDemoRequested = user.role === "admin";
 
     const media = getMediaReadiness();
     const audio = getAudioReadiness();
     return Response.json({
       ok: true,
       pricing_version: CREATION_PRICING_VERSION,
-      capabilities: getCreationCapabilities().map(publicCapability),
+      capabilities: getCreationCapabilities({ ownerDemo: ownerDemoRequested }).map(publicCapability),
       media: {
         renderer_connection_configured: media.luma_key_configured,
         paid_production_enabled: media.paid_media_enabled,
         billing_ready: media.media_billing_ready,
         commercial_approved: media.commercial_approved,
-        render_ready: media.luma_ready,
+        technical_ready: media.luma_technical_ready,
+        commercial_ready: media.luma_commercial_ready,
+        owner_demo_ready: ownerDemoRequested && media.luma_technical_ready,
+        render_ready: media.luma_ready || (ownerDemoRequested && media.luma_technical_ready),
+        blocker_codes: media.blocker_codes,
       },
       audio: {
         renderer_connection_configured: audio.api_key_configured,
