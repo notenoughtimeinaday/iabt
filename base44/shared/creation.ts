@@ -760,7 +760,9 @@ export async function generateAppDefinition(base44: any, requestText: string, sp
 export async function generateTextDeliverable(base44: any, requestText: string, spec: any, intent: string) {
   const modeInstruction = intent === "audio"
     ? "Create an audio preproduction package: concept, timing, structure, lyrics or spoken script when appropriate, instrumentation or voice direction, cue sheet, mix notes, and production checklist. State clearly that no audio file was rendered."
-    : intent === "video"
+    : intent === "audio-render"
+      ? "Create the companion audio production specification for a managed MP3 render: concept, exact duration, structure, lyrics or spoken script when appropriate, instrumentation or voice direction, cue sheet, mix notes, and production metadata. Do not say that audio was not rendered."
+      : intent === "video"
       ? "Create a video preproduction package: logline, audience, duration, aspect ratio, visual language, full script, shot-by-shot list, camera/motion/lighting notes, storyboard image prompts, sound plan, edit plan, and render prompt. State clearly that no MP4 was rendered."
       : intent === "design"
         ? "Create a conceptual design specification with layout rationale, dimensions or scale assumptions, materials, annotations, and qualified-review warnings when applicable."
