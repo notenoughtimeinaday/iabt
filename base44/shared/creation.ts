@@ -329,6 +329,104 @@ export function parseStructured(value: any) {
   return JSON.parse(candidate.slice(start, end + 1));
 }
 
+function enforceProductionContract(details: any) {
+  const intent = String(details?.intent || "other");
+  const warnings = Array.from(new Set(Array.isArray(details?.warnings) ? details.warnings : []));
+  const step = (order: number, title: string, description: string, tool: string, deliverable: string) => ({
+    order,
+    title,
+    description,
+    tool,
+    deliverable,
+  });
+
+  if (intent === "app" || intent === "website") {
+    return {
+      ...details,
+      assistant_summary: "JERICHO will create a reviewable IABT project, an importable AppDefinition, a downloadable Vite/React source ZIP, and a transparent source-integrity/build-readiness report.",
+      steps: [
+        step(1, "Application architecture", "Define pages, routes, data, workflows, integrations, permissions, and acceptance criteria.", "JERICHO planner", "Application architecture"),
+        step(2, "AppDefinition and source package", "Generate the IABT AppDefinition and package a runnable Vite/React project with Capacitor Android handoff files.", "IABT application production", "AppDefinition JSON and source ZIP"),
+        step(3, "Package verification", "Validate required files, routes, package metadata, and secret hygiene; record which build steps still require a Node or Android environment.", "IABT verifier", "BUILD_REPORT.json"),
+      ],
+      deliverables: [
+        "Generated IABT project record and AppDefinition JSON",
+        "Downloadable Vite/React source ZIP",
+        "Source-integrity and build-readiness report",
+        "Capacitor Android handoff instructions (no APK or AAB is claimed)",
+      ],
+      success_criteria: [
+        "The project record and AppDefinition are stored and recoverable.",
+        "The source ZIP passes deterministic package-integrity checks.",
+        "The build report distinguishes verified checks from commands not run in production.",
+        "No APK, AAB, IPA, Figma file, or store submission is promised or implied.",
+      ],
+      warnings: Array.from(new Set([
+        ...warnings,
+        "The source ZIP is statically verified. Run npm install and npm run build in a Node build environment before deployment.",
+        "APK/AAB packaging is a separate Android Studio signing and device-verification stage; this release provides a readiness handoff, not a mobile binary.",
+      ])),
+    };
+  }
+
+  if (intent === "document") {
+    return {
+      ...details,
+      assistant_summary: "JERICHO will create the requested document and store three recoverable formats: an in-app Markdown preview, Microsoft Word DOCX, and PDF.",
+      steps: [
+        step(1, "Document production", "Write and structure the complete document for the requested audience and purpose.", "IABT production writer", "Final document content"),
+        step(2, "Document export", "Render and store Markdown, DOCX, and PDF versions in the Deliverable Library.", "IABT document exporter", "Markdown, DOCX, and PDF"),
+      ],
+      deliverables: ["In-app Markdown document", "Downloadable Microsoft Word DOCX", "Downloadable PDF"],
+      success_criteria: [
+        "The complete document is readable in the Deliverable Library.",
+        "DOCX and PDF files are stored privately and downloadable.",
+        "All three formats represent the same generated content.",
+      ],
+      warnings,
+    };
+  }
+
+  if (intent === "audio") {
+    const ready = getAudioReadiness().audio_ready;
+    return ready
+      ? {
+          ...details,
+          assistant_summary: "JERICHO will create an audio production specification, render a playable MP3 through IABT managed music production, and store both outputs in the Deliverable Library.",
+          steps: [
+            step(1, "Audio direction", "Define duration, structure, instrumentation, voice, pacing, and mix direction.", "JERICHO planner", "Audio production specification"),
+            step(2, "Managed audio render", "Generate and securely store the approved MP3 through the configured commercial music provider.", "IABT managed audio production", "Playable MP3"),
+          ],
+          deliverables: ["Playable downloadable MP3", "Downloadable audio production specification"],
+          success_criteria: [
+            "The MP3 is non-empty, stored privately, and playable through a signed delivery URL.",
+            "The production specification is preserved with the audio artifact.",
+            "Provider usage is executed only after exact quote approval and commercial controls pass.",
+          ],
+          warnings,
+        }
+      : {
+          ...details,
+          assistant_summary: "JERICHO can create a downloadable audio preproduction package, but the managed audio renderer is not fully enabled. Approval will not create or imply an MP3, WAV, stems, or MIDI file.",
+          steps: [
+            step(1, "Audio direction", "Define structure, duration, instrumentation, voice, pacing, cue sheet, and mix direction.", "JERICHO planner", "Audio production specification"),
+            step(2, "Preproduction package", "Create renderer-ready production notes without claiming a playable media file.", "IABT preproduction", "Audio preproduction document"),
+          ],
+          deliverables: ["Downloadable audio preproduction document", "Timing, cue sheet, arrangement, voice, and mix direction"],
+          success_criteria: [
+            "A downloadable audio preproduction document is delivered.",
+            "The result does not claim that playable audio, stems, or MIDI files were rendered.",
+          ],
+          warnings: Array.from(new Set([
+            ...warnings,
+            "AUDIO RENDERER NOT READY: no MP3, WAV, stems, or MIDI will be generated until the provider key, cost policy, billing gate, commercial gate, and approved supplier agreement are active.",
+          ])),
+        };
+  }
+
+  return details;
+}
+
 export async function planRequest(base44: any, requestText: string, context: any = null) {
   const forcedIntent = selectedCreationIntent(context?.selected_mode);
   const inferredIntent = forcedIntent || normalizeIntent("", requestText);
