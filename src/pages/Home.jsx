@@ -17,9 +17,7 @@ import {
   FolderOpen,
   LayoutTemplate,
   Loader2,
-  Network,
   LogOut,
-  Repeat2,
   Search,
   ShieldCheck,
   Sparkles,
@@ -272,20 +270,16 @@ export default function Home() {
       <main className="iabt-home-main">
         <section className="iabt-hero">
           <div>
-            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> Intelligent Application Building Tool · JERICHO</p>
-            <h1>You define the objective. JERICHO gets it done.</h1>
-            <p>Describe the outcome once. JERICHO keeps the context, selects the best authorized tools, builds the workflow, verifies the result, and returns a usable deliverable—without making you manually connect every step.</p>
+            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> Intelligent Application Building Tool</p>
+            <h1>Bring an objective. Leave with a finished deliverable.</h1>
+            <p>Tell JERICHO what you need in plain language. It plans the work, shows you the cost before production, and keeps every finished file in your Deliverables library.</p>
             <div className="iabt-hero-actions">
               <Button size="lg" onClick={() => navigate("/studio")}>
-                <Sparkles className="h-4 w-4 mr-2" /> Tell JERICHO the objective
+                <Sparkles className="h-4 w-4 mr-2" /> Open JERICHO Studio
               </Button>
-              <input ref={importRef} type="file" hidden accept=".json,application/json" onChange={importProject} />
-              <Button size="lg" variant="ghost" onClick={() => importRef.current?.click()} disabled={working}>
-                <Upload className="h-4 w-4 mr-2" /> Import project
+              <Button size="lg" variant="outline" onClick={() => navigate("/deliverables")}>
+                <Download className="h-4 w-4 mr-2" /> View deliverables
               </Button>
-            </div>
-            <div className="iabt-hero-capabilities" aria-label="AI project operator capabilities">
-              <span>Persistent context</span><span>Provider-neutral routing</span><span>Expandable connection fabric</span><span>Authorized execution</span><span>Verified results</span>
             </div>
           </div>
           <div className="iabt-hero-visual" aria-hidden="true">
@@ -293,8 +287,8 @@ export default function Home() {
             <div className="iabt-orbit orbit-two" />
             <div className="iabt-hero-card">
               <img className="iabt-hero-emblem" src="/iabt-mark.svg" alt="" />
-              <strong>You define it → JERICHO decides what is needed → Your deliverable arrives verified</strong>
-              <span>Build it · operate it · improve it</span>
+              <strong>Describe → approve → receive</strong>
+              <span>One conversation from idea to verified result.</span>
             </div>
           </div>
         </section>
@@ -302,59 +296,15 @@ export default function Home() {
         <section className="iabt-operator-flow" aria-labelledby="iabt-operator-flow-title">
           <div className="iabt-operator-flow-heading">
             <div>
-              <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> How JERICHO works</p>
-              <h2 id="iabt-operator-flow-title">Don’t operate the software. Operate the objective.</h2>
+              <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> A simpler way to create</p>
+              <h2 id="iabt-operator-flow-title">Three clear steps. No complicated setup.</h2>
             </div>
-            <p>IABT proceeds independently where it is authorized and pauses only when your judgment, credentials, or approval are genuinely required.</p>
+            <p>JERICHO keeps the technical details in the background and asks for your approval only when it matters.</p>
           </div>
           <div className="iabt-operator-steps">
-            <article><span>01</span><strong>Keep the context</strong><p>Your goal, decisions, plans, and prior work stay together in one project conversation.</p></article>
-            <article><span>02</span><strong>Plan and coordinate</strong><p>IABT breaks down the work and selects the connected tools or services suited to each step.</p></article>
-            <article><span>03</span><strong>Execute with authority</strong><p>It completes authorized in-scope work and brings you only the decisions or approvals it cannot make.</p></article>
-            <article><span>04</span><strong>Verify and deliver</strong><p>It checks results, reports real limits and costs, and returns usable deliverables with a clear status.</p></article>
-          </div>
-        </section>
-
-        <section className="iabt-connection-fabric" aria-labelledby="iabt-connection-title">
-          <div className="iabt-connection-heading">
-            <div className="iabt-connection-mark"><Network /></div>
-            <div>
-              <p className="iabt-eyebrow">IABT connection fabric</p>
-              <h2 id="iabt-connection-title">Not limited to today’s providers. Designed to connect to what comes next.</h2>
-            </div>
-            <p>IABT separates your objective from the system that performs each step. Every adapter declares its capabilities, authorization method, cost, risk, and verification requirements before IABT treats it as usable.</p>
-          </div>
-          <div className="iabt-connection-lanes">
-            <article><span>ACTIVE NOW</span><strong>Models and media</strong><p>Managed intelligence, images, structured apps, documents, code, and provider-gated rendering.</p></article>
-            <article><span>AUTHORIZE</span><strong>Business systems</strong><p>Files, communications, CRM, finance, analytics, commerce, data, and development platforms through scoped connections.</p></article>
-            <article><span>ADAPTER-READY</span><strong>Enterprise and mainframes</strong><p>Customer-controlled bridges for APIs, databases, SFTP, queues, batch jobs, ERP, and systems of record.</p></article>
-            <article><span>VERIFY FIRST</span><strong>Custom tools and machines</strong><p>Tool servers, webhooks, scanners, devices, and simulation-first machine workflows with explicit safety gates.</p></article>
-          </div>
-          <div className="iabt-connection-rule">
-            <strong>Discover → authorize → quote → execute → verify.</strong>
-            <span>“Adapter-ready” never means “already connected.” IABT proves access before it claims control.</span>
-          </div>
-        </section>
-
-        <section className="iabt-autonomy-engine" aria-labelledby="iabt-autonomy-title">
-          <div className="iabt-autonomy-heading">
-            <div className="iabt-autonomy-mark"><Repeat2 /></div>
-            <div>
-              <p className="iabt-eyebrow">Reusable autonomy</p>
-              <h2 id="iabt-autonomy-title">Teach it once. Let IABT handle the repeatable work.</h2>
-              <p>When a workflow succeeds and its result is verified, IABT can preserve the path as a versioned runbook—complete with permissions, cost limits, retries, recovery, and proof of completion.</p>
-            </div>
-          </div>
-          <div className="iabt-autonomy-grid">
-            <article><span>QUALITY FIRST</span><strong>Best connected intelligence</strong><p>Route each workload to the strongest suitable connected model, record what actually ran, and fall back without changing the user’s goal.</p></article>
-            <article><span>PROVEN PATHS</span><strong>Reusable runbook memory</strong><p>A pathway becomes reusable only after the final state passes its verification contract.</p></article>
-            <article><span>API → BROWSER</span><strong>Hands-off execution</strong><p>Use supported APIs first. When necessary, replay a permitted workflow in an isolated browser or desktop runner.</p></article>
-            <article><span>PRECISE HANDOFF</span><strong>Pause only where required</strong><p>IABT completes every safe step before requesting OAuth, MFA, identity checks, payments, destructive changes, or other required owner action.</p></article>
-          </div>
-          <div className="iabt-autonomy-status">
-            <span><i className="is-live" /> Bounded-autonomy policy active</span>
-            <span><i className="is-live" /> Runbook registry ready</span>
-            <span><i /> Computer-use runtime requires connection</span>
+            <article><span>01</span><strong>Describe the outcome</strong><p>Explain what you want to create and add any important details or files.</p></article>
+            <article><span>02</span><strong>Review the plan</strong><p>See the proposed work, expected cost, and any approvals before production begins.</p></article>
+            <article><span>03</span><strong>Receive the result</strong><p>Open or download the finished file from your permanent Deliverables library.</p></article>
           </div>
         </section>
 
