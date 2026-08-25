@@ -4,7 +4,7 @@
 
 - Name: IABT-JERICHO
 - App ID: `6a849bcd3e04d068553b4af7`
-- Production URL: https://iabt.insuredspending.org
+- Production URL: https://insuredspending.org
 - Base44 fallback: https://crazy-creator-flow-hub.base44.app
 - Architecture: React/Vite + Base44 SDK/auth/entities/functions
 - AppDefinition schema: 1.0
@@ -43,6 +43,6 @@ The initial IABT version of this concept must remain a no-real-money prototype a
 - Do not market video rendering as unlimited. The published plan allowances and exact per-job quotes remain the customer control; the owner-only Profit & Compliance Control Center governs private supplier economics.
 - The Trust & Legal Center and versioned policy-acceptance gate are implemented as prelaunch policies. Final counsel review and verified legal/privacy/support contact details remain required before paid public launch.
 
-## Candidate domain
+## Canonical domain
 
-`iabt.insuredspending.org`
+`insuredspending.org` is the verified production domain. `iabt.insuredspending.org` redirects to it for backward compatibility.
