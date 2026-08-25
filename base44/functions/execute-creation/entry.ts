@@ -693,7 +693,8 @@ Deno.serve(async (req) => {
     }
 
     if (plan.intent === "audio") {
-      const content = await generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, "audio");
+      const audioDocumentMode = plan.provider === "elevenlabs-music-v2" ? "audio-render" : "audio";
+      const content = await generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, audioDocumentMode);
       if (plan.provider === "elevenlabs-music-v2") {
         if (!getAudioReadiness().audio_ready) {
           throw new Response(JSON.stringify({
