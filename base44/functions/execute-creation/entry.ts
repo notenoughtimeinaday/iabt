@@ -928,6 +928,13 @@ Deno.serve(async (req) => {
       "luma_authentication_failed",
       "luma_access_denied",
     ].includes(errorCode);
+    const audioSetupError = [
+      "managed_audio_renderer_unavailable",
+      "elevenlabs_insufficient_balance",
+      "elevenlabs_authentication_failed",
+      "elevenlabs_access_denied",
+    ].includes(errorCode);
+    const managedProviderSetupError = lumaSetupError || audioSetupError;
     const message = lumaBalanceEmpty
       ? (
         creditsReleased
@@ -939,9 +946,9 @@ Deno.serve(async (req) => {
     if (service && job?.id) {
       try {
         job = await service.entities.GenerationJob.update(job.id, {
-          status: lumaSetupError ? "needs_setup" : "failed",
+          status: managedProviderSetupError ? "needs_setup" : "failed",
           progress: 100,
-          stage: lumaBalanceEmpty ? "IABT managed renderer temporarily unavailable" : "Generation failed",
+          stage: managedProviderSetupError ? "IABT managed renderer temporarily unavailable" : "Generation failed",
           error_message: message,
           completed_at: new Date().toISOString(),
         });
@@ -967,7 +974,7 @@ Deno.serve(async (req) => {
     return Response.json({
       ...responsePayload,
       error: message,
-      ...(errorCode ? { code: lumaSetupError ? "managed_renderer_unavailable" : errorCode } : {}),
+      ...(errorCode ? { code: managedProviderSetupError ? "managed_renderer_unavailable" : errorCode } : {}),
       ...(plan ? { plan } : {}),
       ...(job ? { job } : {}),
       credits_restored: creditsReleased,
