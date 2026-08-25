@@ -13,8 +13,10 @@ The Intelligent Application Building Tool (IABT) is an autonomous creation and p
 - User-controlled migration of legacy `iabt.projectsIndex` projects without deleting local originals
 - Generated app project records with AppDefinition metadata, files, manifests, and delivery history
 - A permanent Deliverable Library independent of conversation history
-- Download recovery for inline documents, code, G-code, and preproduction packages
-- Private signed-link retrieval for stored media artifacts
+- Document production as an in-app Markdown preview plus private downloadable DOCX and PDF files
+- Generated application delivery as AppDefinition JSON, a Vite/React source ZIP, and a transparent build-readiness report
+- Download recovery for inline documents, code, G-code, app packages, and preproduction packages
+- Private signed-link retrieval for stored media artifacts, including playable MP3 audio when managed audio production is fully approved
 - The former Visual App Builder is retained only as unreachable historical source and is not part of the customer experience
 - AI AppDefinition creation through JERICHO Studio's authenticated plan, quote, approval, and verification workflow
 - Account entitlements for Free, Builder, Pro, and Agency
@@ -75,6 +77,7 @@ This runs lint, JavaScript project validation, and the production Vite build. Ex
 - Authentication is enabled for email/password, Google, Microsoft, Facebook, and Apple.
 - Optional: add `OPENAI_API_KEY` and `OPENAI_MODEL` through Base44 backend secrets.
 - For managed Luma video, add `LUMA_AGENTS_API_KEY`, set `IABT_ENABLE_PAID_MEDIA=true`, and set `IABT_MEDIA_BILLING_READY=true` only after the provider account has a funded balance and spending controls. Set `IABT_LUMA_COMMERCIAL_APPROVED=true` only after the ProviderAgreement record documents embedded use, white-label permission, commercial output rights, privacy/DPA approval, and accepted billing terms.
+- For managed audio, add `ELEVENLABS_API_KEY` and a reviewed integer `IABT_ELEVENLABS_COST_PER_MINUTE_CENTS`. Set `IABT_ENABLE_PAID_AUDIO=true`, `IABT_AUDIO_BILLING_READY=true`, and `IABT_ELEVENLABS_COMMERCIAL_APPROVED=true` only after the account is funded, cost controls are verified, and an approved ProviderAgreement documents commercial output, embedded use, white-label, privacy/DPA, and billing rights.
 - Publish only after `npm run verify` passes.
 - Keep the production custom domain attached to this one canonical Base44 app.
 
@@ -120,7 +123,7 @@ The public Trust & Legal Center is a prelaunch operational policy set. Before li
 
 ## Agentic creation direction
 
-JERICHO Studio is IABT's single creation surface. Generated AppDefinition projects are preserved for review and delivery; the former Visual App Builder is retired from customer-facing routes. Capability modules connect software development, integrations, original image/video/audio generation, documents, floor plans, simulators, and CAD/G-code workflows through an auditable planner → permission → sandbox → verification pipeline. Physical-output workflows require simulation and safety checks, and every provider remains subject to its technical, legal, and content-policy boundaries.
+JERICHO Studio is IABT's single creation surface. Generated applications are preserved as project records and delivered as AppDefinition JSON, Vite/React source ZIPs, and explicit build-readiness reports; the former Visual App Builder is retired from customer-facing routes. Documents are delivered in Markdown, DOCX, and PDF. Playable audio is available only when the managed audio provider and all commercial gates are active; otherwise IABT produces clearly labeled preproduction. Capability modules connect software development, integrations, original image/video/audio generation, documents, floor plans, simulators, and CAD/G-code workflows through an auditable planner → permission → sandbox → verification pipeline. Physical-output workflows require simulation and safety checks, and every provider remains subject to its technical, legal, and content-policy boundaries.
 
 ## Domain
 
