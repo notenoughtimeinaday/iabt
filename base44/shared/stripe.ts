@@ -53,7 +53,7 @@ const PRICE_SECRET_BY_PLAN = {
   agency: "STRIPE_AGENCY_PRICE_ID",
 };
 
-const DEFAULT_APP_ORIGIN = "https://iabt.insuredspending.org";
+const DEFAULT_APP_ORIGIN = "https://insuredspending.org";
 const ALLOWED_APP_ORIGINS = new Set([
   DEFAULT_APP_ORIGIN,
   "https://crazy-creator-flow-hub.base44.app",
