@@ -5659,4 +5659,23 @@ input, textarea, select { color-scheme: dark; caret-color: var(--jericho-cyan); 
   }
 }
 
+.iabt-auth-shell p,
+.iabt-auth-shell label,
+.iabt-auth-shell input,
+.iabt-auth-shell button {
+  font-size: .96rem;
+}
+
+.iabt-auth-shell .text-xs {
+  font-size: .86rem;
+}
+
+.iabt-auth-shell .text-sm {
+  font-size: .94rem;
+}
+
+.iabt-auth-shell .text-muted-foreground {
+  color: #b4c2d4;
+}
+
 
