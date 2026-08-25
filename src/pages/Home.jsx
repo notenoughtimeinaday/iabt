@@ -324,12 +324,18 @@ export default function Home() {
           )}
           <div className="iabt-projects-heading">
             <div>
-              <p className="iabt-eyebrow"><Cloud className="h-4 w-4" /> Base44 cloud workspace</p>
-              <h2>Your generated app projects</h2>
+              <p className="iabt-eyebrow"><Cloud className="h-4 w-4" /> Your workspace</p>
+              <h2>App projects</h2>
             </div>
-            <div className="iabt-search">
-              <Search className="h-4 w-4" />
-              <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search projects" />
+            <div className="iabt-project-tools">
+              <input ref={importRef} type="file" hidden accept=".json,application/json" onChange={importProject} />
+              <Button variant="outline" onClick={() => importRef.current?.click()} disabled={working}>
+                <Upload className="h-4 w-4 mr-2" /> Import
+              </Button>
+              <div className="iabt-search">
+                <Search className="h-4 w-4" />
+                <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search projects" />
+              </div>
             </div>
           </div>
 
