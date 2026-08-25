@@ -1,9 +1,11 @@
 import { secrets } from "base44:runtime";
 
-export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-24.2";
+export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-25.1";
 export const CREATION_QUOTE_TTL_MS = 30 * 60 * 1000;
 export const LUMA_MODEL = "ray-3.2";
 export const LUMA_API_BASE = "https://agents.lumalabs.ai/v1";
+export const ELEVENLABS_MUSIC_MODEL = "music_v2";
+export const ELEVENLABS_MUSIC_API = "https://api.elevenlabs.io/v1/music";
 export const PROVIDER_COST_PER_IABT_CREDIT_CENTS = 3;
 
 const INTENTS = [
@@ -57,6 +59,53 @@ export function getMediaReadiness() {
     commercial_approval_gate_configured: Boolean(commercialApprovalRaw),
     commercial_approved: commercialApproved,
     luma_ready: lumaKeyConfigured && paidMediaEnabled && mediaBillingReady && commercialApproved,
+  };
+}
+
+export function getAudioReadiness() {
+  const apiKey = String(secrets.get("ELEVENLABS_API_KEY") || "").trim();
+  const paidAudioRaw = String(secrets.get("IABT_ENABLE_PAID_AUDIO") || "").trim();
+  const billingRaw = String(secrets.get("IABT_AUDIO_BILLING_READY") || "").trim();
+  const commercialRaw = String(secrets.get("IABT_ELEVENLABS_COMMERCIAL_APPROVED") || "").trim();
+  const costRaw = String(secrets.get("IABT_ELEVENLABS_COST_PER_MINUTE_CENTS") || "").trim();
+  const costPerMinute = Number(costRaw);
+  const paidAudioEnabled = /^(1|true|yes|on)$/i.test(paidAudioRaw);
+  const billingReady = /^(1|true|yes|on)$/i.test(billingRaw);
+  const commercialApproved = /^(1|true|yes|on)$/i.test(commercialRaw);
+  const costConfigured = Number.isInteger(costPerMinute) && costPerMinute > 0 && costPerMinute <= 100000;
+  return {
+    api_key_configured: Boolean(apiKey),
+    paid_audio_gate_configured: Boolean(paidAudioRaw),
+    paid_audio_enabled: paidAudioEnabled,
+    billing_gate_configured: Boolean(billingRaw),
+    billing_ready: billingReady,
+    commercial_approval_gate_configured: Boolean(commercialRaw),
+    commercial_approved: commercialApproved,
+    cost_policy_configured: costConfigured,
+    cost_per_minute_cents: costConfigured ? costPerMinute : 0,
+    audio_ready: Boolean(apiKey) && paidAudioEnabled && billingReady && commercialApproved && costConfigured,
+  };
+}
+
+function audioDuration(value: unknown, requestText = "") {
+  const supplied = Number(value);
+  if (Number.isFinite(supplied)) return Math.min(600, Math.max(3, Math.round(supplied)));
+  const clock = String(requestText || "").match(/\b(\d{1,2}):(\d{2})\b/);
+  if (clock) return Math.min(600, Math.max(3, Number(clock[1]) * 60 + Number(clock[2])));
+  return 30;
+}
+
+function audioSettings(spec: any = {}) {
+  const readiness = getAudioReadiness();
+  const durationSeconds = audioDuration(spec?.duration_seconds, spec?.creative_prompt);
+  const providerCost = readiness.cost_policy_configured
+    ? Math.max(1, Math.ceil((durationSeconds / 60) * readiness.cost_per_minute_cents))
+    : 0;
+  return {
+    duration_seconds: durationSeconds,
+    music_length_ms: durationSeconds * 1000,
+    force_instrumental: Boolean(spec?.force_instrumental),
+    provider_cost_cents: providerCost,
   };
 }
 
@@ -129,6 +178,7 @@ function sanitizeSpec(value: any, requestText: string, intent: string) {
   };
 
   if (intent === "video") Object.assign(spec, videoSettings(source));
+  if (intent === "audio") Object.assign(spec, audioSettings({ ...source, creative_prompt: spec.creative_prompt }));
   if (intent === "image" || intent === "design") {
     spec.aspect_ratio = VIDEO_ASPECT_RATIOS.has(String(source.aspect_ratio))
       ? String(source.aspect_ratio)
@@ -233,6 +283,7 @@ const PLANNER_SCHEMA = {
         format: { type: "string" },
         aspect_ratio: { type: "string" },
         duration_seconds: { type: "integer" },
+        force_instrumental: { type: "boolean" },
         resolution: { type: "string" },
         features: { type: "array", items: { type: "string" } },
         sections: { type: "array", items: { type: "string" } },
