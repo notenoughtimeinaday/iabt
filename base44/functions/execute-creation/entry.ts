@@ -571,19 +571,18 @@ Deno.serve(async (req) => {
         stage: "Project created; securing AppDefinition artifact",
         progress: 90,
       });
-      return await finish({
-        name: clean(plan.title, 160) + " — AppDefinition.json",
-        kind: "app",
-        mime_type: "application/vnd.iabt+json",
-        content: JSON.stringify(definition, null, 2),
-        provider: "base44-managed-ai",
+      const appArtifacts = await createAppArtifactSet(base44, plan.title, definition);
+      const ownedArtifacts = appArtifacts.map((artifact: any) => ({
+        ...artifact,
         metadata: {
-          schema_version: definition.schemaVersion,
-          page_count: definition.pages.length,
+          ...(artifact.metadata || {}),
           project_id: project.id,
-          builder_ready: true,
         },
-      }, "IABT created a generated app project record plus an importable AppDefinition artifact for review and delivery.");
+      }));
+      return await finish(
+        ownedArtifacts,
+        "IABT created a generated app project, AppDefinition, downloadable Vite/React source ZIP, and transparent build-readiness report.",
+      );
     }
 
     if (plan.intent === "image" || plan.intent === "design") {
