@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk";
 import {
   CREATION_PRICING_VERSION,
+  getAudioReadiness,
   getCreationCapabilities,
   getMediaReadiness,
   publicCapability,
@@ -17,6 +18,7 @@ Deno.serve(async (req) => {
     await requireUser(base44);
 
     const media = getMediaReadiness();
+    const audio = getAudioReadiness();
     return Response.json({
       ok: true,
       pricing_version: CREATION_PRICING_VERSION,
@@ -27,6 +29,14 @@ Deno.serve(async (req) => {
         billing_ready: media.media_billing_ready,
         commercial_approved: media.commercial_approved,
         render_ready: media.luma_ready,
+      },
+      audio: {
+        renderer_connection_configured: audio.api_key_configured,
+        paid_production_enabled: audio.paid_audio_enabled,
+        billing_ready: audio.billing_ready,
+        commercial_approved: audio.commercial_approved,
+        cost_policy_configured: audio.cost_policy_configured,
+        render_ready: audio.audio_ready,
       },
       billing: {
         card_charged: false,
