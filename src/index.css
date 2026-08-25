@@ -5088,3 +5088,575 @@ input, textarea, select { color-scheme: dark; caret-color: var(--jericho-cyan); 
 }
 
 
+/* =========================================================
+   IABT readability and calm-interface pass
+   Larger type, stronger contrast, and reduced landing density.
+   ========================================================= */
+@layer base {
+  body {
+    font-size: 16px;
+    line-height: 1.55;
+  }
+}
+
+:root {
+  --jericho-muted: #b5c3d6;
+}
+
+.iabt-eyebrow,
+.creator-kicker {
+  font-size: .78rem;
+  line-height: 1.4;
+  letter-spacing: .1em;
+}
+
+.iabt-home-main {
+  padding: 34px 0 64px;
+}
+
+.iabt-home-nav {
+  min-height: 76px;
+  flex-wrap: wrap;
+}
+
+.iabt-home-brand strong {
+  font-size: 1.05rem;
+}
+
+.iabt-home-brand span,
+.iabt-home-user > span {
+  color: #b5c3d6;
+  font-size: .84rem;
+}
+
+.iabt-home-user {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.iabt-home-nav button {
+  min-height: 40px;
+  font-size: .9rem;
+}
+
+.iabt-home-user > .iabt-plan-badge,
+.iabt-credit-badge {
+  padding: 7px 10px;
+  font-size: .78rem !important;
+}
+
+.iabt-hero {
+  min-height: 0;
+  gap: clamp(28px, 5vw, 52px);
+  padding: clamp(30px, 5vw, 58px);
+}
+
+.iabt-hero h1 {
+  font-size: clamp(2.35rem, 5vw, 4.4rem);
+  line-height: 1.03;
+}
+
+.iabt-hero > div:first-child > p:not(.iabt-eyebrow) {
+  margin-top: 20px;
+  color: #bdc9d9;
+  font-size: clamp(1.02rem, 1.4vw, 1.18rem);
+  line-height: 1.7;
+}
+
+.iabt-hero-actions {
+  margin-top: 25px;
+}
+
+.iabt-hero-actions button {
+  min-height: 48px;
+  padding-inline: 20px;
+  font-size: .98rem;
+}
+
+.iabt-hero-card {
+  gap: 12px;
+}
+
+.iabt-hero-card strong {
+  font-size: 1.18rem;
+  line-height: 1.45;
+}
+
+.iabt-hero-card span {
+  color: #c1ccda;
+  font-size: .94rem;
+  line-height: 1.55;
+}
+
+.iabt-operator-flow {
+  margin-top: 18px;
+  padding: clamp(25px, 4vw, 38px);
+}
+
+.iabt-operator-flow-heading {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, .72fr);
+  align-items: center;
+}
+
+.iabt-operator-flow-heading h2 {
+  font-size: clamp(1.7rem, 3vw, 2.45rem);
+}
+
+.iabt-operator-flow-heading > p {
+  color: #4f566a;
+  font-size: 1rem;
+}
+
+.iabt-operator-steps {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 24px;
+}
+
+.iabt-operator-steps article {
+  min-height: 0;
+  padding: 22px;
+}
+
+.iabt-operator-steps article > span {
+  font-size: .78rem;
+}
+
+.iabt-operator-steps article > strong {
+  margin-top: 16px;
+  font-size: 1.05rem;
+}
+
+.iabt-operator-steps article > p {
+  color: #565d70;
+  font-size: .93rem;
+  line-height: 1.65;
+}
+
+.iabt-projects {
+  padding-top: 48px;
+}
+
+.iabt-project-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.iabt-project-tools > button {
+  min-height: 40px;
+}
+
+.iabt-project-status {
+  font-size: .78rem;
+}
+
+.iabt-project-open p {
+  color: #b2c0d3;
+  font-size: .93rem;
+  line-height: 1.6;
+}
+
+.iabt-project-open dt {
+  color: #a9b8cc;
+  font-size: .76rem;
+}
+
+.iabt-project-open dd,
+.iabt-open-link {
+  font-size: .9rem;
+}
+
+.iabt-project-actions button {
+  min-height: 38px;
+  font-size: .84rem;
+}
+
+.iabt-project-empty p,
+.iabt-legacy-banner span {
+  color: #b2c0d3;
+  font-size: .94rem;
+}
+
+.iabt-legacy-banner strong {
+  font-size: .98rem;
+}
+
+/* JERICHO Studio */
+.creator-brand-link strong {
+  font-size: 1rem;
+}
+
+.creator-brand-link small,
+.creator-history button small,
+.creator-topbar-title small,
+.creator-sidebar-foot > div small {
+  color: #aebcd0;
+  font-size: .78rem;
+}
+
+.creator-history-heading,
+.creator-kicker,
+.creator-starters > span {
+  color: #aebcd0;
+  font-size: .76rem;
+}
+
+.creator-history button {
+  padding-block: 13px;
+}
+
+.creator-history button strong {
+  font-size: .9rem;
+}
+
+.creator-history-empty {
+  color: #aebcd0;
+  font-size: .88rem;
+}
+
+.creator-sidebar-foot > div strong,
+.creator-sidebar-foot > a {
+  font-size: .84rem;
+}
+
+.creator-topbar {
+  min-height: 70px;
+}
+
+.creator-topbar-title strong {
+  font-size: .98rem;
+}
+
+.creator-credit-chip,
+.creator-builder-link,
+.creator-user {
+  min-height: 38px;
+  color: #c2cfe0;
+  font-size: .8rem;
+}
+
+.creator-welcome {
+  padding-top: clamp(38px, 6vh, 68px);
+}
+
+.creator-welcome-copy {
+  color: #b7c4d5;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.creator-mode-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.creator-mode-grid button {
+  min-height: 132px;
+  padding: 17px;
+}
+
+.creator-mode-grid button strong {
+  font-size: .95rem;
+}
+
+.creator-mode-grid button small {
+  color: #b0bed0;
+  font-size: .8rem;
+  line-height: 1.55;
+}
+
+.creator-starters button {
+  min-height: 46px;
+  color: #bdc9d9;
+  font-size: .86rem;
+}
+
+.creator-thread-mode,
+.creator-thread-intro button,
+.creator-message-meta strong {
+  font-size: .8rem;
+}
+
+.creator-message-meta span,
+.creator-thinking small,
+.creator-tool-list span,
+.creator-composer-mode,
+.creator-composer-mode select,
+.creator-composer-foot > span {
+  color: #aebcd0;
+  font-size: .76rem;
+}
+
+.creator-message-body > p,
+.creator-composer textarea {
+  font-size: .98rem;
+}
+
+.creator-message-body > p {
+  color: #d8e3ef;
+  line-height: 1.75;
+}
+
+.creator-composer textarea {
+  min-height: 86px;
+}
+
+.creator-panel-heading span {
+  font-size: .98rem;
+}
+
+.creator-panel-heading small,
+.creator-plan-top small,
+.creator-plan-empty p,
+.creator-plan-summary {
+  color: #aebcd0;
+  font-size: .8rem;
+}
+
+.creator-plan-empty strong,
+.creator-plan-top h2 {
+  font-size: .95rem;
+}
+
+.creator-status,
+.creator-readiness strong,
+.creator-readiness small,
+.creator-honesty-note p,
+.creator-plan-section h3,
+.creator-plan-section li,
+.creator-plan-section ol li > span,
+.creator-question-note,
+.creator-warning-list,
+.creator-quote-title > span,
+.creator-quote-title small,
+.creator-quote dl > div,
+.creator-quote > p,
+.creator-quote > small,
+.creator-approval label,
+.creator-approval > small,
+.creator-section-title span,
+.creator-section-title small,
+.creator-job-head strong,
+.creator-job-head small,
+.creator-job-foot,
+.creator-job-error,
+.creator-artifact-placeholder,
+.creator-artifact-kind,
+.creator-artifact-info > small,
+.creator-artifact-info a,
+.creator-artifact-info button,
+.creator-artifact-limitation {
+  font-size: .78rem;
+}
+
+.creator-readiness small,
+.creator-quote-title small,
+.creator-quote > p,
+.creator-quote > small,
+.creator-approval > small,
+.creator-section-title small,
+.creator-job-head small,
+.creator-job-foot,
+.creator-artifact-info > small {
+  color: #a6b5c8;
+}
+
+.creator-plan-summary,
+.creator-plan-section li,
+.creator-question-note,
+.creator-warning-list,
+.creator-approval label,
+.creator-honesty-note p {
+  line-height: 1.65;
+}
+
+.creator-quote dl > div.is-total {
+  font-size: .94rem;
+}
+
+.creator-artifact-content {
+  font: .8rem/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.creator-artifact-info > strong {
+  font-size: .9rem;
+  line-height: 1.45;
+}
+
+.creator-artifact-info a,
+.creator-artifact-info button {
+  min-height: 36px;
+  padding: 8px 10px;
+}
+
+/* Billing, deliverables, legal, and compliance */
+.iabt-billing-heading p,
+.iabt-plan-card > p,
+.iabt-plan-card li,
+.iabt-credit-pack p,
+.iabt-billing-note {
+  font-size: .92rem;
+  line-height: 1.6;
+}
+
+.iabt-billing-trust span,
+.iabt-plan-card-top,
+.iabt-plan-card-top strong,
+.iabt-plan-price span,
+.iabt-credit-pack-kicker {
+  font-size: .8rem;
+}
+
+.iabt-billing-economics strong {
+  font-size: .95rem;
+}
+
+.iabt-billing-economics span,
+.iabt-billing-legal,
+.iabt-auth-legal {
+  color: #aebdd0;
+  font-size: .86rem;
+}
+
+.iabt-home-footer {
+  color: #aebdd0;
+  font-size: .88rem;
+}
+
+.iabt-home-footer button {
+  color: #c4d1e2;
+  font-size: .88rem;
+}
+
+.iabt-library-heading > div > p:last-child,
+.iabt-library-search {
+  color: #b4c2d4;
+  font-size: .94rem;
+}
+
+.iabt-library-card-head strong {
+  font-size: 1rem;
+}
+
+.iabt-library-card-head small,
+.iabt-library-preview summary {
+  font-size: .82rem;
+}
+
+.iabt-library-preview pre {
+  font: .82rem/1.65 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.iabt-legal-brand small,
+.iabt-legal-back,
+.iabt-control-header a,
+.iabt-legal-nav a,
+.iabt-subprocessor-list span {
+  color: #aebed2;
+  font-size: .9rem;
+}
+
+.iabt-legal-title > p:last-of-type,
+.iabt-legal-launch-note span,
+.iabt-legal-section p,
+.iabt-legal-section li {
+  color: #bdcadb;
+  font-size: 1rem;
+  line-height: 1.78;
+}
+
+.iabt-legal-section h3 {
+  font-size: 1.12rem;
+}
+
+.iabt-control-header > div:first-child > span,
+.iabt-control-grid article span,
+.iabt-control-grid article small,
+.iabt-control-panel-title p,
+.iabt-control-gates span:last-child,
+.iabt-control-row,
+.iabt-control-policy span,
+.iabt-control-version,
+.iabt-control-actions p {
+  color: #b0bfd2;
+  font-size: .88rem;
+  line-height: 1.6;
+}
+
+.iabt-control-status,
+.iabt-control-row.is-head {
+  font-size: .78rem;
+}
+
+.iabt-policy-gate-card > p:not(.iabt-eyebrow):not(.iabt-policy-error),
+.iabt-policy-gate-points span,
+.iabt-policy-check,
+.iabt-policy-error {
+  font-size: .98rem;
+  line-height: 1.65;
+}
+
+@media (max-width: 1100px) {
+  .iabt-home-nav {
+    position: static;
+  }
+
+  .iabt-home-brand,
+  .iabt-home-user {
+    width: 100%;
+  }
+
+  .iabt-home-user {
+    justify-content: flex-start;
+  }
+
+  .creator-mode-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .iabt-home-main {
+    width: min(100% - 24px, 1240px);
+    padding-top: 18px;
+  }
+
+  .iabt-hero {
+    grid-template-columns: 1fr;
+    padding: 28px 22px;
+    border-radius: 24px;
+  }
+
+  .iabt-hero-visual {
+    min-height: 210px;
+  }
+
+  .orbit-one {
+    width: 250px;
+    height: 250px;
+  }
+
+  .iabt-operator-flow-heading,
+  .iabt-operator-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .iabt-projects-heading,
+  .iabt-project-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .iabt-project-tools,
+  .iabt-search {
+    width: 100%;
+  }
+
+  .creator-mode-grid,
+  .creator-starters {
+    grid-template-columns: 1fr;
+  }
+}
+
+
