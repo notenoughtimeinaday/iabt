@@ -54,6 +54,7 @@ const PRICE_SECRET_BY_PLAN = {
 };
 
 const DEFAULT_APP_ORIGIN = "https://insuredspending.org";
+const LEGACY_APP_ORIGIN = "https://iabt.insuredspending.org";
 const ALLOWED_APP_ORIGINS = new Set([
   DEFAULT_APP_ORIGIN,
   "https://crazy-creator-flow-hub.base44.app",
@@ -113,7 +114,7 @@ export function getAppOrigin(req) {
   if (configured) {
     try {
       const origin = new URL(configured).origin;
-      if (origin.startsWith("https://")) allowed.add(origin);
+      if (origin !== LEGACY_APP_ORIGIN && origin.startsWith("https://")) allowed.add(origin);
     } catch {
       // Ignore malformed optional configuration and retain known-safe origins.
     }
@@ -138,6 +139,7 @@ export function getAppOrigin(req) {
   if (configured) {
     try {
       const configuredOrigin = new URL(configured).origin;
+      if (configuredOrigin === LEGACY_APP_ORIGIN) return DEFAULT_APP_ORIGIN;
       if (allowed.has(configuredOrigin)) return configuredOrigin;
     } catch {
       // Fall through to the canonical production origin.
