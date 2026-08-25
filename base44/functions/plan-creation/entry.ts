@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
     const planSummary = videoRenderUnavailable
       ? "JERICHO can prepare the complete video production package, but IABT's managed renderer is not active yet. Approving this plan will not create or imply an MP4."
       : audioRenderUnavailable
-        ? "JERICHO can create a downloadable audio preproduction package, but no audio renderer is connected. Approving this plan will not create or imply WAV, MP3, stems, or MIDI files."
+        ? "JERICHO can create a downloadable audio preproduction package, but IABT managed audio production is not fully enabled. Approving this plan will not create or imply WAV, MP3, stems, or MIDI files."
         : details.assistant_summary;
     const planSteps = videoRenderUnavailable
       ? [
