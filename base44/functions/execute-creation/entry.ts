@@ -255,7 +255,17 @@ Deno.serve(async (req) => {
       return Response.json({ error: "Creation plan not found." }, { status: 404 });
     }
 
-    const currentQuote = quoteFor(String(plan.intent || "other"), plan.normalized_spec || {});
+    const ownerDemoRequested = user.role === "admin";
+    const currentQuote = quoteFor(
+      String(plan.intent || "other"),
+      plan.normalized_spec || {},
+      { ownerDemo: ownerDemoRequested },
+    );
+    const ownerDemoOnly = Boolean(
+      ownerDemoRequested &&
+      currentQuote?.capability?.owner_demo_only === true &&
+      String(plan.capability_id || "") === "video-iabt-owner-demo"
+    );
     const capabilityChanged = Boolean(
       String(currentQuote?.capability?.provider || "") !== String(plan.provider || "") ||
       Boolean(currentQuote?.capability?.render_ready) !== Boolean(plan.render_ready) ||
@@ -339,7 +349,9 @@ Deno.serve(async (req) => {
       providerCostCents: Number(plan.provider_cost_cents || 0),
       creditCost: Number(plan.credit_cost || 1),
     });
-    if (paidMedia && !commercialAssessment.allowed) {
+    const ownerDemoExecutionAllowed = ownerDemoOnly &&
+      commercialAssessment.blockers.every((code: string) => code === "provider_agreement_not_approved");
+    if (paidMedia && !commercialAssessment.allowed && !ownerDemoExecutionAllowed) {
       return commercialBlockResponse(commercialAssessment);
     }
     const credit = await reserveIabtCredits(
@@ -369,6 +381,9 @@ Deno.serve(async (req) => {
       commercial_policy_version: commercialAssessment.policy.pricing_version,
       estimated_margin_bps: commercialAssessment.margin.estimated_margin_bps,
       purchased_credits_required: Boolean(commercialAssessment.policy.purchased_credits_required),
+      owner_demo_only: ownerDemoOnly,
+      commercial_release_approved: commercialAssessment.allowed,
+      ai_generated_output: true,
     };
 
     job = await service.entities.GenerationJob.create({
@@ -615,7 +630,8 @@ Deno.serve(async (req) => {
 
     if (plan.intent === "video") {
       if (plan.provider === "luma-ray-3.2") {
-        if (!getMediaReadiness().luma_ready) {
+        const mediaReadiness = getMediaReadiness();
+        if (!mediaReadiness.luma_ready && !(ownerDemoOnly && mediaReadiness.luma_technical_ready)) {
           job = await service.entities.GenerationJob.update(job.id, {
             status: "needs_setup",
             progress: 0,
@@ -649,7 +665,7 @@ Deno.serve(async (req) => {
           }, { status: 409 });
         }
 
-        providerSubmission = await submitLumaVideo(plan.normalized_spec);
+        providerSubmission = await submitLumaVideo(plan.normalized_spec, { ownerDemo: ownerDemoOnly });
         providerAccepted = true;
         try {
           await recordProviderCommitment(base44, job, plan);
