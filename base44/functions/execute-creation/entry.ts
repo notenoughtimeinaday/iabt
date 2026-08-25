@@ -694,6 +694,56 @@ Deno.serve(async (req) => {
 
     if (plan.intent === "audio") {
       const content = await generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, "audio");
+      if (plan.provider === "elevenlabs-music-v2") {
+        if (!getAudioReadiness().audio_ready) {
+          throw new Response(JSON.stringify({
+            error: "Paid audio rendering is not currently configured. No provider request was sent.",
+            code: "managed_audio_renderer_unavailable",
+          }), {
+            status: 409,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        const rendered = await submitElevenMusic(base44, plan.normalized_spec, plan.title);
+        try {
+          await recordProviderCommitment(base44, job, plan);
+        } catch (spendError) {
+          console.error("audio provider spend commitment ledger failed:", spendError);
+        }
+        job = await service.entities.GenerationJob.update(job.id, {
+          progress: 90,
+          stage: "Playable audio rendered; securing artifact set",
+          provider_model: ELEVENLABS_MUSIC_MODEL,
+          ...(rendered.song_id ? { provider_job_id: rendered.song_id } : {}),
+        });
+        return await finish([
+          {
+            name: clean(plan.title, 140) + ".mp3",
+            kind: "audio",
+            mime_type: rendered.mime_type,
+            file_uri: rendered.file_uri,
+            provider: "elevenlabs-music-v2",
+            metadata: {
+              rendered: true,
+              playable: true,
+              format: "mp3",
+              size_bytes: rendered.size_bytes,
+              duration_seconds: rendered.settings.duration_seconds,
+              model: ELEVENLABS_MUSIC_MODEL,
+              song_id: rendered.song_id || null,
+            },
+          },
+          {
+            name: clean(plan.title, 140) + " — audio production specification.md",
+            kind: "document",
+            mime_type: "text/markdown",
+            content,
+            provider: "iabt-preproduction",
+            metadata: { requested_kind: "audio", rendered: true, companion_to: "audio" },
+          },
+        ], "IABT rendered a playable MP3 and preserved its audio production specification.");
+      }
+
       return await finish({
         name: clean(plan.title, 160) + " — audio preproduction.md",
         kind: "document",
