@@ -15,7 +15,7 @@ The current app is Base44-native. The historical Node/Express implementation rem
 
 ## Preserved capabilities
 
-The former Visual App Builder remains preserved only as unreachable historical source. JERICHO Studio is the sole customer-facing creation experience. Generated app projects remain available as reviewable records with AppDefinition metadata, files, manifests, and delivery history. A permanent Deliverable Library recovers documents, code, G-code, private media, and preproduction packages independently of conversation history.
+The former Visual App Builder remains preserved only as unreachable historical source. JERICHO Studio is the sole customer-facing creation experience. Generated app projects remain available as reviewable records and are delivered with AppDefinition JSON, a Vite/React source ZIP, and a transparent source-integrity/build-readiness report. The ZIP includes Capacitor Android handoff files but does not claim a verified APK or AAB. A permanent Deliverable Library recovers Markdown/DOCX/PDF documents, code, G-code, private media, app source packages, and preproduction packages independently of conversation history.
 
 ## Founding product origin
 
@@ -28,7 +28,8 @@ The initial IABT version of this concept must remain a no-real-money prototype a
 - Sign in through the Base44-hosted login.
 - Optional: configure `OPENAI_API_KEY` and `OPENAI_MODEL` in Base44 backend secrets for direct OpenAI Responses API usage.
 - Managed Luma video requires a funded provider account, `LUMA_AGENTS_API_KEY`, paid-media and billing safety gates, an approved ProviderAgreement, and `IABT_LUMA_COMMERCIAL_APPROVED=true`.
-- Stripe subscriptions and IABT credit packs fund user allowances; Stripe does not directly refill the separate Luma provider balance.
+- Managed audio requires a funded provider account, `ELEVENLABS_API_KEY`, a verified `IABT_ELEVENLABS_COST_PER_MINUTE_CENTS`, paid-audio and billing gates, an approved ProviderAgreement, and `IABT_ELEVENLABS_COMMERCIAL_APPROVED=true`. When those controls are unavailable, audio remains clearly labeled preproduction.
+- Stripe subscriptions and IABT credit packs fund user allowances; Stripe does not directly refill separate media-provider balances.
 - Publish from Base44 after `npm run verify` passes.
 - Do not change DNS without explicit authorization.
 
