@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk";
 import {
   CREATION_PRICING_VERSION,
+  ELEVENLABS_MUSIC_MODEL,
   LUMA_MODEL,
   executionKey,
   generateAppDefinition,
@@ -8,11 +9,17 @@ import {
   generateGCodeDraft,
   generateImage,
   generateTextDeliverable,
+  getAudioReadiness,
   getMediaReadiness,
   quoteFor,
   requireUser,
+  submitElevenMusic,
   submitLumaVideo,
 } from "../../shared/creation.ts";
+import {
+  createAppArtifactSet,
+  createDocumentArtifactSet,
+} from "../../shared/production-artifacts.ts";
 import {
   captureJobCredits,
   releaseIabtCredits,
@@ -23,6 +30,7 @@ import {
   commercialBlockResponse,
   evaluateCommercialExecution,
   recordProviderCommitment,
+  settleProviderCommitment,
 } from "../../shared/commercial-governance.ts";
 
 function clean(value: unknown, max = 300) {
@@ -372,7 +380,11 @@ Deno.serve(async (req) => {
       intent: plan.intent,
       mode,
       provider: plan.provider,
-      ...(plan.provider === "luma-ray-3.2" ? { provider_model: LUMA_MODEL } : {}),
+      ...(plan.provider === "luma-ray-3.2"
+        ? { provider_model: LUMA_MODEL }
+        : plan.provider === "elevenlabs-music-v2"
+          ? { provider_model: ELEVENLABS_MUSIC_MODEL }
+          : {}),
       status: "running",
       progress: 5,
       stage: "Approval recorded; starting generation",
