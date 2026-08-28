@@ -16,6 +16,7 @@ import {
   requireUser,
   submitElevenMusic,
   submitLumaVideo,
+  verifyElevenLabsAuthentication,
 } from "../../shared/creation.ts";
 import {
   createAppArtifactSet,
@@ -263,10 +264,37 @@ Deno.serve(async (req) => {
     }
 
     const ownerDemoRequested = user.role === "admin";
+    const audioProvider = String(plan.intent || "") === "audio"
+      ? await verifyElevenLabsAuthentication()
+      : null;
+    const audioAuthenticated = String(plan.intent || "") !== "audio" || audioProvider?.authenticated === true;
+    const audioMusicApiEligible = String(plan.intent || "") !== "audio" || audioProvider?.music_api_eligible === true;
+    if (String(plan.intent || "") === "audio" && (!audioAuthenticated || !audioMusicApiEligible)) {
+      const code = String(audioProvider?.error_code || "elevenlabs_connection_check_failed");
+      const message =
+        code === "elevenlabs_paid_subscription_required"
+          ? "The ElevenLabs key is valid, but Music API access requires a paid ElevenLabs subscription. Upgrade the ElevenLabs account, then request a new audio plan."
+          : code === "elevenlabs_subscription_inactive"
+            ? "The ElevenLabs paid subscription is not active. Restore it, then request a new audio plan."
+            : code === "elevenlabs_authentication_failed"
+              ? "ElevenLabs rejected the configured API key. Replace it, then request a new audio plan."
+              : "ElevenLabs Music API readiness could not be verified. Resolve the provider requirement, then request a new audio plan.";
+      return Response.json({
+        error: message,
+        code,
+        provider_authenticated: audioProvider?.authenticated === true,
+        music_api_eligible: audioProvider?.music_api_eligible === true,
+      }, { status: 409 });
+    }
     const currentQuote = quoteFor(
       String(plan.intent || "other"),
       plan.normalized_spec || {},
-      { ownerDemo: ownerDemoRequested },
+      {
+        ownerDemo: ownerDemoRequested,
+        audioAuthenticated,
+        audioMusicApiEligible,
+        audioErrorCode: audioProvider?.error_code,
+      },
     );
     const ownerDemoCapabilityIds = new Set([
       "video-iabt-owner-demo",
