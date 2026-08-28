@@ -45,7 +45,7 @@ const MODE_OPTIONS = [
   { id: "website", label: "Website", icon: Globe2, description: "Marketable sites with a clear purpose" },
   { id: "image", label: "Image", icon: ImageIcon, description: "Original visual concepts and assets" },
   { id: "video", label: "Video", icon: Video, description: "MP4 rendering when active · preproduction otherwise" },
-  { id: "audio", label: "Audio brief", icon: Music2, description: "Preproduction only — no playable audio renderer connected" },
+  { id: "audio", label: "Audio", icon: Music2, description: "Playable MP3 when active · preproduction otherwise" },
   { id: "document", label: "Document", icon: FileText, description: "Detailed, useful written deliverables" },
   { id: "code", label: "Code", icon: Code2, description: "Implementation-ready source and technical plans" },
   { id: "design", label: "Design", icon: Palette, description: "Professional visual systems and specifications" },
@@ -727,7 +727,10 @@ export default function Studio() {
                       onClick={() => setMode(item.id)}
                     >
                       <span className="creator-mode-icon"><Icon /></span>
-                      <span><strong>{item.label}</strong><small>{item.description}</small></span>
+                      <span>
+                        <strong>{capability?.name || item.label}</strong>
+                        <small>{capability?.description || item.description}</small>
+                      </span>
                       {ready === true && renderReady !== false && <i className="is-ready" title="Renderer configured — provider balance and capacity are checked at submission" />}
                       {preparationOnly && <i className="is-prepare" title="Preproduction only — final renderer offline" />}
                       {ready === false && <i className="is-prepare" title="Provider setup required" />}
