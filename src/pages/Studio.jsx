@@ -214,10 +214,13 @@ export default function Studio() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const targetProjectId = (searchParams.get("project_id") || "").trim().slice(0, 200);
+  const setupProvider = (searchParams.get("setup") || "").trim().slice(0, 80);
   const reduceMotion = useReducedMotion();
   const messageEndRef = useRef(null);
   const artifactAccessRef = useRef({});
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState(() => setupProvider
+    ? "Help me connect " + readable(setupProvider) + " to my IABT projects. Use the safest authorization method, keep credentials out of prompts and generated code, explain who pays provider costs, and verify the connection before using it."
+    : "");
   const [conversations, setConversations] = useState([]);
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -693,9 +696,8 @@ export default function Studio() {
               <p className="creator-kicker">Intelligent Application Building Tool · JERICHO Studio</p>
               <h1>Tell JERICHO the objective. It figures out how to get there.</h1>
               <p className="creator-welcome-copy">
-                JERICHO preserves your objective, discovers the best authorized path, coordinates the connected
-                tools, and verifies the deliverable. Add future models, services, enterprise systems, and secure
-                gateways without changing how you work with the operator.
+                Describe the result—not the file type. JERICHO infers the output, identifies only the integrations
+                it needs, shows the cost and missing authorization, then verifies the finished deliverable.
               </p>
               <div className="creator-fabric-strip">
                 <Network />
@@ -715,36 +717,19 @@ export default function Studio() {
                 </div>
               </div>
 
-              <div className="creator-mode-grid" role="list" aria-label="Creation modes">
-                {(targetProjectId ? MODE_OPTIONS.filter((item) => item.id === "app") : MODE_OPTIONS).map((item) => {
-                  const Icon = item.icon;
-                  const capability = capabilityForMode(capabilities, item.id);
-                  const ready = capability?.provider_ready ?? capability?.ready;
-                  const renderReady = capability?.render_ready;
-                  const preparationOnly = ready === true && renderReady === false;
-                  return (
-                    <button
-                      type="button"
-                      key={item.id}
-                      className={effectiveMode === item.id ? "is-active" : ""}
-                      onClick={() => setMode(item.id)}
-                    >
-                      <span className="creator-mode-icon"><Icon /></span>
-                      <span>
-                        <strong>{capability?.name || item.label}</strong>
-                        <small>{capability?.description || item.description}</small>
-                      </span>
-                      {ready === true && renderReady !== false && <i className="is-ready" title="Renderer configured — provider balance and capacity are checked at submission" />}
-                      {preparationOnly && <i className="is-prepare" title="Preproduction only — final renderer offline" />}
-                      {ready === false && <i className="is-prepare" title="Provider setup required" />}
-                    </button>
-                  );
-                })}
+              <div className="creator-auto-route">
+                <span><Sparkles /></span>
+                <div>
+                  <strong>Automatic output and tool selection</strong>
+                  <p>Describe the outcome in plain language. JERICHO identifies whether it needs an app, website, document, media file, code, automation, or a combination.</p>
+                  <small>{capabilities.length || "Multiple"} verified output paths · integrations requested only when the objective needs them</small>
+                </div>
+                <Link to="/integrations"><PlugZap /> Integrations</Link>
               </div>
 
               <div className="creator-starters">
-                <span>Try a detailed starting point</span>
-                {(STARTERS[effectiveMode] || STARTERS.app).map((starter) => (
+                <span>Or start with an example</span>
+                {(targetProjectId ? STARTERS.app : AUTO_STARTERS).map((starter) => (
                   <button type="button" key={starter} onClick={() => setPrompt(starter)}>
                     {starter}<ArrowUpRight />
                   </button>
@@ -754,7 +739,7 @@ export default function Studio() {
           ) : (
             <div className="creator-message-list">
               <div className="creator-thread-intro">
-                <span className="creator-thread-mode">{React.createElement(currentMode.icon)} {currentMode.label}</span>
+                <span className="creator-thread-mode">{React.createElement(currentMode.icon)} {activePlan ? readable(activePlan.intent) : "Automatic routing"}</span>
                 <button type="button" onClick={createConversation}><MessageSquarePlus /> Start another</button>
               </div>
               <AnimatePresence initial={false}>
@@ -799,12 +784,10 @@ export default function Studio() {
             </div>
           )}
 
-          <form className="creator-composer" onSubmit={sendPrompt}>
+          <form className="creator-composer creator-composer-auto" onSubmit={sendPrompt}>
             <div className="creator-composer-mode">
-              <span>{targetProjectId ? "Revising app" : "Creating"}</span>
-              <select value={effectiveMode} onChange={(event) => setMode(event.target.value)} aria-label="Creation mode" disabled={Boolean(targetProjectId)}>
-                {(targetProjectId ? MODE_OPTIONS.filter((item) => item.id === "app") : MODE_OPTIONS).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-              </select>
+              <span><Sparkles /> {targetProjectId ? "Revision mode" : "Automatic routing"}</span>
+              <Link to="/integrations"><PlugZap /> Connections</Link>
             </div>
             <textarea
               value={prompt}
@@ -812,15 +795,17 @@ export default function Studio() {
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void sendPrompt(event);
               }}
-              placeholder={"Describe the " + currentMode.label.toLowerCase() + " you want in as much detail as you like…"}
-              rows={3}
+              placeholder={targetProjectId
+                ? "Describe what should change. JERICHO will inspect this project before planning the revision…"
+                : "What do you want to accomplish? Describe the outcome; JERICHO will choose the correct format and tools…"}
+              rows={4}
               maxLength={12000}
             />
             <div className="creator-composer-foot">
-              <span><Check /> JERICHO plans first. Decisions, credentials and approvals stay yours.</span>
+              <span><Check /> Output, integrations, cost, and verification are decided from your objective.</span>
               <Button type="submit" disabled={!prompt.trim() || sending || conversationBusy}>
                 {sending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                Develop plan
+                Plan objective
               </Button>
             </div>
           </form>
