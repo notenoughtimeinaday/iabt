@@ -1,6 +1,6 @@
 import { secrets } from "base44:runtime";
 
-export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-25.2";
+export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-28.1";
 export const CREATION_QUOTE_TTL_MS = 30 * 60 * 1000;
 export const LUMA_MODEL = "ray-3.2";
 export const LUMA_API_BASE = "https://agents.lumalabs.ai/v1";
@@ -353,13 +353,14 @@ function enforceProductionContract(details: any) {
   if (intent === "app" || intent === "website") {
     return {
       ...details,
-      assistant_summary: "JERICHO will create a reviewable IABT project, an importable AppDefinition, a downloadable Vite/React source ZIP, and a transparent source-integrity/build-readiness report.",
+      assistant_summary: "JERICHO will create a working sandboxed interactive preview, a reviewable IABT project, an importable AppDefinition, a downloadable source ZIP, and request-specific validation results.",
       steps: [
         step(1, "Application architecture", "Define pages, routes, data, workflows, integrations, permissions, and acceptance criteria.", "JERICHO planner", "Application architecture"),
-        step(2, "AppDefinition and source package", "Generate the IABT AppDefinition and package a runnable Vite/React project with Capacitor Android handoff files.", "IABT application production", "AppDefinition JSON and source ZIP"),
+        step(2, "Functional implementation", "Generate the requested browser interactions, validate required behavior, and package the implementation in a runnable Vite/React project.", "IABT application production", "Interactive preview, AppDefinition JSON, and source ZIP"),
         step(3, "Package verification", "Validate required files, routes, package metadata, and secret hygiene; record which build steps still require a Node or Android environment.", "IABT verifier", "BUILD_REPORT.json"),
       ],
       deliverables: [
+        "Working sandboxed interactive preview",
         "Generated IABT project record and AppDefinition JSON",
         "Downloadable Vite/React source ZIP",
         "Source-integrity and build-readiness report",
@@ -367,6 +368,7 @@ function enforceProductionContract(details: any) {
       ],
       success_criteria: [
         "The project record and AppDefinition are stored and recoverable.",
+        "The interactive implementation passes syntax, isolation, and request-specific capability checks.",
         "The source ZIP passes deterministic package-integrity checks.",
         "The build report distinguishes verified checks from commands not run in production.",
         "No APK, AAB, IPA, Figma file, or store submission is promised or implied.",
@@ -559,8 +561,8 @@ export function getCreationCapabilities(options: { ownerDemo?: boolean } = {}) {
       };
 
   return [
-    { id: "app-production", intent: "app", name: "Application generation", description: "Create a generated project, importable AppDefinition, downloadable Vite/React source ZIP, and transparent build-readiness report.", provider: "base44-managed-ai", provider_ready: true, render_ready: true, fallback_available: true, output_kinds: ["app", "archive", "document"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
-    { id: "website-production", intent: "website", name: "Website generation", description: "Create a generated website project, importable AppDefinition, downloadable Vite/React source ZIP, and build-readiness report.", provider: "base44-managed-ai", provider_ready: true, render_ready: true, fallback_available: true, output_kinds: ["app", "archive", "document"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
+    { id: "app-production", intent: "app", name: "Application generation", description: "Create a working sandboxed interactive preview, generated project, importable AppDefinition, downloadable source ZIP, and request-specific validation report.", provider: "base44-managed-ai", provider_ready: true, render_ready: true, fallback_available: true, output_kinds: ["app", "archive", "document"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
+    { id: "website-production", intent: "website", name: "Website generation", description: "Create a working sandboxed interactive website preview, generated project, importable AppDefinition, downloadable source ZIP, and request-specific validation report.", provider: "base44-managed-ai", provider_ready: true, render_ready: true, fallback_available: true, output_kinds: ["app", "archive", "document"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
     { id: "image-production", intent: "image", name: "Image generation", description: "Render an original image from the approved production prompt.", provider: "base44-core-image", provider_ready: true, render_ready: true, fallback_available: true, output_kinds: ["image", "document"], pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 } },
     video,
     audio,
