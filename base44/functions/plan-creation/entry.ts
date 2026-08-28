@@ -96,14 +96,34 @@ Deno.serve(async (req) => {
     const service = base44.asServiceRole;
     const videoRenderUnavailable = details.intent === "video" && !capability.render_ready;
     const audioRenderUnavailable = details.intent === "audio" && !capability.render_ready;
+    const audioRenderReady = details.intent === "audio" && capability.render_ready;
     const planSummary = ownerDemoOnly
-      ? "JERICHO will create a private owner-test MP4 through IABT managed production. This demo is AI-generated and is not approved for customer production, resale, or white-label release."
+      ? details.intent === "audio"
+        ? "JERICHO will create a private owner-test MP3 through IABT managed audio production. This demo is AI-generated and is not approved for customer production, resale, advertising, or white-label release."
+        : "JERICHO will create a private owner-test MP4 through IABT managed video production. This demo is AI-generated and is not approved for customer production, resale, or white-label release."
       : videoRenderUnavailable
         ? "JERICHO can prepare the complete video production package, but IABT's managed renderer is not active yet. Approving this plan will not create or imply an MP4."
       : audioRenderUnavailable
         ? "JERICHO can create a downloadable audio preproduction package, but IABT managed audio production is not fully enabled. Approving this plan will not create or imply WAV, MP3, stems, or MIDI files."
         : details.assistant_summary;
-    const planSteps = videoRenderUnavailable
+    const planSteps = audioRenderReady
+      ? [
+          {
+            order: 1,
+            title: "Audio direction",
+            description: "Define duration, structure, instrumentation, voice, pacing, and mix direction.",
+            tool: "JERICHO planner",
+            deliverable: "Audio production specification",
+          },
+          {
+            order: 2,
+            title: ownerDemoOnly ? "Owner audio render" : "Managed audio render",
+            description: "Generate and securely store the approved MP3 through ElevenLabs Music.",
+            tool: "IABT managed audio production",
+            deliverable: "Playable MP3",
+          },
+        ]
+      : videoRenderUnavailable
       ? [
           {
             order: 1,
@@ -138,7 +158,12 @@ Deno.serve(async (req) => {
             },
           ]
         : details.steps;
-    const planDeliverables = videoRenderUnavailable
+    const planDeliverables = audioRenderReady
+      ? [
+          "Playable downloadable MP3",
+          "Downloadable audio production specification",
+        ]
+      : videoRenderUnavailable
       ? [
           "Video direction package",
           "Storyboard-ready preproduction document",
@@ -151,13 +176,21 @@ Deno.serve(async (req) => {
             "Renderer-ready instructions for a compatible audio production service",
           ]
         : details.deliverables;
-    const planSuccessCriteria = audioRenderUnavailable
+    const planSuccessCriteria = audioRenderReady
+      ? [
+          "The MP3 is non-empty, stored privately, and playable through a signed delivery URL.",
+          "The audio production specification is preserved with the MP3 artifact.",
+          "Provider execution occurs only after the exact quote is explicitly approved.",
+        ]
+      : audioRenderUnavailable
       ? [
           "A downloadable audio preproduction document is delivered.",
           "The result does not claim that playable audio, stems, or MIDI files were rendered.",
         ]
       : details.success_criteria;
-    const planWarnings = videoRenderUnavailable
+    const planWarnings = audioRenderReady
+      ? (details.warnings || []).filter((warning: string) => !/AUDIO RENDERER NOT READY/i.test(warning))
+      : videoRenderUnavailable
       ? Array.from(new Set([
           ...(details.warnings || []),
           "VIDEO RENDERER OFFLINE: this approval creates preproduction only. No MP4 will be generated until IABT's managed renderer and paid-media gates are enabled.",
@@ -177,7 +210,9 @@ Deno.serve(async (req) => {
     }
     if (ownerDemoExecutionAllowed) {
       planWarnings.push(
-        "OWNER DEMO ONLY: this private AI-generated test render is not approval for customer production, resale, public white-label release, or a commercial Luma launch.",
+        details.intent === "audio"
+          ? "OWNER DEMO ONLY: this private AI-generated MP3 is not approval for customer production, resale, advertising, public white-label release, or commercial launch."
+          : "OWNER DEMO ONLY: this private AI-generated MP4 is not approval for customer production, resale, public white-label release, or commercial launch.",
       );
     } else if (!commercialAssessment.allowed) {
       planWarnings.push(
