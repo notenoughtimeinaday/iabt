@@ -907,6 +907,10 @@ Deno.serve(async (req) => {
       responsePayload?.code || (error as any)?.code,
       200,
     );
+    const diagnosis = classifySystemFailure(
+      { ...(error as any), code: errorCode, message: originalMessage, status: responseError?.status || (error as any)?.status },
+      originalMessage,
+    );
 
     if (committedArtifact && base44 && service && job?.id) {
       try {
@@ -1064,6 +1068,35 @@ Deno.serve(async (req) => {
       }
     }
 
+    let incident: any = null;
+    if (service && user?.id && user?.email) {
+      incident = await recordSystemIncident(service, {
+        user_id: user.id,
+        user_email: user.email,
+        plan_id: plan?.id,
+        job_id: job?.id,
+        conversation_id: plan?.conversation_id,
+        source: "execute_creation",
+        diagnosis,
+        status: managedProviderSetupError ? "needs_setup" : "needs_review",
+        retry_count: 0,
+        max_retry_count: 2,
+        recovery_action: creditsReleased ? "credit_release" : diagnosis.recovery_action,
+        recovery_result: creditsReleased
+          ? "The job stopped before durable output and its reserved IABT credits were restored."
+          : "",
+        credits_protected: creditsReleased,
+        evidence: {
+          job_status: job?.status || "not_created",
+          usage_state: job?.usage_state || (creditReservation ? "reservation_created" : "none"),
+          provider_accepted: providerAccepted,
+        },
+      }).catch((incidentError: any) => {
+        console.error("system incident recording failed:", incidentError);
+        return null;
+      });
+    }
+
     const status = lumaBalanceEmpty
       ? 503
       : responseError?.status || ((error as any)?.status === 429 ? 429 : 500);
@@ -1074,6 +1107,14 @@ Deno.serve(async (req) => {
       ...(plan ? { plan } : {}),
       ...(job ? { job } : {}),
       credits_restored: creditsReleased,
+      self_diagnosis: {
+        category: diagnosis.category,
+        severity: diagnosis.severity,
+        retryable: diagnosis.retryable,
+        recovery_action: creditsReleased ? "credit_release" : diagnosis.recovery_action,
+        safe_message: diagnosis.safe_message,
+      },
+      ...(incident?.id ? { incident_id: incident.id } : {}),
       billing: billing(job),
     }, { status });
   }
