@@ -864,56 +864,64 @@ export default function Studio() {
               </div>
             )}
 
-            {activePlan.steps?.length > 0 && (
-              <div className="creator-plan-section">
-                <h3>Production plan</h3>
-                <ol>
-                  {activePlan.steps.map((step, index) => (
-                    <li key={index}><span>{index + 1}</span><p>{stepText(step, index)}</p></li>
-                  ))}
-                </ol>
-              </div>
-            )}
-
-            {activePlan.deliverables?.length > 0 && (
-              <div className="creator-plan-section">
-                <h3>What you will receive</h3>
-                <ul>
-                  {activePlan.deliverables.map((item, index) => <li key={index}><Check /> {item}</li>)}
-                </ul>
-              </div>
-            )}
-
             {activePlan.clarification_questions?.length > 0 && (
               <div className="creator-question-note">
-                <strong>IABT still needs your direction</strong>
+                <strong>JERICHO needs one decision</strong>
                 {activePlan.clarification_questions.map((question, index) => <span key={index}>{question}</span>)}
                 <small>Answer in the conversation before approving.</small>
               </div>
             )}
 
-            {activePlan.warnings?.length > 0 && (
-              <div className="creator-warning-list">
-                {activePlan.warnings.map((warning, index) => <p key={index}>{warning}</p>)}
-              </div>
-            )}
-
-            <div className="creator-quote">
+            <div className="creator-quote creator-quote-compact">
               <div className="creator-quote-title">
-                <span><CircleDollarSign /> Approval quote</span>
-                <small>{activePlan.pricing_version}</small>
+                <span><CircleDollarSign /> Approval summary</span>
               </div>
               <dl>
-                <div className="is-total"><dt>IABT credit quote</dt><dd>{Number(activePlan.credit_cost || 0)} credits</dd></div>
-                <div><dt>Approval action</dt><dd>Reserve credits only</dd></div>
-                <div><dt>Paid production funding</dt><dd>{activePlan.commercial_summary?.purchased_credits_required ? "Purchased credits required" : "Paid-plan credits eligible"}</dd></div>
-                <div><dt>Delivery rule</dt><dd>Capture after verification</dd></div>
+                <div className="is-total"><dt>IABT cost</dt><dd>{Number(activePlan.credit_cost || 0)} credits</dd></div>
+                <div><dt>Provider route</dt><dd>{activePlan.provider_ready ? "Configured" : "Setup required"}</dd></div>
+                <div><dt>Charge rule</dt><dd>Capture after verified delivery</dd></div>
               </dl>
-              <p>{activePlan.consent_summary || "The quote is an estimate. No billing action occurs until you explicitly approve."}</p>
+              <p>{activePlan.consent_summary || "No billing action occurs until you explicitly approve."}</p>
               <small className={quoteExpired ? "is-expired" : ""}>
-                {quoteExpired ? "This quote has expired. Ask IABT to refresh it." : "Quote valid until " + formatDate(activePlan.quote_expires_at)}
+                {quoteExpired ? "This quote has expired. Ask JERICHO to refresh it." : "Valid until " + formatDate(activePlan.quote_expires_at)}
               </small>
             </div>
+
+            <details className="creator-plan-details">
+              <summary>
+                <span>Plan details</span>
+                <small>{activePlan.steps?.length || 0} steps · {activePlan.deliverables?.length || 0} deliverables</small>
+              </summary>
+              {activePlan.steps?.length > 0 && (
+                <div className="creator-plan-section">
+                  <h3>Production plan</h3>
+                  <ol>
+                    {activePlan.steps.map((step, index) => (
+                      <li key={index}><span>{index + 1}</span><p>{stepText(step, index)}</p></li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              {activePlan.deliverables?.length > 0 && (
+                <div className="creator-plan-section">
+                  <h3>What you will receive</h3>
+                  <ul>
+                    {activePlan.deliverables.map((item, index) => <li key={index}><Check /> {item}</li>)}
+                  </ul>
+                </div>
+              )}
+              {activePlan.warnings?.length > 0 && (
+                <div className="creator-warning-list">
+                  {activePlan.warnings.map((warning, index) => <p key={index}>{warning}</p>)}
+                </div>
+              )}
+              <div className="creator-plan-technical">
+                <span>Quote version</span>
+                <code>{activePlan.pricing_version}</code>
+                <span>Funding</span>
+                <strong>{activePlan.commercial_summary?.purchased_credits_required ? "Purchased credits required" : "Paid-plan credits eligible"}</strong>
+              </div>
+            </details>
 
             {activePlan.status === "quoted" && (
               <div className="creator-approval">
