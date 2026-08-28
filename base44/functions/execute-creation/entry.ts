@@ -529,7 +529,7 @@ Deno.serve(async (req) => {
         : artifacts.length > 1 && plan.intent === "document"
           ? "Document created in Markdown, DOCX, and PDF"
           : artifacts.length > 1 && (plan.intent === "app" || plan.intent === "website")
-            ? "App project, source ZIP, and verification report created"
+            ? "Interactive app, source ZIP, and verification report created"
             : primaryData?.kind === "audio"
               ? "Playable audio created and secured"
               : primaryData?.kind === "document"
