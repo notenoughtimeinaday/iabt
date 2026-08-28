@@ -1,6 +1,6 @@
 import { secrets } from "base44:runtime";
 
-export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-28.1";
+export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-28.2";
 export const CREATION_QUOTE_TTL_MS = 30 * 60 * 1000;
 export const LUMA_MODEL = "ray-3.2";
 export const LUMA_API_BASE = "https://agents.lumalabs.ai/v1";
@@ -93,6 +93,8 @@ export function getAudioReadiness() {
     commercial_approved: commercialApproved,
     cost_policy_configured: costConfigured,
     cost_per_minute_cents: costConfigured ? costPerMinute : 0,
+    audio_technical_ready: Boolean(apiKey) && paidAudioEnabled && billingReady && costConfigured,
+    audio_commercial_ready: Boolean(apiKey) && paidAudioEnabled && billingReady && commercialApproved && costConfigured,
     audio_ready: Boolean(apiKey) && paidAudioEnabled && billingReady && commercialApproved && costConfigured,
   };
 }
@@ -533,16 +535,24 @@ export function getCreationCapabilities(options: { ownerDemo?: boolean } = {}) {
         pricing: { currency: "USD", from_cents: 0, default_cents: 0, maximum_cents: 0, platform_fee_cents: 0 },
       };
 
-  const audioReady = getAudioReadiness().audio_ready;
-  const audio = audioReady
+  const audioReadiness = getAudioReadiness();
+  const audioOwnerDemo = options.ownerDemo === true &&
+    audioReadiness.audio_technical_ready &&
+    !audioReadiness.audio_commercial_ready;
+  const audioRenderReady = audioReadiness.audio_commercial_ready || audioOwnerDemo;
+  const audio = audioRenderReady
     ? {
-        id: "audio-iabt-managed",
+        id: audioOwnerDemo ? "audio-iabt-owner-demo" : "audio-iabt-managed",
         intent: "audio",
-        name: "Playable audio generation",
-        description: "Render a playable MP3 through IABT managed music production after an exact quote and commercial approval.",
+        name: audioOwnerDemo ? "Owner audio demo" : "Playable audio generation",
+        description: audioOwnerDemo
+          ? "Generate a private administrator-test MP3. The result is noncommercial and is not approved for customer production, resale, advertising, or white-label release."
+          : "Render a playable MP3 through IABT managed music production after an exact quote and commercial approval.",
         provider: "elevenlabs-music-v2",
         provider_ready: true,
         render_ready: true,
+        owner_demo_only: audioOwnerDemo,
+        commercial_ready: audioReadiness.audio_commercial_ready,
         fallback_available: true,
         output_kinds: ["audio", "document"],
         pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 },
@@ -551,10 +561,12 @@ export function getCreationCapabilities(options: { ownerDemo?: boolean } = {}) {
         id: "audio-preproduction",
         intent: "audio",
         name: "Audio preproduction",
-        description: "Create renderer-ready audio direction and production notes. No playable audio is claimed until the managed renderer is fully enabled.",
+        description: "Create renderer-ready audio direction and production notes. No playable audio is claimed until the managed renderer is technically configured.",
         provider: "iabt-preproduction",
         provider_ready: true,
         render_ready: false,
+        owner_demo_only: false,
+        commercial_ready: audioReadiness.audio_commercial_ready,
         fallback_available: true,
         output_kinds: ["document"],
         pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 },
@@ -1019,9 +1031,10 @@ export async function submitLumaVideo(spec: any, options: { ownerDemo?: boolean 
   return { generation: result, settings };
 }
 
-export async function submitElevenMusic(base44: any, spec: any, title: string) {
+export async function submitElevenMusic(base44: any, spec: any, title: string, options: { ownerDemo?: boolean } = {}) {
   const readiness = getAudioReadiness();
-  if (!readiness.audio_ready) throw new Error("IABT's paid audio rendering is not fully enabled.");
+  const ownerDemoAllowed = options.ownerDemo === true && readiness.audio_technical_ready;
+  if (!readiness.audio_ready && !ownerDemoAllowed) throw new Error("IABT's paid audio rendering is not fully enabled.");
   const settings = audioSettings(spec);
   const response = await fetch(ELEVENLABS_MUSIC_API + "?output_format=mp3_44100_128", {
     method: "POST",
