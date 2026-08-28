@@ -33,6 +33,11 @@ import {
   recordProviderCommitment,
   settleProviderCommitment,
 } from "../../shared/commercial-governance.ts";
+import {
+  classifySystemFailure,
+  recordSystemIncident,
+  withSelfHealingRetry,
+} from "../../shared/self-healing.ts";
 
 function clean(value: unknown, max = 300) {
   return String(value || "").trim().slice(0, max);
@@ -571,6 +576,45 @@ Deno.serve(async (req) => {
         complete: true,
         result: { message, artifact_kind: artifact.kind, artifact_count: artifacts.length },
         billing: billing(job),
+      });
+    };
+
+    const runSafeInternal = async <T>(source: string, operation: () => Promise<T>): Promise<T> => {
+      let retryIncidentId = "";
+      return withSelfHealingRetry(operation, {
+        maxRetries: 2,
+        onRetry: async ({ retry_count, diagnosis }) => {
+          const incident = await recordSystemIncident(service, {
+            user_id: user.id,
+            user_email: user.email,
+            plan_id: plan.id,
+            job_id: job.id,
+            conversation_id: plan.conversation_id,
+            source,
+            diagnosis,
+            status: "retrying",
+            retry_count,
+            max_retry_count: 2,
+            recovery_action: "automatic_retry",
+            credits_protected: true,
+            evidence: { job_status: job.status, operation_class: "safe_internal_generation" },
+          }).catch(() => null);
+          retryIncidentId = String(incident?.id || retryIncidentId);
+          job = await service.entities.GenerationJob.update(job.id, {
+            stage: "Temporary internal failure detected; retrying safely (" + retry_count + "/2)",
+          });
+        },
+        onRecovered: async ({ retry_count }) => {
+          if (retryIncidentId) {
+            await service.entities.SystemIncident.update(retryIncidentId, {
+              status: "recovered",
+              retry_count,
+              recovery_result: "The safe internal generation step succeeded automatically on retry.",
+              resolved_at: new Date().toISOString(),
+              last_seen_at: new Date().toISOString(),
+            }).catch(() => null);
+          }
+        },
       });
     };
 
