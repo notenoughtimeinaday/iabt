@@ -1,4 +1,4 @@
-export const SELF_HEALING_VERSION = "iabt-self-healing-2026-08-28.1";
+export const SELF_HEALING_VERSION = "iabt-self-healing-2026-08-28.2";
 
 const TRANSIENT_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const SETUP_CODES = new Set([
@@ -58,7 +58,22 @@ export function classifySystemFailure(error: any, fallbackMessage = "The operati
   let recovery_action = retryable ? "automatic_retry" : "manual_review";
   let safe_message = "IABT detected an internal production failure and protected the job for review.";
 
-  if (status === 429 || /rate.?limit|too many requests/.test(lower)) {
+  if (code === "elevenlabs_authentication_failed") {
+    category = "configuration";
+    retryable = false;
+    recovery_action = "manual_setup";
+    safe_message = "ElevenLabs rejected the configured API key (HTTP 401). Replace or rotate ELEVENLABS_API_KEY, then run a new owner audio test. Reserved IABT credits were protected.";
+  } else if (code === "elevenlabs_access_denied") {
+    category = "authorization";
+    retryable = false;
+    recovery_action = "manual_setup";
+    safe_message = "The ElevenLabs key authenticated but does not have permission for this audio request. Update the key permissions or account access before retrying.";
+  } else if (code === "elevenlabs_insufficient_balance") {
+    category = "billing";
+    retryable = false;
+    recovery_action = "manual_setup";
+    safe_message = "ElevenLabs reported insufficient provider credits. Add provider credits or change the funded account before retrying.";
+  } else if (status === 429 || /rate.?limit|too many requests/.test(lower)) {
     category = "rate_limit";
     retryable = true;
     severity = "warning";
