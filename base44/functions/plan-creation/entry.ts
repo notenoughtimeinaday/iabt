@@ -82,6 +82,7 @@ Deno.serve(async (req) => {
     const quote = quoteFor(details.intent, details.normalized_spec, {
       ownerDemo: ownerDemoRequested,
       audioAuthenticated,
+      audioErrorCode: audioProvider?.error_code,
     });
     const capability = quote.capability;
     const ownerDemoOnly = Boolean(capability.owner_demo_only && ownerDemoRequested);
@@ -325,6 +326,7 @@ Deno.serve(async (req) => {
       capabilities: getCreationCapabilities({
         ownerDemo: ownerDemoRequested,
         audioAuthenticated,
+        audioErrorCode: audioProvider?.error_code,
       }).map(publicCapability),
       next_action: "Show the exact quote and plan to the user. Call execute-creation only after explicit approval.",
       billing: {
