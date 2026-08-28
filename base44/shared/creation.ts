@@ -107,6 +107,39 @@ export function getAudioReadiness() {
   };
 }
 
+export async function verifyElevenLabsAuthentication() {
+  const apiKey = String(secrets.get("ELEVENLABS_API_KEY") || "").trim();
+  if (!apiKey) {
+    return { checked: false, authenticated: false, status: 0, error_code: "elevenlabs_key_missing" };
+  }
+  try {
+    const response = await fetch("https://api.elevenlabs.io/v1/user/subscription", {
+      method: "GET",
+      headers: { "xi-api-key": apiKey },
+    });
+    return {
+      checked: true,
+      authenticated: response.ok,
+      status: response.status,
+      error_code: response.ok
+        ? ""
+        : response.status === 401
+          ? "elevenlabs_authentication_failed"
+          : response.status === 403
+            ? "elevenlabs_access_denied"
+            : response.status === 402
+              ? "elevenlabs_insufficient_balance"
+              : response.status === 429
+                ? "elevenlabs_rate_limited"
+                : response.status >= 500
+                  ? "elevenlabs_provider_unavailable"
+                  : "elevenlabs_connection_check_failed",
+    };
+  } catch {
+    return { checked: true, authenticated: false, status: 0, error_code: "elevenlabs_provider_unavailable" };
+  }
+}
+
 function audioDuration(value: unknown, requestText = "") {
   const supplied = Number(value);
   if (Number.isFinite(supplied)) return Math.min(600, Math.max(3, Math.round(supplied)));
@@ -505,7 +538,9 @@ export async function planRequest(base44: any, requestText: string, context: any
   }
 }
 
-export function getCreationCapabilities(options: { ownerDemo?: boolean } = {}) {
+type CreationCapabilityOptions = { ownerDemo?: boolean; audioAuthenticated?: boolean };
+
+export function getCreationCapabilities(options: CreationCapabilityOptions = {}) {
   const media = getMediaReadiness();
   const ownerDemo = options.ownerDemo === true && media.luma_technical_ready && !media.luma_commercial_ready;
   const videoRenderReady = media.luma_commercial_ready || ownerDemo;
@@ -544,10 +579,12 @@ export function getCreationCapabilities(options: { ownerDemo?: boolean } = {}) {
       };
 
   const audioReadiness = getAudioReadiness();
+  const audioAuthenticationReady = options.audioAuthenticated !== false;
   const audioOwnerDemo = options.ownerDemo === true &&
+    audioAuthenticationReady &&
     audioReadiness.audio_technical_ready &&
     !audioReadiness.audio_commercial_ready;
-  const audioRenderReady = audioReadiness.audio_commercial_ready || audioOwnerDemo;
+  const audioRenderReady = audioAuthenticationReady && (audioReadiness.audio_commercial_ready || audioOwnerDemo);
   const audio = audioRenderReady
     ? {
         id: audioOwnerDemo ? "audio-iabt-owner-demo" : "audio-iabt-managed",
@@ -595,7 +632,7 @@ export function getCreationCapabilities(options: { ownerDemo?: boolean } = {}) {
   ];
 }
 
-export function capabilityFor(intent: string, spec: any = {}, options: { ownerDemo?: boolean } = {}) {
+export function capabilityFor(intent: string, spec: any = {}, options: CreationCapabilityOptions = {}) {
   const normalized = normalizeIntent(intent);
   const capabilities = getCreationCapabilities(options);
   const exact = capabilities.find((capability) => capability.intent === normalized);
@@ -621,7 +658,7 @@ export function capabilityFor(intent: string, spec: any = {}, options: { ownerDe
   };
 }
 
-export function quoteFor(intent: string, spec: any = {}, options: { ownerDemo?: boolean } = {}) {
+export function quoteFor(intent: string, spec: any = {}, options: CreationCapabilityOptions = {}) {
   const capability = capabilityFor(intent, spec, options);
   const expiresAt = new Date(Date.now() + CREATION_QUOTE_TTL_MS).toISOString();
   const creditLabel = capability.credit_cost === 1 ? "1 IABT credit" : capability.credit_cost + " IABT credits";
