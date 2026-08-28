@@ -1,4 +1,4 @@
-export const SELF_HEALING_VERSION = "iabt-self-healing-2026-08-28.2";
+export const SELF_HEALING_VERSION = "iabt-self-healing-2026-08-28.3";
 
 const TRANSIENT_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const SETUP_CODES = new Set([
@@ -6,6 +6,8 @@ const SETUP_CODES = new Set([
   "luma_authentication_failed",
   "luma_access_denied",
   "elevenlabs_insufficient_balance",
+  "elevenlabs_paid_subscription_required",
+  "elevenlabs_subscription_inactive",
   "elevenlabs_authentication_failed",
   "elevenlabs_access_denied",
   "managed_audio_renderer_unavailable",
@@ -68,11 +70,21 @@ export function classifySystemFailure(error: any, fallbackMessage = "The operati
     retryable = false;
     recovery_action = "manual_setup";
     safe_message = "The ElevenLabs key authenticated but does not have permission for this audio request. Update the key permissions or account access before retrying.";
+  } else if (code === "elevenlabs_paid_subscription_required") {
+    category = "billing";
+    retryable = false;
+    recovery_action = "manual_setup";
+    safe_message = "The ElevenLabs key is valid, but Music API access requires a paid ElevenLabs subscription. Upgrade the provider account before requesting a new playable-audio plan.";
+  } else if (code === "elevenlabs_subscription_inactive") {
+    category = "billing";
+    retryable = false;
+    recovery_action = "manual_setup";
+    safe_message = "The ElevenLabs key is valid, but its paid subscription is inactive. Restore the subscription before requesting a new playable-audio plan.";
   } else if (code === "elevenlabs_insufficient_balance") {
     category = "billing";
     retryable = false;
     recovery_action = "manual_setup";
-    safe_message = "ElevenLabs reported insufficient provider credits. Add provider credits or change the funded account before retrying.";
+    safe_message = "ElevenLabs reported insufficient paid-plan quota or provider funds. Add eligible provider capacity before retrying.";
   } else if (status === 429 || /rate.?limit|too many requests/.test(lower)) {
     category = "rate_limit";
     retryable = true;
