@@ -418,6 +418,46 @@ export function parseStructured(value: any) {
   return JSON.parse(candidate.slice(start, end + 1));
 }
 
+function structuredSchemaRejected(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /(?:400|invalid_argument|invalid argument|invalid request to llm)/i.test(message);
+}
+
+async function invokeStructuredWithRecovery(
+  base44: any,
+  prompt: string,
+  schema: any,
+  fallbackInstruction: string,
+) {
+  try {
+    return await base44.asServiceRole.integrations.Core.InvokeLLM({
+      prompt,
+      response_json_schema: schema,
+    });
+  } catch (error) {
+    if (!structuredSchemaRejected(error)) throw error;
+    console.warn("Managed structured-output schema was rejected; retrying with JSON-only recovery.");
+    try {
+      return await base44.asServiceRole.integrations.Core.InvokeLLM({
+        prompt: [
+          prompt,
+          "",
+          "STRUCTURED-OUTPUT RECOVERY:",
+          fallbackInstruction,
+          "Return exactly one valid JSON object. Do not use Markdown fences or add commentary.",
+        ].join("\n"),
+      });
+    } catch (recoveryError) {
+      const failure: any = new Error("IABT's managed AI request was rejected before content generation.");
+      failure.code = "managed_llm_request_invalid";
+      failure.status = 400;
+      failure.retryable = false;
+      failure.cause = recoveryError;
+      throw failure;
+    }
+  }
+}
+
 function enforceProductionContract(details: any) {
   const intent = String(details?.intent || "other");
   const warnings = Array.from(new Set(Array.isArray(details?.warnings) ? details.warnings : []));
@@ -813,8 +853,34 @@ const APP_SCHEMA = {
         required: ["name", "route", "layout", "components"],
       },
     },
-    data: { type: "array", items: { type: "object" } },
-    workflows: { type: "array", items: { type: "object" } },
+    data: {
+      type: "array",
+      maxItems: 30,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          fields: { type: "array", items: { type: "string" } },
+        },
+        required: ["name", "description", "fields"],
+      },
+    },
+    workflows: {
+      type: "array",
+      maxItems: 30,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          name: { type: "string" },
+          trigger: { type: "string" },
+          steps: { type: "array", items: { type: "string" } },
+        },
+        required: ["name", "trigger", "steps"],
+      },
+    },
     integrations: { type: "array", items: { type: "string" } },
     permissions: { type: "array", items: { type: "string" } },
     implementation_notes: { type: "array", items: { type: "string" } },
