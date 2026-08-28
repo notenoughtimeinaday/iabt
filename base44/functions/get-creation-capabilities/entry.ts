@@ -23,14 +23,23 @@ Deno.serve(async (req) => {
     const audio = getAudioReadiness();
     const audioProvider = audio.audio_technical_ready
       ? await verifyElevenLabsAuthentication()
-      : { checked: false, authenticated: false, status: 0, error_code: "audio_technical_setup_incomplete" };
+      : {
+          checked: false,
+          authenticated: false,
+          music_api_eligible: false,
+          subscription_class: "unknown",
+          status: 0,
+          error_code: "audio_technical_setup_incomplete",
+        };
     const audioAuthenticated = audioProvider.authenticated === true;
+    const audioMusicApiEligible = audioProvider.music_api_eligible === true;
     return Response.json({
       ok: true,
       pricing_version: CREATION_PRICING_VERSION,
       capabilities: getCreationCapabilities({
         ownerDemo: ownerDemoRequested,
         audioAuthenticated,
+        audioMusicApiEligible,
         audioErrorCode: audioProvider.error_code,
       }).map(publicCapability),
       media: {
@@ -50,12 +59,14 @@ Deno.serve(async (req) => {
         billing_ready: audio.billing_ready,
         commercial_approved: audio.commercial_approved,
         cost_policy_configured: audio.cost_policy_configured,
-        technical_ready: audio.audio_technical_ready && audioAuthenticated,
-        commercial_ready: audio.audio_commercial_ready && audioAuthenticated,
-        owner_demo_ready: ownerDemoRequested && audio.audio_technical_ready && audioAuthenticated,
-        render_ready: audioAuthenticated && (audio.audio_ready || (ownerDemoRequested && audio.audio_technical_ready)),
+        technical_ready: audio.audio_technical_ready && audioAuthenticated && audioMusicApiEligible,
+        commercial_ready: audio.audio_commercial_ready && audioAuthenticated && audioMusicApiEligible,
+        owner_demo_ready: ownerDemoRequested && audio.audio_technical_ready && audioAuthenticated && audioMusicApiEligible,
+        render_ready: audioAuthenticated && audioMusicApiEligible && (audio.audio_ready || (ownerDemoRequested && audio.audio_technical_ready)),
         provider_authentication_checked: audioProvider.checked,
         provider_authenticated: audioAuthenticated,
+        music_api_eligible: audioMusicApiEligible,
+        subscription_class: audioProvider.subscription_class,
         provider_status: audioProvider.status,
         blocker_codes: Array.from(new Set([
           ...audio.blocker_codes,
