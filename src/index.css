@@ -3290,6 +3290,15 @@
   margin: 3px 0;
 }
 
+.creator-artifact-app-preview {
+  width: 100%;
+  min-height: 560px;
+  display: block;
+  border: 1px solid #d8dce8;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
 .creator-artifact-content {
   max-height: 180px;
   margin: 0;
