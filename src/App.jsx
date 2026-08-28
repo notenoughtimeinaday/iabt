@@ -17,6 +17,7 @@ import ProjectDetail from '@/pages/ProjectDetail';
 import Deliverables from '@/pages/Deliverables';
 import Legal from '@/pages/Legal';
 import AdminCompliance from '@/pages/AdminCompliance';
+import Integrations from '@/pages/Integrations';
 import LegalAcceptanceGate from '@/components/LegalAcceptanceGate';
 import { Navigate, useLocation } from 'react-router-dom';
 // Add page imports here
@@ -72,6 +73,7 @@ const AuthenticatedApp = () => {
           <Route path="/" element={<Home />} />
           <Route path="/studio" element={<Studio />} />
           <Route path="/deliverables" element={<Deliverables />} />
+          <Route path="/integrations" element={<Integrations />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/admin/compliance" element={<AdminCompliance />} />
         </Route>
