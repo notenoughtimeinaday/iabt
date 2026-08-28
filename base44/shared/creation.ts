@@ -1138,6 +1138,18 @@ export async function submitElevenMusic(base44: any, spec: any, title: string, o
   const readiness = getAudioReadiness();
   const ownerDemoAllowed = options.ownerDemo === true && readiness.audio_technical_ready;
   if (!readiness.audio_ready && !ownerDemoAllowed) throw new Error("IABT's paid audio rendering is not fully enabled.");
+  const providerCheck = await verifyElevenLabsAuthentication();
+  if (!providerCheck.authenticated || !providerCheck.music_api_eligible) {
+    const error: any = new Error(
+      providerCheck.error_code === "elevenlabs_paid_subscription_required"
+        ? "ElevenLabs Music API access requires a paid provider subscription."
+        : "ElevenLabs Music API readiness could not be verified.",
+    );
+    error.status = providerCheck.status || 409;
+    error.code = providerCheck.error_code || "elevenlabs_connection_check_failed";
+    error.retryable = false;
+    throw error;
+  }
   const settings = audioSettings(spec);
   const response = await fetch(ELEVENLABS_MUSIC_API + "?output_format=mp3_44100_128", {
     method: "POST",
