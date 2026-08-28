@@ -1,5 +1,9 @@
 import { createClientFromRequest } from "npm:@base44/sdk";
-import { getCreationCapabilities, requireUser } from "../../shared/creation.ts";
+import {
+  getCreationCapabilities,
+  requireUser,
+  verifyElevenLabsAuthentication,
+} from "../../shared/creation.ts";
 
 function clean(value: unknown, max = 1000) {
   return String(value || "").trim().slice(0, max);
@@ -166,7 +170,15 @@ Deno.serve(async (req) => {
       return Response.json({ error: "Creation status not found." }, { status: 404 });
     }
 
-    const currentCapability = getCreationCapabilities().find((item: any) => item.intent === String(plan.intent)) || null;
+    const audioProvider = String(plan.intent || "") === "audio"
+      ? await verifyElevenLabsAuthentication()
+      : null;
+    const currentCapability = getCreationCapabilities({
+      ownerDemo: user.role === "admin",
+      audioAuthenticated: String(plan.intent || "") !== "audio" || audioProvider?.authenticated === true,
+      audioMusicApiEligible: String(plan.intent || "") !== "audio" || audioProvider?.music_api_eligible === true,
+      audioErrorCode: audioProvider?.error_code,
+    }).find((item: any) => item.intent === String(plan.intent)) || null;
     const capabilityChanged = Boolean(
       currentCapability && (
         String(currentCapability.provider || "") !== String(plan.provider || "") ||
