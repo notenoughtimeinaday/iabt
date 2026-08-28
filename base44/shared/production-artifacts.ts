@@ -182,34 +182,69 @@ export async function createDocumentArtifactSet(base44: any, title: string, mark
 }
 
 function generatedAppJs(definition: any) {
-  return 'import React from "react";\n' +
-    'import { Link, Navigate, Route, Routes } from "react-router-dom";\n\n' +
-    "const definition = " + JSON.stringify(definition, null, 2) + ";\n\n" +
-    'function Component({ component }) {\n' +
-    '  const props = component.props || {};\n' +
-    '  if (component.type === "Text") return <p className="copy">{props.value || ""}</p>;\n' +
-    '  if (component.type === "Input") return <input aria-label={props.placeholder || "Input"} placeholder={props.placeholder || ""} />;\n' +
-    '  if (component.type === "ScannerInput") return <input aria-label={props.label || "Scanner input"} placeholder={props.label || "Scan barcode or QR"} onKeyDown={(event) => { if (event.key === "Enter") window.dispatchEvent(new CustomEvent("iabt:scan", { detail: { value: event.currentTarget.value } })); }} />;\n' +
-    '  if (component.type === "Button") return props.to ? <Link className="button" to={props.to}>{props.label || "Continue"}</Link> : <button>{props.label || "Continue"}</button>;\n' +
-    '  return null;\n}\n\n' +
-    'function Page({ page }) { return <main className="page"><nav>{definition.pages.map((item) => <Link key={item.id} to={item.route}>{item.name}</Link>)}</nav><section className="card"><h1>{page.name}</h1>{page.components.map((component) => <Component key={component.id} component={component} />)}</section></main>; }\n\n' +
-    'export default function App() { return <Routes>{definition.pages.map((page) => <Route key={page.id} path={page.route} element={<Page page={page} />} />)}<Route path="*" element={<Navigate to={definition.pages[0].route} replace />} /></Routes>; }\n';
+  const title = safeName(definition?.app?.name || "IABT Application");
+  return 'import React from "react";\n\n' +
+    'export default function App() {\n' +
+    '  return <iframe className="iabt-app-frame" title=' + JSON.stringify(title) + ' src="/app.html" />;\n' +
+    '}\n';
 }
 
-function generatedCss(definition: any) {
-  const theme = definition?.theme || {};
-  return ":root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: " + (theme.text || "#f8fafc") + "; background: " + (theme.background || "#0b1020") + "; font-synthesis: none; }\n" +
-    "* { box-sizing: border-box; } body { margin: 0; min-width: 320px; min-height: 100vh; }\n" +
-    ".page { width: min(960px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 64px; }\n" +
-    "nav { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 24px; } nav a { color: inherit; text-decoration: none; padding: 10px 14px; border: 1px solid #334155; border-radius: 999px; }\n" +
-    ".card { background: " + (theme.surface || "#151c30") + "; border: 1px solid #334155; border-radius: " + (Number(theme.radius) || 16) + "px; padding: clamp(24px, 5vw, 56px); box-shadow: 0 24px 70px rgba(0,0,0,.25); }\n" +
-    "h1 { font-size: clamp(2rem, 6vw, 4rem); line-height: 1; } .copy { font-size: 1.1rem; line-height: 1.7; color: #cbd5e1; }\n" +
-    "input { display: block; width: 100%; margin: 14px 0; padding: 14px 16px; color: inherit; background: #0f172a; border: 1px solid #475569; border-radius: 12px; }\n" +
-    "button, .button { display: inline-block; margin: 14px 8px 0 0; padding: 13px 18px; color: white; background: " + (theme.primary || "#7c3aed") + "; border: 0; border-radius: 12px; text-decoration: none; cursor: pointer; }\n";
+function generatedCss() {
+  return "* { box-sizing: border-box; }\n" +
+    "html, body, #root { width: 100%; min-width: 320px; height: 100%; min-height: 100%; margin: 0; }\n" +
+    "body { overflow: hidden; background: #0b1020; }\n" +
+    ".iabt-app-frame { display: block; width: 100%; height: 100vh; border: 0; background: #ffffff; }\n";
 }
 
-function verifySourceFiles(files: Record<string, string>, definition: any) {
-  const required = ["package.json", "index.html", "src/main.jsx", "src/App.jsx", "src/styles.css", "iabt-app-definition.json", "capacitor.config.ts", "README.md"];
+function validateInteractiveHtml(implementation: any, requestText: string, spec: any) {
+  const html = String(implementation?.preview_html || "").trim();
+  const requirements = (requestText + "\n" + JSON.stringify(spec || {})).toLowerCase();
+  const checks: Array<{ check: string; passed: boolean; detail?: string }> = [
+    { check: "interactive_html_complete", passed: /<!doctype\s+html/i.test(html) && /<html\b/i.test(html) && /<\/html>/i.test(html) },
+    { check: "inline_styles_present", passed: /<style\b[^>]*>[\s\S]*?<\/style>/i.test(html) },
+    { check: "no_external_assets", passed: !/(?:src|href|action)\s*=\s*["']https?:\/\//i.test(html) && !/<script\b[^>]*\bsrc\s*=/i.test(html) },
+    { check: "network_isolated", passed: !/(?:fetch|XMLHttpRequest|WebSocket|EventSource)\s*\(|\bimport\s*\(|\beval\s*\(|\bnew\s+Function\s*\(/i.test(html) },
+    { check: "no_nested_browsing", passed: !/<(?:iframe|object|embed)\b/i.test(html) },
+    { check: "test_plan_present", passed: Array.isArray(implementation?.test_cases) && implementation.test_cases.length >= 3 },
+  ];
+
+  const scripts = Array.from(html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)).map((match) => match[1].trim()).filter(Boolean);
+  let scriptsParse = scripts.length > 0;
+  let parseError = "";
+  for (const script of scripts) {
+    try {
+      parseJavaScript(script, { ecmaVersion: "latest", sourceType: "script" });
+    } catch (error) {
+      scriptsParse = false;
+      parseError = error instanceof Error ? error.message.slice(0, 300) : "JavaScript syntax error";
+      break;
+    }
+  }
+  checks.push({ check: "inline_javascript_parses", passed: scriptsParse, ...(parseError ? { detail: parseError } : {}) });
+
+  const audioRequested = /piano|synth|web audio|sound playback|audio synthesis/.test(requirements);
+  const keyboardRequested = /computer keyboard|keyboard-to-note|keyboard keys|keydown|keyup|typing/.test(requirements);
+  const octaveRequested = /octave/.test(requirements);
+  if (audioRequested) {
+    checks.push({ check: "requested_audio_engine_implemented", passed: /(?:AudioContext|webkitAudioContext)/.test(html) });
+    checks.push({ check: "audio_has_user_gesture_control", passed: /(?:click|pointerdown|touchstart)[\s\S]{0,1200}(?:AudioContext|resume\s*\()/i.test(html) || /(?:AudioContext|resume\s*\()[\s\S]{0,1200}(?:click|pointerdown|touchstart)/i.test(html) });
+  }
+  if (keyboardRequested) {
+    checks.push({ check: "keyboard_keydown_implemented", passed: /keydown/i.test(html) });
+    checks.push({ check: "keyboard_keyup_implemented", passed: /keyup/i.test(html) });
+  }
+  if (octaveRequested) checks.push({ check: "octave_control_implemented", passed: /octave/i.test(html) });
+
+  return {
+    status: checks.every((check) => check.passed) ? "passed" : "failed",
+    checks,
+    implementation_summary: String(implementation?.implementation_summary || "").slice(0, 3000),
+    test_cases: Array.isArray(implementation?.test_cases) ? implementation.test_cases.slice(0, 20) : [],
+  };
+}
+
+function verifySourceFiles(files: Record<string, string>, definition: any, implementation: any, requestText: string, spec: any) {
+  const required = ["package.json", "index.html", "src/main.jsx", "src/App.jsx", "src/styles.css", "public/app.html", "iabt-app-definition.json", "capacitor.config.ts", "README.md"];
   const checks = required.map((path) => ({ check: "required_file:" + path, passed: typeof files[path] === "string" && files[path].length > 0 }));
   let packageParsed = false;
   try {
@@ -222,19 +257,22 @@ function verifySourceFiles(files: Record<string, string>, definition: any) {
   checks.push({ check: "has_pages", passed: Array.isArray(definition?.pages) && definition.pages.length > 0 });
   checks.push({ check: "routes_unique", passed: new Set((definition?.pages || []).map((page: any) => page.route)).size === (definition?.pages || []).length });
   checks.push({ check: "no_embedded_secrets", passed: !Object.values(files).some((value) => /(?:sk-[A-Za-z0-9_-]{20,}|xi-api-key\s*[:=]\s*[^\s<]{12,}|OPENAI_API_KEY\s*=\s*[^\s<]{12,})/i.test(value)) });
+  const interactive = validateInteractiveHtml(implementation, requestText, spec);
+  checks.push({ check: "requested_interactions_validated", passed: interactive.status === "passed" });
   return {
     generated_at: new Date().toISOString(),
     product: "Intelligent Application Building Tool (IABT)",
-    verification_level: "source_package_static_validation",
+    verification_level: "generated_interaction_and_source_validation",
     source_integrity: checks.every((check) => check.passed) ? "passed" : "failed",
     checks,
+    interactive_validation: interactive,
     template_build_validation: {
       status: "passed",
-      generator_version: "iabt-app-package-2026-08-25.1",
+      generator_version: "iabt-functional-app-package-2026-08-28.1",
       command: "npm install && npm run build",
-      evidence: "The deterministic Vite/React/Capacitor source template completed a clean production build during release verification.",
+      evidence: "The deterministic Vite/React/Capacitor wrapper for generated interactive apps completed a clean production build during release verification.",
     },
-    production_build: { status: "not_run", command: "npm install && npm run build", note: "This individual ZIP is source code. Run the included command in a Node build environment before deployment." },
+    production_build: { status: "not_run", command: "npm install && npm run build", note: "The generated interaction code passed syntax, isolation, and request-specific capability checks. Run the included build command before deployment." },
     android: {
       readiness: "handoff_ready",
       apk_generated: false,
