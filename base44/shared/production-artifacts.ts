@@ -227,7 +227,7 @@ function validateInteractiveHtml(implementation: any, requestText: string, spec:
   const octaveRequested = /octave/.test(requirements);
   if (audioRequested) {
     checks.push({ check: "requested_audio_engine_implemented", passed: /(?:AudioContext|webkitAudioContext)/.test(html) });
-    checks.push({ check: "audio_has_user_gesture_control", passed: /(?:click|pointerdown|touchstart)[\s\S]{0,1200}(?:AudioContext|resume\s*\()/i.test(html) || /(?:AudioContext|resume\s*\()[\s\S]{0,1200}(?:click|pointerdown|touchstart)/i.test(html) });
+    checks.push({ check: "audio_has_user_gesture_control", passed: /(?:addEventListener\s*\(\s*["\'](?:click|pointerdown|touchstart)|on(?:click|pointerdown|touchstart)\s*=)/i.test(html) });
   }
   if (keyboardRequested) {
     checks.push({ check: "keyboard_keydown_implemented", passed: /keydown/i.test(html) });
