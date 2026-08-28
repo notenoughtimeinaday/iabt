@@ -190,6 +190,16 @@ function ArtifactPreview({ artifact }) {
   if (url && (kind === "audio" || mime.startsWith("audio/"))) {
     return <audio className="creator-artifact-audio" src={url} controls preload="metadata" />;
   }
+  if (mime === "text/html" && artifact.content) {
+    return (
+      <iframe
+        className="creator-artifact-app-preview"
+        title={artifact.name || "Interactive application preview"}
+        srcDoc={artifact.content}
+        sandbox="allow-scripts"
+      />
+    );
+  }
   if (artifact.content) {
     return <pre className="creator-artifact-content">{artifact.content}</pre>;
   }
