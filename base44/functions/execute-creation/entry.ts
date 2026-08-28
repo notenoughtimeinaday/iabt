@@ -226,6 +226,7 @@ async function saveGeneratedProject(service: any, user: any, plan: any, definiti
 
 Deno.serve(async (req) => {
   let base44: any = null;
+  let user: any = null;
   let service: any = null;
   let plan: any = null;
   let job: any = null;
@@ -240,7 +241,7 @@ Deno.serve(async (req) => {
     }
 
     base44 = createClientFromRequest(req);
-    const user = await requireUser(base44);
+    user = await requireUser(base44);
     service = base44.asServiceRole;
     const body = await req.json().catch(() => ({}));
     const planId = clean(body?.plan_id, 200);
@@ -600,9 +601,10 @@ Deno.serve(async (req) => {
             evidence: { job_status: job.status, operation_class: "safe_internal_generation" },
           }).catch(() => null);
           retryIncidentId = String(incident?.id || retryIncidentId);
-          job = await service.entities.GenerationJob.update(job.id, {
+          const updatedJob = await service.entities.GenerationJob.update(job.id, {
             stage: "Temporary internal failure detected; retrying safely (" + retry_count + "/2)",
-          });
+          }).catch(() => null);
+          if (updatedJob) job = updatedJob;
         },
         onRecovered: async ({ retry_count }) => {
           if (retryIncidentId) {
