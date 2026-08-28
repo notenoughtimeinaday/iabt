@@ -1,6 +1,6 @@
 import { secrets } from "base44:runtime";
 
-export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-28.2";
+export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-28.3";
 export const CREATION_QUOTE_TTL_MS = 30 * 60 * 1000;
 export const LUMA_MODEL = "ray-3.2";
 export const LUMA_API_BASE = "https://agents.lumalabs.ai/v1";
@@ -110,33 +110,69 @@ export function getAudioReadiness() {
 export async function verifyElevenLabsAuthentication() {
   const apiKey = String(secrets.get("ELEVENLABS_API_KEY") || "").trim();
   if (!apiKey) {
-    return { checked: false, authenticated: false, status: 0, error_code: "elevenlabs_key_missing" };
+    return {
+      checked: false,
+      authenticated: false,
+      music_api_eligible: false,
+      subscription_class: "unknown",
+      status: 0,
+      error_code: "elevenlabs_key_missing",
+    };
   }
   try {
     const response = await fetch("https://api.elevenlabs.io/v1/user/subscription", {
       method: "GET",
       headers: { "xi-api-key": apiKey },
     });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {
+        checked: true,
+        authenticated: false,
+        music_api_eligible: false,
+        subscription_class: "unknown",
+        status: response.status,
+        error_code:
+          response.status === 401
+            ? "elevenlabs_authentication_failed"
+            : response.status === 403
+              ? "elevenlabs_access_denied"
+              : response.status === 402
+                ? "elevenlabs_insufficient_balance"
+                : response.status === 429
+                  ? "elevenlabs_rate_limited"
+                  : response.status >= 500
+                    ? "elevenlabs_provider_unavailable"
+                    : "elevenlabs_connection_check_failed",
+      };
+    }
+
+    const tier = String(payload?.tier || "").trim().toLowerCase();
+    const subscriptionStatus = String(payload?.status || "").trim().toLowerCase();
+    const paidTier = Boolean(tier) && tier !== "free";
+    const activeSubscription = !subscriptionStatus || ["active", "trialing"].includes(subscriptionStatus);
+    const musicApiEligible = paidTier && activeSubscription;
     return {
       checked: true,
-      authenticated: response.ok,
+      authenticated: true,
+      music_api_eligible: musicApiEligible,
+      subscription_class: paidTier ? "paid" : tier === "free" ? "free" : "unknown",
       status: response.status,
-      error_code: response.ok
+      error_code: musicApiEligible
         ? ""
-        : response.status === 401
-          ? "elevenlabs_authentication_failed"
-          : response.status === 403
-            ? "elevenlabs_access_denied"
-            : response.status === 402
-              ? "elevenlabs_insufficient_balance"
-              : response.status === 429
-                ? "elevenlabs_rate_limited"
-                : response.status >= 500
-                  ? "elevenlabs_provider_unavailable"
-                  : "elevenlabs_connection_check_failed",
+        : tier === "free"
+          ? "elevenlabs_paid_subscription_required"
+          : "elevenlabs_subscription_inactive",
     };
   } catch {
-    return { checked: true, authenticated: false, status: 0, error_code: "elevenlabs_provider_unavailable" };
+    return {
+      checked: true,
+      authenticated: false,
+      music_api_eligible: false,
+      subscription_class: "unknown",
+      status: 0,
+      error_code: "elevenlabs_provider_unavailable",
+    };
   }
 }
 
@@ -541,6 +577,7 @@ export async function planRequest(base44: any, requestText: string, context: any
 type CreationCapabilityOptions = {
   ownerDemo?: boolean;
   audioAuthenticated?: boolean;
+  audioMusicApiEligible?: boolean;
   audioErrorCode?: string;
 };
 
@@ -584,16 +621,18 @@ export function getCreationCapabilities(options: CreationCapabilityOptions = {})
 
   const audioReadiness = getAudioReadiness();
   const audioAuthenticationReady = options.audioAuthenticated !== false;
+  const audioMusicApiEligible = options.audioMusicApiEligible !== false;
+  const audioProviderReady = audioAuthenticationReady && audioMusicApiEligible;
   const audioErrorCode = String(options.audioErrorCode || "").trim();
   const audioBlockers = Array.from(new Set([
     ...audioReadiness.blocker_codes,
     ...(audioErrorCode ? [audioErrorCode] : []),
   ]));
   const audioOwnerDemo = options.ownerDemo === true &&
-    audioAuthenticationReady &&
+    audioProviderReady &&
     audioReadiness.audio_technical_ready &&
     !audioReadiness.audio_commercial_ready;
-  const audioRenderReady = audioAuthenticationReady && (audioReadiness.audio_commercial_ready || audioOwnerDemo);
+  const audioRenderReady = audioProviderReady && (audioReadiness.audio_commercial_ready || audioOwnerDemo);
   const audio = audioRenderReady
     ? {
         id: audioOwnerDemo ? "audio-iabt-owner-demo" : "audio-iabt-managed",
@@ -620,7 +659,11 @@ export function getCreationCapabilities(options: CreationCapabilityOptions = {})
           ? "ElevenLabs rejected the configured API key. Replace or rotate ELEVENLABS_API_KEY before requesting a playable MP3."
           : audioErrorCode === "elevenlabs_access_denied"
             ? "The ElevenLabs key authenticated but lacks permission for this audio request. Update its permissions or account access."
-            : "Create renderer-ready audio direction and production notes. No playable audio is claimed until the managed renderer is technically configured.",
+            : audioErrorCode === "elevenlabs_paid_subscription_required"
+              ? "The ElevenLabs key is valid, but Music API access requires a paid ElevenLabs subscription. Upgrade the provider account before requesting a playable MP3."
+              : audioErrorCode === "elevenlabs_subscription_inactive"
+                ? "The ElevenLabs key is valid, but its paid subscription is not active. Restore the provider subscription before requesting a playable MP3."
+                : "Create renderer-ready audio direction and production notes. No playable audio is claimed until the managed renderer is technically configured.",
         provider: "iabt-preproduction",
         provider_ready: true,
         render_ready: false,
