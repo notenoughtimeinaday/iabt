@@ -241,6 +241,7 @@ export default function Studio() {
   const [refreshingJobs, setRefreshingJobs] = useState({});
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [systemAlert, setSystemAlert] = useState(null);
 
   const effectiveMode = targetProjectId ? "app" : mode;
   const currentMode = MODE_OPTIONS.find((item) => item.id === effectiveMode) || MODE_OPTIONS[0];
@@ -543,6 +544,16 @@ export default function Studio() {
       setQuoteAccepted(false);
       await loadResources(conversation?.id, true);
     } catch (error) {
+      const failure = error?.response?.data || error?.data || {};
+      if (failure?.self_diagnosis) {
+        setSystemAlert({
+          message: failure.self_diagnosis.safe_message || errorMessage(error),
+          category: failure.self_diagnosis.category || "unknown",
+          recovery: failure.self_diagnosis.recovery_action || "manual_review",
+          incidentId: failure.incident_id || "",
+          creditsRestored: failure.credits_restored === true,
+        });
+      }
       toast({ title: "Creation did not start", description: errorMessage(error), variant: "destructive" });
     } finally {
       setApprovalBusy(false);
@@ -646,6 +657,21 @@ export default function Studio() {
         </header>
 
         <section className="creator-conversation">
+          {systemAlert ? (
+            <div className="creator-system-alert" role="status">
+              <Gauge />
+              <div>
+                <strong>IABT diagnosed this failure</strong>
+                <p>{systemAlert.message}</p>
+                <small>
+                  {readable(systemAlert.category)} · Recovery: {readable(systemAlert.recovery)}
+                  {systemAlert.creditsRestored ? " · Reserved credits restored" : ""}
+                  {systemAlert.incidentId ? " · Incident " + systemAlert.incidentId.slice(-8) : ""}
+                </small>
+              </div>
+              <button type="button" onClick={() => setSystemAlert(null)} aria-label="Dismiss diagnostic"><X /></button>
+            </div>
+          ) : null}
           {loadError ? (
             <div className="creator-error-state">
               <Bot />
