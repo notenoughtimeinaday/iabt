@@ -46,9 +46,7 @@ Deno.serve(async (req) => {
           : "api_key";
     const status = connectionMode === "not_selected"
       ? "not_connected"
-      : connectionMode === "iabt_managed"
-        ? "connected"
-        : "setup_required";
+      : "setup_required";
     const record = {
       user_id: user.id,
       user_email: user.email,
