@@ -777,6 +777,52 @@ export async function generateAppDefinition(base44: any, requestText: string, sp
   };
 }
 
+const INTERACTIVE_APP_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    implementation_summary: { type: "string" },
+    preview_html: { type: "string" },
+    test_cases: { type: "array", minItems: 3, maxItems: 20, items: { type: "string" } },
+  },
+  required: ["implementation_summary", "preview_html", "test_cases"],
+};
+
+export async function generateInteractiveApp(base44: any, requestText: string, spec: any, definition: any) {
+  const raw = await base44.asServiceRole.integrations.Core.InvokeLLM({
+    prompt: [
+      "Build the requested application as a complete self-contained interactive HTML implementation.",
+      "Return only structured data matching the schema.",
+      "preview_html must contain one full HTML document with inline CSS and plain inline JavaScript.",
+      "Implement the requested behavior now; do not write placeholders, TODOs, pseudocode, setup instructions, or feature descriptions in place of working interactions.",
+      "Use only browser-native APIs. Do not use CDNs, external scripts, external stylesheets, remote fonts, remote images, fetch, XMLHttpRequest, WebSocket, EventSource, dynamic imports, eval, or new Function.",
+      "Make it responsive, keyboard accessible, understandable without documentation, and safe to run inside a sandboxed preview.",
+      "For audio, initialize AudioContext only after a user gesture and provide a visible Start/Enable Audio control. Stop sustained sounds on keyup, blur, or visibility change.",
+      "For keyboard-controlled experiences, ignore repeated keydown events, ignore typing inside editable controls, prevent only the shortcuts the app actually consumes, and show the active mapping on screen.",
+      "Include useful empty, error, and disabled states when the request requires them.",
+      "",
+      "USER REQUEST:",
+      requestText,
+      "",
+      "NORMALIZED SPEC:",
+      JSON.stringify(spec).slice(0, 12000),
+      "",
+      "APP ARCHITECTURE:",
+      JSON.stringify(definition).slice(0, 16000),
+    ].join("\n"),
+    response_json_schema: INTERACTIVE_APP_SCHEMA,
+  });
+  const value = parseStructured(raw);
+  const previewHtml = String(value?.preview_html || "").trim();
+  if (previewHtml.length < 500) throw new Error("The application generator returned an incomplete interactive implementation.");
+  if (previewHtml.length > 300000) throw new Error("The generated interactive implementation exceeded the 300 KB safety limit.");
+  return {
+    implementation_summary: clampText(value?.implementation_summary, 3000, "Interactive application implementation"),
+    preview_html: previewHtml,
+    test_cases: stringList(value?.test_cases, [], 20),
+  };
+}
+
 export async function generateTextDeliverable(base44: any, requestText: string, spec: any, intent: string) {
   const modeInstruction = intent === "audio"
     ? "Create an audio preproduction package: concept, timing, structure, lyrics or spoken script when appropriate, instrumentation or voice direction, cue sheet, mix notes, and production checklist. State clearly that no audio file was rendered."
