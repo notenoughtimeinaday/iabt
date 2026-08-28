@@ -268,10 +268,14 @@ Deno.serve(async (req) => {
       plan.normalized_spec || {},
       { ownerDemo: ownerDemoRequested },
     );
+    const ownerDemoCapabilityIds = new Set([
+      "video-iabt-owner-demo",
+      "audio-iabt-owner-demo",
+    ]);
     const ownerDemoOnly = Boolean(
       ownerDemoRequested &&
       currentQuote?.capability?.owner_demo_only === true &&
-      String(plan.capability_id || "") === "video-iabt-owner-demo"
+      ownerDemoCapabilityIds.has(String(plan.capability_id || ""))
     );
     const capabilityChanged = Boolean(
       String(currentQuote?.capability?.provider || "") !== String(plan.provider || "") ||
@@ -786,7 +790,8 @@ Deno.serve(async (req) => {
         generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, audioDocumentMode)
       );
       if (plan.provider === "elevenlabs-music-v2") {
-        if (!getAudioReadiness().audio_ready) {
+        const audioReadiness = getAudioReadiness();
+        if (!audioReadiness.audio_ready && !(ownerDemoOnly && audioReadiness.audio_technical_ready)) {
           throw new Response(JSON.stringify({
             error: "Paid audio rendering is not currently configured. No provider request was sent.",
             code: "managed_audio_renderer_unavailable",
@@ -795,7 +800,12 @@ Deno.serve(async (req) => {
             headers: { "Content-Type": "application/json" },
           });
         }
-        const rendered = await submitElevenMusic(base44, plan.normalized_spec, plan.title);
+        const rendered = await submitElevenMusic(
+          base44,
+          plan.normalized_spec,
+          plan.title,
+          { ownerDemo: ownerDemoOnly },
+        );
         try {
           await recordProviderCommitment(base44, job, plan);
         } catch (spendError) {
@@ -822,6 +832,11 @@ Deno.serve(async (req) => {
               duration_seconds: rendered.settings.duration_seconds,
               model: ELEVENLABS_MUSIC_MODEL,
               song_id: rendered.song_id || null,
+              owner_demo_only: ownerDemoOnly,
+              commercial_release_approved: !ownerDemoOnly,
+              usage_restriction: ownerDemoOnly
+                ? "Private administrator test only; not approved for customer production, resale, advertising, or white-label release."
+                : "",
             },
           },
           {
