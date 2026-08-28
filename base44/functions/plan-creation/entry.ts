@@ -79,9 +79,11 @@ Deno.serve(async (req) => {
       ? await verifyElevenLabsAuthentication()
       : null;
     const audioAuthenticated = details.intent !== "audio" || audioProvider?.authenticated === true;
+    const audioMusicApiEligible = details.intent !== "audio" || audioProvider?.music_api_eligible === true;
     const quote = quoteFor(details.intent, details.normalized_spec, {
       ownerDemo: ownerDemoRequested,
       audioAuthenticated,
+      audioMusicApiEligible,
       audioErrorCode: audioProvider?.error_code,
     });
     const capability = quote.capability;
