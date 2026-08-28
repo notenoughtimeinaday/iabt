@@ -41,7 +41,11 @@ Deno.serve(async (req) => {
         billing_ready: audio.billing_ready,
         commercial_approved: audio.commercial_approved,
         cost_policy_configured: audio.cost_policy_configured,
-        render_ready: audio.audio_ready,
+        technical_ready: audio.audio_technical_ready,
+        commercial_ready: audio.audio_commercial_ready,
+        owner_demo_ready: ownerDemoRequested && audio.audio_technical_ready,
+        render_ready: audio.audio_ready || (ownerDemoRequested && audio.audio_technical_ready),
+        blocker_codes: audio.blocker_codes,
       },
       billing: {
         card_charged: false,
