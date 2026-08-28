@@ -29,6 +29,7 @@ import {
   Music2,
   Network,
   Palette,
+  PlugZap,
   Play,
   RefreshCw,
   Rocket,
@@ -51,6 +52,12 @@ const MODE_OPTIONS = [
   { id: "design", label: "Design", icon: Palette, description: "Professional visual systems and specifications" },
   { id: "gcode", label: "G-code", icon: Box, description: "Machine-ready planning with safety checks" },
   { id: "automation", label: "Automation", icon: Workflow, description: "Repeatable workflows and integrations" },
+];
+
+const AUTO_STARTERS = [
+  "Build a playable piano app that maps computer keyboard keys to piano notes and verifies the sound controls.",
+  "Create an advertising website for IABT with a merchandise store and customer-owned Stripe checkout.",
+  "Create the finished deliverable described in my prompt, choose the correct format, and verify it before delivery.",
 ];
 
 const STARTERS = {
@@ -163,15 +170,6 @@ function stepText(step, index) {
   return step?.title || step?.name || step?.description || "Production step " + (index + 1);
 }
 
-function capabilityForMode(capabilities, mode) {
-  return capabilities.find((item) =>
-    item?.intent === mode ||
-    item?.id === mode ||
-    item?.capability_id === mode ||
-    item?.type === mode
-  );
-}
-
 function StatusPill({ status }) {
   return <span className={"creator-status status-" + String(status || "draft")}>{readable(status || "draft")}</span>;
 }
@@ -219,7 +217,6 @@ export default function Studio() {
   const reduceMotion = useReducedMotion();
   const messageEndRef = useRef(null);
   const artifactAccessRef = useRef({});
-  const [mode, setMode] = useState("app");
   const [prompt, setPrompt] = useState("");
   const [conversations, setConversations] = useState([]);
   const [conversation, setConversation] = useState(null);
@@ -243,9 +240,14 @@ export default function Studio() {
   const [loadError, setLoadError] = useState("");
   const [systemAlert, setSystemAlert] = useState(null);
 
-  const effectiveMode = targetProjectId ? "app" : mode;
-  const currentMode = MODE_OPTIONS.find((item) => item.id === effectiveMode) || MODE_OPTIONS[0];
   const activePlan = plans[0] || null;
+  const currentIntent = targetProjectId ? "app" : activePlan?.intent || "auto";
+  const currentMode = MODE_OPTIONS.find((item) => item.id === currentIntent) || {
+    id: "auto",
+    label: "Automatic routing",
+    icon: Sparkles,
+    description: "JERICHO infers the correct output and tools from your objective.",
+  };
   const visibleMessages = messages.filter((message) => !message.hidden && message.role !== "system");
   const latestMessage = visibleMessages.at(-1);
   const assistantWorking = sending || latestMessage?.role === "user" ||
@@ -495,12 +497,11 @@ export default function Studio() {
         content: request,
         custom_context: [{
           type: "iabt_creation_request",
-          message: "The user selected " + effectiveMode + " mode. Use this exact conversation_id when calling plan-creation: " + target.id + "." + (targetProjectId ? " Revise the existing app by passing this exact top-level project_id to plan-creation: " + targetProjectId + "." : "") + " Plan and quote first. Never execute without explicit approval.",
+          message: "Infer the correct output type and required integrations from the user's objective. Use this exact conversation_id when calling plan-creation: " + target.id + "." + (targetProjectId ? " This is an existing app revision: pass this exact top-level project_id to inspect-project and plan-creation: " + targetProjectId + ", and keep selected_mode as app for the revision." : " Do not invent or pass selected_mode; let the server infer intent from the full request.") + " Plan and quote first. Never execute without explicit approval.",
           data: {
-            mode: effectiveMode,
-            selected_mode: effectiveMode,
+            routing_mode: "automatic",
             conversation_id: target.id,
-            ...(targetProjectId ? { project_id: targetProjectId } : {}),
+            ...(targetProjectId ? { project_id: targetProjectId, selected_mode: "app" } : {}),
             approval_required: true,
             surface: "creator_studio",
           },
@@ -635,6 +636,7 @@ export default function Studio() {
             </span>
           </div>
           <Link to="/deliverables"><Download /> Deliverable library</Link>
+          <Link to="/integrations"><PlugZap /> Integrations</Link>
           <Link to="/"><ArrowLeft /> App projects</Link>
         </div>
       </aside>
@@ -651,6 +653,7 @@ export default function Studio() {
           <div className="creator-topbar-actions">
             <span className="creator-credit-chip"><Sparkles /> {remainingCredits} credits</span>
             <Link to="/deliverables" className="creator-builder-link"><Download /> Deliverables</Link>
+            <Link to="/integrations" className="creator-builder-link"><PlugZap /> Integrations</Link>
             <Link to="/" className="creator-builder-link"><AppWindow /> App projects</Link>
             <span className="creator-user">{user?.full_name || user?.email || "Creator"}</span>
           </div>
