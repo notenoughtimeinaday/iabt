@@ -21,7 +21,8 @@ The Intelligent Application Building Tool (IABT) is an autonomous creation and p
 - AI AppDefinition creation through JERICHO Studio's authenticated plan, quote, approval, and verification workflow
 - Account entitlements for Free, Builder, Pro, and Agency
 - Monthly IABT credit allowances, hourly safety limits, and one-time credit packs
-- Bounded self-healing with safe transient retries, durable incident fingerprints, user-visible diagnoses, credit-protection evidence, and JERICHO system-health inspection
+- Bounded self-healing with safe transient retries, durable incident fingerprints, user-visible diagnoses, credit-protection evidence, JERICHO system-health inspection, and pre-revision generated-project inspection
+- A user-scoped Integration Center that separates IABT billing from generated-project commerce, records provider cost ownership, and keeps authorization requirements out of the main Studio screen
 - Plan-enforced cloud-project and export access
 - Professional dark-neon JERICHO interface based on the canonical launch artwork
 - Professional Plans & Billing interface with visible IABT credit balances and private supplier economics
@@ -124,7 +125,7 @@ The public Trust & Legal Center is a prelaunch operational policy set. Before li
 
 ## Agentic creation direction
 
-JERICHO Studio is IABT's single creation surface. Generated applications are preserved as project records and delivered as AppDefinition JSON, Vite/React source ZIPs, and explicit build-readiness reports; the former Visual App Builder is retired from customer-facing routes. Documents are delivered in Markdown, DOCX, and PDF. Playable audio is available only when the managed audio provider and all commercial gates are active; otherwise IABT produces clearly labeled preproduction. Capability modules connect software development, integrations, original image/video/audio generation, documents, floor plans, simulators, and CAD/G-code workflows through an auditable planner → permission → sandbox → verification pipeline. Physical-output workflows require simulation and safety checks, and every provider remains subject to its technical, legal, and content-policy boundaries.
+JERICHO Studio is IABT's single prompt-first creation surface. Users describe the objective; JERICHO infers the output type and required tools instead of forcing an app/website/media/document mode. Generated applications are preserved as project records and delivered as AppDefinition JSON, Vite/React source ZIPs, and explicit build-readiness reports; the former Visual App Builder is retired from customer-facing routes. Documents are delivered in Markdown, DOCX, and PDF. Playable audio is available only when the managed audio provider and all commercial gates are active; otherwise IABT produces clearly labeled preproduction. Capability modules connect software development, integrations, original image/video/audio generation, documents, floor plans, simulators, and CAD/G-code workflows through an auditable planner → permission → sandbox → verification pipeline. Physical-output workflows require simulation and safety checks, and every provider remains subject to its technical, legal, and content-policy boundaries.
 
 ## Domain
 
