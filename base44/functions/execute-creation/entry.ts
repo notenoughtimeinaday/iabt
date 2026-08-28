@@ -5,6 +5,7 @@ import {
   LUMA_MODEL,
   executionKey,
   generateAppDefinition,
+  generateInteractiveApp,
   generateCodeBundle,
   generateGCodeDraft,
   generateImage,
@@ -575,6 +576,16 @@ Deno.serve(async (req) => {
 
     if (plan.intent === "app" || plan.intent === "website") {
       const definition = await generateAppDefinition(base44, plan.request_text, plan.normalized_spec);
+      job = await service.entities.GenerationJob.update(job.id, {
+        stage: "Building and validating requested interactions",
+        progress: 55,
+      });
+      const implementation = await generateInteractiveApp(
+        base44,
+        plan.request_text,
+        plan.normalized_spec,
+        definition,
+      );
       const project = await saveGeneratedProject(service, user, plan, definition);
       plan = await service.entities.CreationPlan.update(plan.id, {
         status: "executing",
@@ -583,10 +594,17 @@ Deno.serve(async (req) => {
       });
       job = await service.entities.GenerationJob.update(job.id, {
         project_id: project.id,
-        stage: "Project created; securing AppDefinition artifact",
+        stage: "Interactive app validated; securing deliverables",
         progress: 90,
       });
-      const appArtifacts = await createAppArtifactSet(base44, plan.title, definition);
+      const appArtifacts = await createAppArtifactSet(
+        base44,
+        plan.title,
+        definition,
+        implementation,
+        plan.request_text,
+        plan.normalized_spec,
+      );
       const ownedArtifacts = appArtifacts.map((artifact: any) => ({
         ...artifact,
         metadata: {
@@ -596,7 +614,7 @@ Deno.serve(async (req) => {
       }));
       return await finish(
         ownedArtifacts,
-        "IABT created a generated app project, AppDefinition, downloadable Vite/React source ZIP, and transparent build-readiness report.",
+        "IABT created a working interactive preview, generated project, AppDefinition, downloadable source ZIP, and request-specific validation report.",
       );
     }
 
