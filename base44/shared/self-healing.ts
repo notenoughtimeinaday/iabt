@@ -60,7 +60,12 @@ export function classifySystemFailure(error: any, fallbackMessage = "The operati
   let recovery_action = retryable ? "automatic_retry" : "manual_review";
   let safe_message = "IABT detected an internal production failure and protected the job for review.";
 
-  if (code === "elevenlabs_authentication_failed") {
+  if (code === "managed_llm_request_invalid") {
+    category = "provider";
+    retryable = false;
+    recovery_action = "manual_review";
+    safe_message = "IABT's managed AI rejected the internal generation request before producing content. The request schema and recovery path require review; the user's requested website was not the validation failure.";
+  } else if (code === "elevenlabs_authentication_failed") {
     category = "configuration";
     retryable = false;
     recovery_action = "manual_setup";
