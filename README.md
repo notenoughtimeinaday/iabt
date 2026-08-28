@@ -21,6 +21,7 @@ The Intelligent Application Building Tool (IABT) is an autonomous creation and p
 - AI AppDefinition creation through JERICHO Studio's authenticated plan, quote, approval, and verification workflow
 - Account entitlements for Free, Builder, Pro, and Agency
 - Monthly IABT credit allowances, hourly safety limits, and one-time credit packs
+- Bounded self-healing with safe transient retries, durable incident fingerprints, user-visible diagnoses, credit-protection evidence, and JERICHO system-health inspection
 - Plan-enforced cloud-project and export access
 - Professional dark-neon JERICHO interface based on the canonical launch artwork
 - Professional Plans & Billing interface with visible IABT credit balances and private supplier economics
@@ -37,7 +38,7 @@ The Intelligent Application Building Tool (IABT) is an autonomous creation and p
 - React + Vite frontend
 - Base44 SDK and Vite plugin
 - Base44 authentication
-- Owner-scoped `Project` and `AiUsage` entities
+- Owner-scoped `Project`, `AiUsage`, and `SystemIncident` entities
 - User-readable, administrator-managed `AccountEntitlement` entity
 - AI function at `base44/functions/generate-app/entry.ts`
 - Stripe functions under `base44/functions/stripe-*`
