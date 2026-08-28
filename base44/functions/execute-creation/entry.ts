@@ -1076,6 +1076,8 @@ Deno.serve(async (req) => {
     const audioSetupError = [
       "managed_audio_renderer_unavailable",
       "elevenlabs_insufficient_balance",
+      "elevenlabs_paid_subscription_required",
+      "elevenlabs_subscription_inactive",
       "elevenlabs_authentication_failed",
       "elevenlabs_access_denied",
     ].includes(errorCode);
