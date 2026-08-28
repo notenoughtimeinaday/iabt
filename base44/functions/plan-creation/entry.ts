@@ -6,6 +6,7 @@ import {
   quoteFor,
   requireUser,
   selectedCreationIntent,
+  verifyElevenLabsAuthentication,
 } from "../../shared/creation.ts";
 import { creditEligibility } from "../../shared/credit-policy.ts";
 import {
@@ -74,7 +75,14 @@ Deno.serve(async (req) => {
     await verifyProjectAccess(base44, user, projectId);
     const details = await planRequest(base44, requestText, context);
     const ownerDemoRequested = user.role === "admin";
-    const quote = quoteFor(details.intent, details.normalized_spec, { ownerDemo: ownerDemoRequested });
+    const audioProvider = details.intent === "audio"
+      ? await verifyElevenLabsAuthentication()
+      : null;
+    const audioAuthenticated = details.intent !== "audio" || audioProvider?.authenticated === true;
+    const quote = quoteFor(details.intent, details.normalized_spec, {
+      ownerDemo: ownerDemoRequested,
+      audioAuthenticated,
+    });
     const capability = quote.capability;
     const ownerDemoOnly = Boolean(capability.owner_demo_only && ownerDemoRequested);
     const entitlement = await getOrCreateEntitlement(base44, user);
@@ -314,7 +322,10 @@ Deno.serve(async (req) => {
           policy_version: commercialAssessment.policy.pricing_version,
         },
       },
-      capabilities: getCreationCapabilities({ ownerDemo: ownerDemoRequested }).map(publicCapability),
+      capabilities: getCreationCapabilities({
+        ownerDemo: ownerDemoRequested,
+        audioAuthenticated,
+      }).map(publicCapability),
       next_action: "Show the exact quote and plan to the user. Call execute-creation only after explicit approval.",
       billing: {
         card_charged: false,
