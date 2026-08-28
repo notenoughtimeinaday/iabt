@@ -619,16 +619,20 @@ Deno.serve(async (req) => {
     };
 
     if (plan.intent === "app" || plan.intent === "website") {
-      const definition = await generateAppDefinition(base44, plan.request_text, plan.normalized_spec);
+      const definition = await runSafeInternal("app_architecture_generation", () =>
+        generateAppDefinition(base44, plan.request_text, plan.normalized_spec)
+      );
       job = await service.entities.GenerationJob.update(job.id, {
         stage: "Building and validating requested interactions",
         progress: 55,
       });
-      const implementation = await generateInteractiveApp(
-        base44,
-        plan.request_text,
-        plan.normalized_spec,
-        definition,
+      const implementation = await runSafeInternal("interactive_app_generation", () =>
+        generateInteractiveApp(
+          base44,
+          plan.request_text,
+          plan.normalized_spec,
+          definition,
+        )
       );
       const project = await saveGeneratedProject(service, user, plan, definition);
       plan = await service.entities.CreationPlan.update(plan.id, {
@@ -674,7 +678,9 @@ Deno.serve(async (req) => {
           metadata: { prompt: clean(plan.normalized_spec?.creative_prompt || plan.request_text, 6000) },
         }, "IABT rendered the requested image.");
       } catch (imageError) {
-        const content = await generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, "design");
+        const content = await runSafeInternal("design_brief_generation", () =>
+          generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, "design")
+        );
         return await finish({
           name: clean(plan.title, 160) + " — visual production brief.md",
           kind: "document",
@@ -759,7 +765,9 @@ Deno.serve(async (req) => {
         }, { status: 202 });
       }
 
-      const content = await generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, "video");
+      const content = await runSafeInternal("video_brief_generation", () =>
+        generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, "video")
+      );
       return await finish({
         name: clean(plan.title, 160) + " — video preproduction.md",
         kind: "document",
@@ -772,7 +780,9 @@ Deno.serve(async (req) => {
 
     if (plan.intent === "audio") {
       const audioDocumentMode = plan.provider === "elevenlabs-music-v2" ? "audio-render" : "audio";
-      const content = await generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, audioDocumentMode);
+      const content = await runSafeInternal("audio_document_generation", () =>
+        generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, audioDocumentMode)
+      );
       if (plan.provider === "elevenlabs-music-v2") {
         if (!getAudioReadiness().audio_ready) {
           throw new Response(JSON.stringify({
@@ -834,7 +844,9 @@ Deno.serve(async (req) => {
     }
 
     if (plan.intent === "code" || plan.intent === "automation") {
-      const bundle = await generateCodeBundle(base44, plan.request_text, plan.normalized_spec);
+      const bundle = await runSafeInternal("code_bundle_generation", () =>
+        generateCodeBundle(base44, plan.request_text, plan.normalized_spec)
+      );
       return await finish({
         name: clean(plan.title, 160) + " — source bundle.json",
         kind: "code",
@@ -846,7 +858,9 @@ Deno.serve(async (req) => {
     }
 
     if (plan.intent === "gcode") {
-      const content = await generateGCodeDraft(base44, plan.request_text, plan.normalized_spec);
+      const content = await runSafeInternal("gcode_draft_generation", () =>
+        generateGCodeDraft(base44, plan.request_text, plan.normalized_spec)
+      );
       return await finish({
         name: clean(plan.title, 160) + " — simulation-first.nc",
         kind: "gcode",
@@ -858,7 +872,9 @@ Deno.serve(async (req) => {
     }
 
     if (plan.intent === "document") {
-      const content = await generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, "document");
+      const content = await runSafeInternal("document_generation", () =>
+        generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, "document")
+      );
       const artifacts = await createDocumentArtifactSet(base44, plan.title, content);
       return await finish(
         artifacts,
@@ -866,7 +882,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    const content = await generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, plan.intent);
+    const content = await runSafeInternal("general_deliverable_generation", () =>
+      generateTextDeliverable(base44, plan.request_text, plan.normalized_spec, plan.intent)
+    );
     return await finish({
       name: clean(plan.title, 160) + ".md",
       kind: "document",
