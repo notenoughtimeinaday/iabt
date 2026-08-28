@@ -918,10 +918,12 @@ export async function generateAppDefinition(base44: any, requestText: string, sp
     "NORMALIZED SPEC:",
     JSON.stringify(spec).slice(0, 12000),
   ].join("\n");
-  const raw = await base44.asServiceRole.integrations.Core.InvokeLLM({
+  const raw = await invokeStructuredWithRecovery(
+    base44,
     prompt,
-    response_json_schema: APP_SCHEMA,
-  });
+    APP_SCHEMA,
+    "Use top-level keys app, theme, pages, data, workflows, integrations, permissions, and implementation_notes. app has name and description. theme has primary, background, surface, text, and radius. Every page has name, route, layout set to column, and components using only Text, Input, Button, or ScannerInput. Every data item has name, description, and a fields string array. Every workflow has name, trigger, and a steps string array.",
+  );
   const value = parseStructured(raw);
   const usedRoutes = new Set<string>();
   const pages = (Array.isArray(value?.pages) ? value.pages : []).slice(0, 12).map((page: any, index: number) => ({
@@ -1073,20 +1075,23 @@ function safeFilePath(value: unknown, index: number) {
 }
 
 export async function generateCodeBundle(base44: any, requestText: string, spec: any) {
-  const raw = await base44.asServiceRole.integrations.Core.InvokeLLM({
-    prompt: [
-      "Generate a coherent source-code bundle for the request.",
-      "Include every essential file, secure defaults, input validation, error handling, setup steps, and verification. Do not claim code was executed.",
-      "Do not include secrets or absolute machine paths. Return only structured data.",
-      "",
-      "USER REQUEST:",
-      requestText,
-      "",
-      "NORMALIZED SPEC:",
-      JSON.stringify(spec).slice(0, 12000),
-    ].join("\n"),
-    response_json_schema: CODE_SCHEMA,
-  });
+  const prompt = [
+    "Generate a coherent source-code bundle for the request.",
+    "Include every essential file, secure defaults, input validation, error handling, setup steps, and verification. Do not claim code was executed.",
+    "Do not include secrets or absolute machine paths. Return only structured data.",
+    "",
+    "USER REQUEST:",
+    requestText,
+    "",
+    "NORMALIZED SPEC:",
+    JSON.stringify(spec).slice(0, 12000),
+  ].join("\n");
+  const raw = await invokeStructuredWithRecovery(
+    base44,
+    prompt,
+    CODE_SCHEMA,
+    "Use top-level keys summary, language, files, setup, verification, and limitations. files is a non-empty array whose objects each contain path, purpose, and content. setup, verification, and limitations are string arrays.",
+  );
   const value = parseStructured(raw);
   const files = (Array.isArray(value?.files) ? value.files : []).slice(0, 30).map((file: any, index: number) => ({
     path: safeFilePath(file?.path, index),
