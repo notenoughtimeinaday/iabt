@@ -538,7 +538,11 @@ export async function planRequest(base44: any, requestText: string, context: any
   }
 }
 
-type CreationCapabilityOptions = { ownerDemo?: boolean; audioAuthenticated?: boolean };
+type CreationCapabilityOptions = {
+  ownerDemo?: boolean;
+  audioAuthenticated?: boolean;
+  audioErrorCode?: string;
+};
 
 export function getCreationCapabilities(options: CreationCapabilityOptions = {}) {
   const media = getMediaReadiness();
@@ -580,6 +584,11 @@ export function getCreationCapabilities(options: CreationCapabilityOptions = {})
 
   const audioReadiness = getAudioReadiness();
   const audioAuthenticationReady = options.audioAuthenticated !== false;
+  const audioErrorCode = String(options.audioErrorCode || "").trim();
+  const audioBlockers = Array.from(new Set([
+    ...audioReadiness.blocker_codes,
+    ...(audioErrorCode ? [audioErrorCode] : []),
+  ]));
   const audioOwnerDemo = options.ownerDemo === true &&
     audioAuthenticationReady &&
     audioReadiness.audio_technical_ready &&
@@ -598,6 +607,7 @@ export function getCreationCapabilities(options: CreationCapabilityOptions = {})
         render_ready: true,
         owner_demo_only: audioOwnerDemo,
         commercial_ready: audioReadiness.audio_commercial_ready,
+        readiness_blockers: audioBlockers,
         fallback_available: true,
         output_kinds: ["audio", "document"],
         pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 },
@@ -606,12 +616,17 @@ export function getCreationCapabilities(options: CreationCapabilityOptions = {})
         id: "audio-preproduction",
         intent: "audio",
         name: "Audio preproduction",
-        description: "Create renderer-ready audio direction and production notes. No playable audio is claimed until the managed renderer is technically configured.",
+        description: audioErrorCode === "elevenlabs_authentication_failed"
+          ? "ElevenLabs rejected the configured API key. Replace or rotate ELEVENLABS_API_KEY before requesting a playable MP3."
+          : audioErrorCode === "elevenlabs_access_denied"
+            ? "The ElevenLabs key authenticated but lacks permission for this audio request. Update its permissions or account access."
+            : "Create renderer-ready audio direction and production notes. No playable audio is claimed until the managed renderer is technically configured.",
         provider: "iabt-preproduction",
         provider_ready: true,
         render_ready: false,
         owner_demo_only: false,
         commercial_ready: audioReadiness.audio_commercial_ready,
+        readiness_blockers: audioBlockers,
         fallback_available: true,
         output_kinds: ["document"],
         pricing: { currency: "USD", default_cents: 0, platform_fee_cents: 0 },
