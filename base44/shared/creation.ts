@@ -974,29 +974,32 @@ const INTERACTIVE_APP_SCHEMA = {
 };
 
 export async function generateInteractiveApp(base44: any, requestText: string, spec: any, definition: any) {
-  const raw = await base44.asServiceRole.integrations.Core.InvokeLLM({
-    prompt: [
-      "Build the requested application as a complete self-contained interactive HTML implementation.",
-      "Return only structured data matching the schema.",
-      "preview_html must contain one full HTML document with inline CSS and plain inline JavaScript.",
-      "Implement the requested behavior now; do not write placeholders, TODOs, pseudocode, setup instructions, or feature descriptions in place of working interactions.",
-      "Use only browser-native APIs. Do not use CDNs, external scripts, external stylesheets, remote fonts, remote images, fetch, XMLHttpRequest, WebSocket, EventSource, dynamic imports, eval, or new Function.",
-      "Make it responsive, keyboard accessible, understandable without documentation, and safe to run inside a sandboxed preview.",
-      "For audio, initialize AudioContext only after a user gesture and provide a visible Start/Enable Audio control. Stop sustained sounds on keyup, blur, or visibility change.",
-      "For keyboard-controlled experiences, ignore repeated keydown events, ignore typing inside editable controls, prevent only the shortcuts the app actually consumes, and show the active mapping on screen.",
-      "Include useful empty, error, and disabled states when the request requires them.",
-      "",
-      "USER REQUEST:",
-      requestText,
-      "",
-      "NORMALIZED SPEC:",
-      JSON.stringify(spec).slice(0, 12000),
-      "",
-      "APP ARCHITECTURE:",
-      JSON.stringify(definition).slice(0, 16000),
-    ].join("\n"),
-    response_json_schema: INTERACTIVE_APP_SCHEMA,
-  });
+  const prompt = [
+    "Build the requested application as a complete self-contained interactive HTML implementation.",
+    "Return only structured data matching the schema.",
+    "preview_html must contain one full HTML document with inline CSS and plain inline JavaScript.",
+    "Implement the requested behavior now; do not write placeholders, TODOs, pseudocode, setup instructions, or feature descriptions in place of working interactions.",
+    "Use only browser-native APIs. Do not use CDNs, external scripts, external stylesheets, remote fonts, remote images, fetch, XMLHttpRequest, WebSocket, EventSource, dynamic imports, eval, or new Function.",
+    "Make it responsive, keyboard accessible, understandable without documentation, and safe to run inside a sandboxed preview.",
+    "For audio, initialize AudioContext only after a user gesture and provide a visible Start/Enable Audio control. Stop sustained sounds on keyup, blur, or visibility change.",
+    "For keyboard-controlled experiences, ignore repeated keydown events, ignore typing inside editable controls, prevent only the shortcuts the app actually consumes, and show the active mapping on screen.",
+    "Include useful empty, error, and disabled states when the request requires them.",
+    "",
+    "USER REQUEST:",
+    requestText,
+    "",
+    "NORMALIZED SPEC:",
+    JSON.stringify(spec).slice(0, 12000),
+    "",
+    "APP ARCHITECTURE:",
+    JSON.stringify(definition).slice(0, 16000),
+  ].join("\n");
+  const raw = await invokeStructuredWithRecovery(
+    base44,
+    prompt,
+    INTERACTIVE_APP_SCHEMA,
+    "Use exactly three top-level keys: implementation_summary as a string, preview_html as one complete self-contained HTML document string, and test_cases as an array containing at least three test-description strings.",
+  );
   const value = parseStructured(raw);
   const previewHtml = String(value?.preview_html || "").trim();
   if (previewHtml.length < 500) throw new Error("The application generator returned an incomplete interactive implementation.");
