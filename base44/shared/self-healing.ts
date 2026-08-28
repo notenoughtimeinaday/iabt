@@ -15,7 +15,7 @@ const SETUP_CODES = new Set([
 function clean(value: unknown, max = 1000) {
   return String(value || "")
     .replace(/(?:sk|pk)_(?:live|test)_[A-Za-z0-9_-]+/gi, "[redacted]")
-    .replace(/(?:api[_-]?key|authorization|token|secret|password)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
+    .replace(/((?:api[_-]?key|authorization|token|secret|password))\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]")
     .replace(/[\r\n\t]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
