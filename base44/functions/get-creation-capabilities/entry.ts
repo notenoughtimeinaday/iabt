@@ -6,6 +6,7 @@ import {
   getMediaReadiness,
   publicCapability,
   requireUser,
+  verifyElevenLabsAuthentication,
 } from "../../shared/creation.ts";
 
 Deno.serve(async (req) => {
@@ -20,10 +21,17 @@ Deno.serve(async (req) => {
 
     const media = getMediaReadiness();
     const audio = getAudioReadiness();
+    const audioProvider = audio.audio_technical_ready
+      ? await verifyElevenLabsAuthentication()
+      : { checked: false, authenticated: false, status: 0, error_code: "audio_technical_setup_incomplete" };
+    const audioAuthenticated = audioProvider.authenticated === true;
     return Response.json({
       ok: true,
       pricing_version: CREATION_PRICING_VERSION,
-      capabilities: getCreationCapabilities({ ownerDemo: ownerDemoRequested }).map(publicCapability),
+      capabilities: getCreationCapabilities({
+        ownerDemo: ownerDemoRequested,
+        audioAuthenticated,
+      }).map(publicCapability),
       media: {
         renderer_connection_configured: media.luma_key_configured,
         paid_production_enabled: media.paid_media_enabled,
@@ -41,11 +49,17 @@ Deno.serve(async (req) => {
         billing_ready: audio.billing_ready,
         commercial_approved: audio.commercial_approved,
         cost_policy_configured: audio.cost_policy_configured,
-        technical_ready: audio.audio_technical_ready,
-        commercial_ready: audio.audio_commercial_ready,
-        owner_demo_ready: ownerDemoRequested && audio.audio_technical_ready,
-        render_ready: audio.audio_ready || (ownerDemoRequested && audio.audio_technical_ready),
-        blocker_codes: audio.blocker_codes,
+        technical_ready: audio.audio_technical_ready && audioAuthenticated,
+        commercial_ready: audio.audio_commercial_ready && audioAuthenticated,
+        owner_demo_ready: ownerDemoRequested && audio.audio_technical_ready && audioAuthenticated,
+        render_ready: audioAuthenticated && (audio.audio_ready || (ownerDemoRequested && audio.audio_technical_ready)),
+        provider_authentication_checked: audioProvider.checked,
+        provider_authenticated: audioAuthenticated,
+        provider_status: audioProvider.status,
+        blocker_codes: Array.from(new Set([
+          ...audio.blocker_codes,
+          ...(audioProvider.error_code ? [audioProvider.error_code] : []),
+        ])),
       },
       billing: {
         card_charged: false,
