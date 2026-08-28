@@ -31,6 +31,7 @@ Deno.serve(async (req) => {
       capabilities: getCreationCapabilities({
         ownerDemo: ownerDemoRequested,
         audioAuthenticated,
+        audioErrorCode: audioProvider.error_code,
       }).map(publicCapability),
       media: {
         renderer_connection_configured: media.luma_key_configured,
