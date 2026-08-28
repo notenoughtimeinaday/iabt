@@ -1,6 +1,5 @@
 import { createClientFromRequest } from "npm:@base44/sdk";
 import {
-  CREATION_PRICING_VERSION,
   ELEVENLABS_MUSIC_MODEL,
   LUMA_MODEL,
   executionKey,
@@ -326,7 +325,6 @@ Deno.serve(async (req) => {
     }
     if (
       acceptedPricing !== String(plan.pricing_version) ||
-      acceptedPricing !== CREATION_PRICING_VERSION ||
       acceptedTotal !== Number(plan.total_estimated_cost_cents)
     ) {
       return Response.json({
