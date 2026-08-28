@@ -328,6 +328,7 @@ Deno.serve(async (req) => {
       capabilities: getCreationCapabilities({
         ownerDemo: ownerDemoRequested,
         audioAuthenticated,
+        audioMusicApiEligible,
         audioErrorCode: audioProvider?.error_code,
       }).map(publicCapability),
       next_action: "Show the exact quote and plan to the user. Call execute-creation only after explicit approval.",
