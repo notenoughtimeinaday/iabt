@@ -1,0 +1,156 @@
+{
+  "name": "IntegrationConnection",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Owning Base44 user ID"
+    },
+    "user_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "github",
+        "stripe_commerce",
+        "openai",
+        "elevenlabs",
+        "luma",
+        "dns"
+      ]
+    },
+    "connection_mode": {
+      "type": "string",
+      "enum": [
+        "customer_account",
+        "iabt_managed",
+        "not_selected"
+      ],
+      "default": "not_selected"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "not_connected",
+        "setup_required",
+        "authorization_required",
+        "connected",
+        "degraded",
+        "revoked"
+      ],
+      "default": "not_connected"
+    },
+    "auth_method": {
+      "type": "string",
+      "enum": [
+        "oauth",
+        "api_key",
+        "platform_managed",
+        "scoped_token",
+        "guided_setup",
+        "none"
+      ],
+      "default": "none"
+    },
+    "cost_owner": {
+      "type": "string",
+      "enum": [
+        "customer",
+        "iabt",
+        "not_applicable"
+      ],
+      "default": "customer"
+    },
+    "external_account_label": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Non-secret account label only"
+    },
+    "scopes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "project_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "last_health_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_error_code": {
+      "type": "string",
+      "maxLength": 120
+    },
+    "connected_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "revoked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Sanitized non-secret integration metadata"
+    }
+  },
+  "required": [
+    "user_id",
+    "user_email",
+    "provider",
+    "connection_mode",
+    "status",
+    "auth_method",
+    "cost_owner"
+  ],
+  "rls": {
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
