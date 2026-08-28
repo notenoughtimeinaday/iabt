@@ -1,4 +1,5 @@
 import JSZip from "npm:jszip@3.10.1";
+import { parse as parseJavaScript } from "npm:acorn@8.15.0";
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from "npm:docx@9.5.1";
 import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1";
 
