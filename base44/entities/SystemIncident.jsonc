@@ -1,0 +1,176 @@
+{
+  "name": "SystemIncident",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "user_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "plan_id": {
+      "type": "string"
+    },
+    "job_id": {
+      "type": "string"
+    },
+    "conversation_id": {
+      "type": "string"
+    },
+    "fingerprint": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "transient",
+        "rate_limit",
+        "provider",
+        "configuration",
+        "validation",
+        "storage",
+        "billing",
+        "authorization",
+        "unknown"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "critical"
+      ],
+      "default": "error"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "detected",
+        "retrying",
+        "recovered",
+        "needs_setup",
+        "needs_review",
+        "resolved"
+      ],
+      "default": "detected"
+    },
+    "error_code": {
+      "type": "string"
+    },
+    "safe_message": {
+      "type": "string"
+    },
+    "technical_summary": {
+      "type": "string"
+    },
+    "retryable": {
+      "type": "boolean",
+      "default": false
+    },
+    "retry_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10,
+      "default": 0
+    },
+    "max_retry_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10,
+      "default": 0
+    },
+    "recovery_action": {
+      "type": "string",
+      "enum": [
+        "none",
+        "automatic_retry",
+        "credit_release",
+        "provider_tracking",
+        "artifact_reconciliation",
+        "manual_setup",
+        "manual_review"
+      ],
+      "default": "none"
+    },
+    "recovery_result": {
+      "type": "string"
+    },
+    "credits_protected": {
+      "type": "boolean",
+      "default": false
+    },
+    "occurrence_count": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "evidence": {
+      "type": "object"
+    },
+    "first_seen_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_seen_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "user_id",
+    "user_email",
+    "fingerprint",
+    "source",
+    "category",
+    "severity",
+    "status",
+    "safe_message",
+    "retryable",
+    "retry_count",
+    "max_retry_count",
+    "recovery_action",
+    "credits_protected",
+    "occurrence_count",
+    "first_seen_at",
+    "last_seen_at"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
