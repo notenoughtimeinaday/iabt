@@ -83,6 +83,13 @@ export function getAudioReadiness() {
   const billingReady = /^(1|true|yes|on)$/i.test(billingRaw);
   const commercialApproved = /^(1|true|yes|on)$/i.test(commercialRaw);
   const costConfigured = Number.isInteger(costPerMinute) && costPerMinute > 0 && costPerMinute <= 100000;
+  const blockerCodes = [
+    ...(!apiKey ? ["elevenlabs_key_missing"] : []),
+    ...(!paidAudioEnabled ? ["paid_audio_disabled"] : []),
+    ...(!billingReady ? ["audio_billing_not_ready"] : []),
+    ...(!costConfigured ? ["audio_cost_policy_invalid"] : []),
+    ...(!commercialApproved ? ["commercial_approval_pending"] : []),
+  ];
   return {
     api_key_configured: Boolean(apiKey),
     paid_audio_gate_configured: Boolean(paidAudioRaw),
@@ -96,6 +103,7 @@ export function getAudioReadiness() {
     audio_technical_ready: Boolean(apiKey) && paidAudioEnabled && billingReady && costConfigured,
     audio_commercial_ready: Boolean(apiKey) && paidAudioEnabled && billingReady && commercialApproved && costConfigured,
     audio_ready: Boolean(apiKey) && paidAudioEnabled && billingReady && commercialApproved && costConfigured,
+    blocker_codes: blockerCodes,
   };
 }
 
