@@ -19,6 +19,7 @@ import Legal from '@/pages/Legal';
 import AdminCompliance from '@/pages/AdminCompliance';
 import Integrations from '@/pages/Integrations';
 import LegalAcceptanceGate from '@/components/LegalAcceptanceGate';
+import OAuthConsent from '@/pages/OAuthConsent';
 import { Navigate, useLocation } from 'react-router-dom';
 // Add page imports here
 
@@ -68,6 +69,7 @@ const AuthenticatedApp = () => {
       <Route path="/privacy" element={<Legal />} />
       <Route path="/terms" element={<Legal />} />
       <Route path="/acceptable-use" element={<Legal />} />
+      <Route path="/oauth/consent" element={<OAuthConsent />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<LegalAcceptanceGate />}>
           <Route path="/" element={<Home />} />
