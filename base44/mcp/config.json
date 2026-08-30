@@ -1,3 +1,131 @@
 {
-  "auth": "oauth"
+  "auth": "oauth",
+  "login_path": null,
+  "consent_path": null,
+  "tools": {
+    "excluded_agents": [],
+    "entity_overrides": {
+      "AccountEntitlement": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "AiUsage": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "Asset": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "AutomationRun": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "AutomationRunbook": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "AutonomyPolicy": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "BillingEvent": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "CommercialPolicy": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "ConnectionAdapter": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "ConsentGrant": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "CreationArtifact": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "CreationPlan": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "GenerationJob": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "IntegrationConnection": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "PolicyAcceptance": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "Project": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "ProviderAgreement": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "ProviderSpendLedger": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "SystemIncident": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      },
+      "UsageLedger": {
+        "operations": [
+          "read"
+        ],
+        "description": null
+      }
+    },
+    "functions": []
+  }
 }
