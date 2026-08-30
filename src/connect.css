@@ -1,0 +1,201 @@
+/* Connect an AI assistant (MCP) instructions page */
+.connect-url-card {
+  margin-top: 22px;
+  padding: 22px 24px;
+  border: 1px solid rgba(143, 229, 255, .16);
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgba(12, 24, 41, .92), rgba(16, 13, 37, .9));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .2);
+}
+
+.connect-url-label {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 13px;
+  align-items: center;
+}
+
+.connect-url-label > svg {
+  width: 22px;
+  height: 22px;
+  color: #8fe5ff;
+}
+
+.connect-url-label strong {
+  display: block;
+  color: #f7fbff;
+  font-size: 1rem;
+}
+
+.connect-url-label small {
+  display: block;
+  margin-top: 3px;
+  color: #8fa4ba;
+  font-size: .86rem;
+}
+
+.connect-url-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.connect-url-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid rgba(143, 229, 255, .24);
+  border-radius: 12px;
+  outline: none;
+  color: #eaf4ff;
+  background: rgba(4, 11, 25, .88);
+  font: .92rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.connect-url-input:focus {
+  border-color: rgba(34, 199, 255, .65);
+  box-shadow: 0 0 0 3px rgba(34, 199, 255, .1);
+}
+
+.connect-copy-button {
+  min-height: 48px;
+  padding-inline: 18px;
+}
+
+.connect-clients {
+  margin-top: 28px;
+}
+
+.connect-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.connect-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border: 1px solid rgba(143, 229, 255, .18);
+  border-radius: 12px;
+  color: #c2cfdd;
+  background: rgba(8, 18, 38, .6);
+  font-size: .92rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 160ms ease;
+}
+
+.connect-tab:hover {
+  border-color: rgba(34, 199, 255, .42);
+  color: #fff;
+  background: rgba(34, 199, 255, .08);
+}
+
+.connect-tab.is-active {
+  border-color: rgba(34, 199, 255, .58);
+  color: #fff;
+  background: linear-gradient(145deg, rgba(14, 37, 62, .96), rgba(18, 18, 48, .96));
+  box-shadow: 0 0 24px rgba(34, 199, 255, .12);
+}
+
+.connect-tab svg {
+  width: 17px;
+  height: 17px;
+}
+
+.connect-steps {
+  padding: 26px 28px;
+  border: 1px solid rgba(143, 229, 255, .16);
+  border-radius: 22px;
+  background: linear-gradient(145deg, rgba(12, 24, 41, .92), rgba(16, 13, 37, .9));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .2);
+}
+
+.connect-steps-head {
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.connect-steps-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #8fe5ff;
+  background: rgba(34, 199, 255, .12);
+}
+
+.connect-steps-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.connect-steps-head small {
+  display: block;
+  color: #8398ae;
+  font-size: .76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.connect-steps-head h2 {
+  margin: 4px 0 0;
+  color: #f7fbff;
+  font-size: 1.2rem;
+}
+
+.connect-steps ol {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.connect-steps li {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.connect-steps li > span {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: #8fe5ff;
+  background: rgba(34, 199, 255, .1);
+  font-size: .86rem;
+  font-weight: 800;
+}
+
+.connect-steps li p {
+  margin: 4px 0 0;
+  color: #c2cfdd;
+  font-size: .96rem;
+  line-height: 1.65;
+}
+
+.connect-steps li p strong {
+  color: #eaf4ff;
+}
+
+@media (max-width: 680px) {
+  .connect-url-row {
+    grid-template-columns: 1fr;
+  }
+  .connect-copy-button {
+    width: 100%;
+  }
+}

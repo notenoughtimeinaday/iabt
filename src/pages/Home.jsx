@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   ArchiveRestore,
   ArrowRight,
+  Bot,
   Cloud,
   Copy,
   CreditCard,
@@ -254,6 +255,7 @@ export default function Home() {
           <Button size="sm" onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-1" /> JERICHO Studio</Button>
           <Button variant="outline" size="sm" onClick={() => navigate("/deliverables")}><Download className="h-4 w-4 mr-1" /> Deliverables</Button>
           <Button variant="outline" size="sm" onClick={() => navigate("/integrations")}><PlugZap className="h-4 w-4 mr-1" /> Integrations</Button>
+          <Button variant="outline" size="sm" onClick={() => navigate("/connect")}><Bot className="h-4 w-4 mr-1" /> Connect AI</Button>
           {entitlement && <span className="iabt-plan-badge">{entitlement.plan} plan</span>}
           {entitlement && <span className="iabt-credit-badge">{Number(entitlement.total_iabt_credits_remaining || 0).toLocaleString()} credits</span>}
           <Button variant="outline" size="sm" onClick={() => setBillingOpen(true)}>

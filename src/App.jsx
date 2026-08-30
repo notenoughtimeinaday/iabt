@@ -18,6 +18,7 @@ import Deliverables from '@/pages/Deliverables';
 import Legal from '@/pages/Legal';
 import AdminCompliance from '@/pages/AdminCompliance';
 import Integrations from '@/pages/Integrations';
+import Connect from '@/pages/Connect';
 import LegalAcceptanceGate from '@/components/LegalAcceptanceGate';
 import OAuthConsent from '@/pages/OAuthConsent';
 import { Navigate, useLocation } from 'react-router-dom';
@@ -76,6 +77,7 @@ const AuthenticatedApp = () => {
           <Route path="/studio" element={<Studio />} />
           <Route path="/deliverables" element={<Deliverables />} />
           <Route path="/integrations" element={<Integrations />} />
+          <Route path="/connect" element={<Connect />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/admin/compliance" element={<AdminCompliance />} />
         </Route>
