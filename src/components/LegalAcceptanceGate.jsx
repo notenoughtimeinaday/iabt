@@ -46,7 +46,7 @@ export default function LegalAcceptanceGate() {
         terms_accepted: true,
         privacy_acknowledged: true,
         acceptable_use_accepted: true,
-        acceptance_text: "I agree to the IABT Terms of Use and Acceptable Use Policy and acknowledge the Privacy Notice and AI-generated content disclosures.",
+        acceptance_text: "I agree to the IABT Terms of Use and Acceptable Use Policy and acknowledge the Privacy Notice, AI-generated content disclosures, and IABT Exchange mutual-consent and credential-verification terms.",
         accepted_at: new Date().toISOString(),
         source: "in_app",
       });
@@ -83,6 +83,7 @@ export default function LegalAcceptanceGate() {
           <span><CheckCircle2 /> Paid supplier work requires an explicit quote and purchased production credits.</span>
           <span><CheckCircle2 /> Failed work restores reserved credits when no durable output is delivered.</span>
           <span><CheckCircle2 /> High-impact, regulated, destructive, or physical actions require additional controls.</span>
+          <span><CheckCircle2 /> Exchange contact details remain private until a mutually accepted introduction.</span>
         </div>
         <label className="iabt-policy-check">
           <input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
