@@ -1,0 +1,90 @@
+{
+  "name": "RoomMessage",
+  "type": "object",
+  "properties": {
+    "room_id": {
+      "type": "string"
+    },
+    "sender_user_id": {
+      "type": "string"
+    },
+    "sender_alias": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "recipient_user_id": {
+      "type": "string"
+    },
+    "message": {
+      "type": "string",
+      "maxLength": 5000
+    },
+    "attachment_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "edited_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "sent",
+        "edited",
+        "deleted",
+        "moderated"
+      ],
+      "default": "sent"
+    }
+  },
+  "required": [
+    "room_id",
+    "sender_user_id",
+    "sender_alias",
+    "recipient_user_id",
+    "message",
+    "attachment_ids",
+    "created_at",
+    "status"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.sender_user_id": "{{user.id}}"
+        },
+        {
+          "data.recipient_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

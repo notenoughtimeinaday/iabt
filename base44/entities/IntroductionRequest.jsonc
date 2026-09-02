@@ -1,0 +1,162 @@
+{
+  "name": "IntroductionRequest",
+  "type": "object",
+  "properties": {
+    "match_id": {
+      "type": "string"
+    },
+    "project_need_id": {
+      "type": "string"
+    },
+    "requester_user_id": {
+      "type": "string"
+    },
+    "recipient_user_id": {
+      "type": "string"
+    },
+    "request_message": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "accepted",
+        "declined",
+        "withdrawn",
+        "expired",
+        "blocked"
+      ],
+      "default": "pending"
+    },
+    "requester_disclosure_consent": {
+      "type": "boolean",
+      "default": true
+    },
+    "recipient_disclosure_consent": {
+      "type": "boolean",
+      "default": false
+    },
+    "requester_disclosure_fields": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "full_name",
+          "email",
+          "phone",
+          "organization",
+          "calendar_link",
+          "linkedin",
+          "website",
+          "private_project_summary"
+        ]
+      },
+      "default": []
+    },
+    "recipient_disclosure_fields": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "full_name",
+          "email",
+          "phone",
+          "organization",
+          "calendar_link",
+          "linkedin",
+          "website"
+        ]
+      },
+      "default": []
+    },
+    "approved_disclosure_fields": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "full_name",
+          "email",
+          "phone",
+          "organization",
+          "calendar_link",
+          "linkedin",
+          "website",
+          "private_project_summary"
+        ]
+      },
+      "default": []
+    },
+    "requester_snapshot": {
+      "type": "object"
+    },
+    "recipient_snapshot": {
+      "type": "object"
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "responded_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "withdrawn_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "match_id",
+    "project_need_id",
+    "requester_user_id",
+    "recipient_user_id",
+    "request_message",
+    "status",
+    "requester_disclosure_consent",
+    "recipient_disclosure_consent",
+    "requester_disclosure_fields",
+    "recipient_disclosure_fields",
+    "approved_disclosure_fields",
+    "requester_snapshot",
+    "recipient_snapshot",
+    "requested_at"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.requester_user_id": "{{user.id}}"
+        },
+        {
+          "data.recipient_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

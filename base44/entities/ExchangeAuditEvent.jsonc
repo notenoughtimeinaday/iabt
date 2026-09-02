@@ -1,0 +1,99 @@
+{
+  "name": "ExchangeAuditEvent",
+  "type": "object",
+  "properties": {
+    "actor_user_id": {
+      "type": "string"
+    },
+    "participant_a_user_id": {
+      "type": "string"
+    },
+    "participant_b_user_id": {
+      "type": "string"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "profile_created",
+        "profile_updated",
+        "need_created",
+        "need_updated",
+        "matches_generated",
+        "introduction_requested",
+        "introduction_accepted",
+        "introduction_declined",
+        "introduction_withdrawn",
+        "disclosure_granted",
+        "room_created",
+        "message_sent",
+        "user_blocked",
+        "safety_reported",
+        "credential_submitted",
+        "credential_reviewed"
+      ]
+    },
+    "entity_type": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "entity_id": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "actor_user_id",
+    "event_type",
+    "entity_type",
+    "entity_id",
+    "summary",
+    "metadata",
+    "created_at"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.actor_user_id": "{{user.id}}"
+        },
+        {
+          "data.participant_a_user_id": "{{user.id}}"
+        },
+        {
+          "data.participant_b_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

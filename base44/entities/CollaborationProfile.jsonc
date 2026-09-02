@@ -1,0 +1,243 @@
+{
+  "name": "CollaborationProfile",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "Owning Base44 user ID"
+    },
+    "user_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "public_alias": {
+      "type": "string",
+      "maxLength": 80
+    },
+    "headline": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "organization": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "phone": {
+      "type": "string",
+      "maxLength": 60
+    },
+    "calendar_link": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "linkedin": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "website": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 100
+      },
+      "default": []
+    },
+    "industries": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 100
+      },
+      "default": []
+    },
+    "jurisdictions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 100
+      },
+      "default": []
+    },
+    "relationship_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "cofounder",
+          "advisor",
+          "paid_contractor",
+          "employee",
+          "equity_collaborator",
+          "institutional_partner",
+          "open_to_discussion"
+        ]
+      },
+      "default": []
+    },
+    "compensation_preferences": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "paid",
+          "equity",
+          "paid_plus_equity",
+          "advisory",
+          "volunteer",
+          "open_to_discussion"
+        ]
+      },
+      "default": []
+    },
+    "availability": {
+      "type": "string",
+      "enum": [
+        "unavailable",
+        "limited",
+        "part_time",
+        "full_time",
+        "project_based"
+      ],
+      "default": "project_based"
+    },
+    "project_stage_preferences": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "idea",
+          "prototype",
+          "beta",
+          "revenue",
+          "growth",
+          "regulated_pilot"
+        ]
+      },
+      "default": []
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "private",
+        "match_only",
+        "discoverable"
+      ],
+      "default": "match_only"
+    },
+    "verification_level": {
+      "type": "string",
+      "enum": [
+        "unverified",
+        "identity_verified",
+        "credential_verified",
+        "organization_verified"
+      ],
+      "default": "unverified"
+    },
+    "contact_disclosure_fields": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "full_name",
+          "email",
+          "phone",
+          "organization",
+          "calendar_link",
+          "linkedin",
+          "website"
+        ]
+      },
+      "default": [
+        "email"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "paused",
+        "suspended",
+        "deleted"
+      ],
+      "default": "draft"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "user_id",
+    "user_email",
+    "public_alias",
+    "headline",
+    "skills",
+    "industries",
+    "jurisdictions",
+    "relationship_types",
+    "compensation_preferences",
+    "availability",
+    "project_stage_preferences",
+    "visibility",
+    "verification_level",
+    "contact_disclosure_fields",
+    "status",
+    "created_at",
+    "updated_at"
+  ],
+  "rls": {
+    "create": {
+      "data.user_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

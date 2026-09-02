@@ -1,0 +1,97 @@
+{
+  "name": "MatchRecord",
+  "type": "object",
+  "properties": {
+    "project_need_id": {
+      "type": "string"
+    },
+    "owner_user_id": {
+      "type": "string"
+    },
+    "candidate_profile_id": {
+      "type": "string"
+    },
+    "candidate_user_id": {
+      "type": "string"
+    },
+    "total_score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "score_breakdown": {
+      "type": "object"
+    },
+    "hard_filter_results": {
+      "type": "object"
+    },
+    "ai_explanation": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "suggested",
+        "saved",
+        "dismissed",
+        "introduction_requested",
+        "connected",
+        "expired"
+      ],
+      "default": "suggested"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "project_need_id",
+    "owner_user_id",
+    "candidate_profile_id",
+    "candidate_user_id",
+    "total_score",
+    "score_breakdown",
+    "hard_filter_results",
+    "ai_explanation",
+    "status",
+    "generated_at"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.owner_user_id": "{{user.id}}"
+        },
+        {
+          "data.candidate_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

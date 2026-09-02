@@ -1,0 +1,190 @@
+{
+  "name": "ProjectNeed",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "description": "Optional IABT Project ID"
+    },
+    "owner_user_id": {
+      "type": "string"
+    },
+    "owner_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 160
+    },
+    "public_summary": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "private_summary": {
+      "type": "string",
+      "maxLength": 5000
+    },
+    "required_capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 120
+      },
+      "default": []
+    },
+    "mandatory_credentials": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 160
+      },
+      "default": []
+    },
+    "industry": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "jurisdictions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 100
+      },
+      "default": []
+    },
+    "project_stage": {
+      "type": "string",
+      "enum": [
+        "idea",
+        "prototype",
+        "beta",
+        "revenue",
+        "growth",
+        "regulated_pilot"
+      ],
+      "default": "idea"
+    },
+    "relationship_requested": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "cofounder",
+          "advisor",
+          "paid_contractor",
+          "employee",
+          "equity_collaborator",
+          "institutional_partner",
+          "open_to_discussion"
+        ]
+      },
+      "default": []
+    },
+    "compensation_model": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "paid",
+          "equity",
+          "paid_plus_equity",
+          "advisory",
+          "volunteer",
+          "open_to_discussion"
+        ]
+      },
+      "default": []
+    },
+    "time_commitment": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "private",
+        "match_only",
+        "discoverable"
+      ],
+      "default": "match_only"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "paused",
+        "filled",
+        "closed"
+      ],
+      "default": "draft"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "owner_user_id",
+    "owner_email",
+    "title",
+    "public_summary",
+    "required_capabilities",
+    "mandatory_credentials",
+    "industry",
+    "jurisdictions",
+    "project_stage",
+    "relationship_requested",
+    "compensation_model",
+    "visibility",
+    "status",
+    "created_at",
+    "updated_at"
+  ],
+  "rls": {
+    "create": {
+      "data.owner_user_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.owner_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.owner_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.owner_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

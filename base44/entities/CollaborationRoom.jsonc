@@ -1,0 +1,86 @@
+{
+  "name": "CollaborationRoom",
+  "type": "object",
+  "properties": {
+    "introduction_request_id": {
+      "type": "string"
+    },
+    "project_id": {
+      "type": "string"
+    },
+    "project_need_id": {
+      "type": "string"
+    },
+    "member_a_user_id": {
+      "type": "string"
+    },
+    "member_b_user_id": {
+      "type": "string"
+    },
+    "member_aliases": {
+      "type": "object"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "closed",
+        "suspended"
+      ],
+      "default": "active"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "closed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "last_message_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "introduction_request_id",
+    "project_need_id",
+    "member_a_user_id",
+    "member_b_user_id",
+    "member_aliases",
+    "status",
+    "created_at"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.member_a_user_id": "{{user.id}}"
+        },
+        {
+          "data.member_b_user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
