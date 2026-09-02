@@ -225,6 +225,7 @@ function validateInteractiveHtml(implementation: any, requestText: string, spec:
   const audioRequested = /piano|synth|web audio|sound playback|audio synthesis/.test(requirements);
   const keyboardRequested = /computer keyboard|keyboard-to-note|keyboard keys|keydown|keyup|typing/.test(requirements);
   const octaveRequested = /octave/.test(requirements);
+  const commerceRequested = /merch|store|shop|e-?commerce|shopping cart|sell products/.test(requirements);
   if (audioRequested) {
     checks.push({ check: "requested_audio_engine_implemented", passed: /(?:AudioContext|webkitAudioContext)/.test(html) });
     checks.push({ check: "audio_has_user_gesture_control", passed: /(?:addEventListener\s*\(\s*["\'](?:click|pointerdown|touchstart)|on(?:click|pointerdown|touchstart)\s*=)/i.test(html) });
@@ -234,6 +235,12 @@ function validateInteractiveHtml(implementation: any, requestText: string, spec:
     checks.push({ check: "keyboard_keyup_implemented", passed: /keyup/i.test(html) });
   }
   if (octaveRequested) checks.push({ check: "octave_control_implemented", passed: /octave/i.test(html) });
+  if (commerceRequested) {
+    checks.push({ check: "product_catalog_implemented", passed: /product|merchandise/i.test(html) && /add.{0,12}cart/i.test(html) });
+    checks.push({ check: "cart_quantity_implemented", passed: /quantity|qty|data-change/i.test(html) });
+    checks.push({ check: "cart_total_implemented", passed: /subtotal|total/i.test(html) });
+    checks.push({ check: "checkout_boundary_disclosed", passed: /checkout/i.test(html) && /preview|stripe|payment/i.test(html) });
+  }
 
   return {
     status: checks.every((check) => check.passed) ? "passed" : "failed",
@@ -263,6 +270,7 @@ function verifySourceFiles(files: Record<string, string>, definition: any, imple
     generated_at: new Date().toISOString(),
     product: "Intelligent Application Building Tool (IABT)",
     verification_level: "generated_interaction_and_source_validation",
+    generation_strategy: String(implementation?.generation_strategy || definition?.generation_strategy || "managed_structured_generation"),
     source_integrity: checks.every((check) => check.passed) ? "passed" : "failed",
     checks,
     interactive_validation: interactive,
@@ -319,7 +327,7 @@ export async function createAppArtifactSet(base44: any, title: string, definitio
       mime_type: "application/vnd.iabt+json",
       content: JSON.stringify(definition, null, 2),
       provider: "base44-managed-ai",
-      metadata: { schema_version: definition.schemaVersion, page_count: definition.pages.length, builder_ready: true, functional_source: true },
+      metadata: { schema_version: definition.schemaVersion, page_count: definition.pages.length, builder_ready: true, functional_source: true, generation_strategy: String(definition?.generation_strategy || "managed_structured_generation") },
     },
     {
       name: safeName(title) + " — Interactive Preview.html",
@@ -335,6 +343,7 @@ export async function createAppArtifactSet(base44: any, title: string, definitio
         implementation_summary: String(implementation?.implementation_summary || "").slice(0, 3000),
         test_cases: Array.isArray(implementation?.test_cases) ? implementation.test_cases.slice(0, 20) : [],
         validation_status: report.interactive_validation.status,
+        generation_strategy: report.generation_strategy,
       },
     },
     {
@@ -350,6 +359,7 @@ export async function createAppArtifactSet(base44: any, title: string, definitio
         android_readiness: report.android.readiness,
         apk_generated: false,
         aab_generated: false,
+        generation_strategy: report.generation_strategy,
       },
     },
     {
@@ -358,7 +368,7 @@ export async function createAppArtifactSet(base44: any, title: string, definitio
       mime_type: "application/json",
       content: JSON.stringify(report, null, 2),
       provider: "iabt-app-verifier",
-      metadata: { verification_level: report.verification_level, source_integrity: report.source_integrity, production_build_status: report.production_build.status },
+      metadata: { verification_level: report.verification_level, source_integrity: report.source_integrity, production_build_status: report.production_build.status, generation_strategy: report.generation_strategy },
     },
   ];
 }
