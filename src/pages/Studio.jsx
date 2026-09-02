@@ -870,6 +870,51 @@ export default function Studio() {
               <span><Sparkles /> {targetProjectId ? "Revision mode" : "Automatic routing"}</span>
               <Link to="/integrations"><PlugZap /> Connections</Link>
             </div>
+
+            {assetScopeId && (
+              <div className="creator-upload-dock">
+                <div className="creator-upload-head">
+                  <span><Paperclip /> Reference files</span>
+                  <small>{assets.length ? assets.length + " attached" : "Attach files before planning"}</small>
+                </div>
+                <FileUploader
+                  projectId={assetScopeId}
+                  conversationId={conversation?.id || ""}
+                  assetScope={targetProjectId ? "project" : "conversation"}
+                  compact
+                  onUploaded={() => conversation?.id && loadResources(conversation.id, true)}
+                />
+                {assets.length > 0 && (
+                  <div className="creator-upload-list" aria-label="Attached files for JERICHO">
+                    {attachedAssets.map((asset) => {
+                      const Icon = assetIconFor(asset);
+                      return (
+                        <div key={asset.id} className="creator-upload-item">
+                          <Icon />
+                          <span><strong title={asset.name}>{asset.name}</strong><small>{readable(asset.kind || "file")} · {formatFileSize(asset.size_bytes)}</small></span>
+                          <button type="button" onClick={() => removeAttachedAsset(asset)} aria-label={"Remove " + asset.name}>
+                            <Trash2 />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {assets.length > attachedAssets.length && <em>+{assets.length - attachedAssets.length} more files available to this conversation</em>}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <label className={"creator-advancement-toggle " + (softwareAdvancementEnabled ? "is-on" : "") }>
+              <input
+                type="checkbox"
+                checked={softwareAdvancementEnabled}
+                onChange={(event) => setSoftwareAdvancementEnabled(event.target.checked)}
+              />
+              <span><ShieldCheck /></span>
+              <strong>Bounded software advancement</strong>
+              <small>JERICHO may plan, repair, test, and update safe internal project work; protected actions still stop for approval.</small>
+            </label>
+
             <textarea
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
@@ -883,7 +928,7 @@ export default function Studio() {
               maxLength={12000}
             />
             <div className="creator-composer-foot">
-              <span><Check /> Output, integrations, cost, and verification are decided from your objective.</span>
+              <span><Check /> Files, bounded autonomy, cost, and verification are included before approval.</span>
               <Button type="submit" disabled={!prompt.trim() || sending || conversationBusy}>
                 {sending ? <Loader2 className="animate-spin" /> : <Sparkles />}
                 Plan objective
