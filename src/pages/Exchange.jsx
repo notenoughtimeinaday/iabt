@@ -495,6 +495,68 @@ export default function Exchange() {
 
             {tab === "rooms" && <section className="exchange-panel"><div className="exchange-panel-title"><div><p className="exchange-eyebrow">Private collaboration</p><h2>Your rooms</h2><p>Rooms open only after a mutually accepted introduction.</p></div></div>{(data?.rooms || []).length ? <div className="exchange-room-grid">{data.rooms.map((room) => <button key={room.id} type="button" className="exchange-room-card" onClick={() => navigate("/exchange/rooms/" + room.id)}><MessageSquare /><span><small>{readable(room.status)}</small><strong>{room.other_alias}</strong><p>{room.need?.title || "Collaboration room"}</p></span><ChevronRight /></button>)}</div> : <Empty icon={MessageSquare} title="No collaboration rooms">A room will appear here after an introduction is accepted.</Empty>}</section>}
 
+            {tab === "safety" && (
+              <>
+                <section className="exchange-panel">
+                  <div className="exchange-panel-title">
+                    <div>
+                      <p className="exchange-eyebrow">Personal safety controls</p>
+                      <h2>Blocks and reports</h2>
+                      <p>Blocking immediately excludes both accounts from future matching and may suspend active rooms. Reports are reviewed separately and do not disclose your private profile to the reported member.</p>
+                    </div>
+                    <ShieldCheck />
+                  </div>
+                  {(data?.blocks || []).length ? (
+                    <div className="exchange-card-list">
+                      {data.blocks.map((block) => (
+                        <article key={block.id} className="exchange-intro-card">
+                          <div>
+                            <span className="exchange-status is-blocked">Blocked</span>
+                            <h3>Member {String(block.blocked_user_id || "").slice(0, 8)}</h3>
+                            <p>{block.reason || "You blocked this Exchange member."}</p>
+                            <small>{block.created_at ? `Blocked ${new Date(block.created_at).toLocaleString()}` : ""}</small>
+                          </div>
+                          <div className="exchange-card-actions">
+                            <Button variant="outline" onClick={() => unblockUser(block.blocked_user_id)} disabled={working === "unblock:" + block.blocked_user_id}>
+                              {working === "unblock:" + block.blocked_user_id ? <Loader2 className="animate-spin" /> : <CheckCircle2 />} Remove block
+                            </Button>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <Empty icon={ShieldCheck} title="No blocked members">Accounts you block will appear here so you can reverse the decision later.</Empty>
+                  )}
+                </section>
+
+                <section className="exchange-panel">
+                  <div className="exchange-panel-title">
+                    <div>
+                      <p className="exchange-eyebrow">Submitted concerns</p>
+                      <h2>Your safety reports</h2>
+                      <p>Reports are allegations pending review. Their status appears here without exposing administrator-only notes.</p>
+                    </div>
+                  </div>
+                  {(data?.safety_reports || []).length ? (
+                    <div className="exchange-card-list">
+                      {data.safety_reports.map((report) => (
+                        <article key={report.id} className="exchange-intro-card">
+                          <div>
+                            <span className={"exchange-status is-" + report.status}>{readable(report.status)}</span>
+                            <h3>{readable(report.reason)}</h3>
+                            <p>{report.description}</p>
+                            <small>{report.created_at ? new Date(report.created_at).toLocaleString() : ""}</small>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <Empty icon={ShieldCheck} title="No submitted reports">Use Report on a match or inside a collaboration room when conduct or information raises a concern.</Empty>
+                  )}
+                </section>
+              </>
+            )}
+
             {tab === "credentials" && <><form className="exchange-panel exchange-form" onSubmit={submitCredential}><div className="exchange-panel-title"><div><p className="exchange-eyebrow">Trust signals</p><h2>Submit a credential claim</h2><p>Claims remain unverified until reviewed through an official registry, issuing organization, or supporting document.</p></div></div><div className="exchange-form-grid"><label>Credential type<input value={credentialForm.credential_type} onChange={(e) => setCredentialForm({ ...credentialForm, credential_type: e.target.value })} required /></label><label>Jurisdiction<input value={credentialForm.jurisdiction} onChange={(e) => setCredentialForm({ ...credentialForm, jurisdiction: e.target.value })} /></label><label>Issuing authority<input value={credentialForm.issuing_authority} onChange={(e) => setCredentialForm({ ...credentialForm, issuing_authority: e.target.value })} required /></label><label>Official reference URL<input value={credentialForm.reference_url} onChange={(e) => setCredentialForm({ ...credentialForm, reference_url: e.target.value })} placeholder="https://…" /></label><label className="is-wide">Claim summary<textarea value={credentialForm.claim_summary} onChange={(e) => setCredentialForm({ ...credentialForm, claim_summary: e.target.value })} rows={4} required /></label></div><div className="exchange-form-actions"><Button type="submit" disabled={working === "credential"}>{working === "credential" ? <Loader2 className="animate-spin" /> : <KeyRound />} Submit for review</Button></div></form><section className="exchange-panel"><div className="exchange-panel-title"><div><h3>Your claims</h3><p>Only verified claims contribute to mandatory-credential matching.</p></div></div>{(data?.credentials || []).length ? <div className="exchange-card-list">{data.credentials.map((claim) => <article key={claim.id} className="exchange-credential-card"><BadgeCheck /><div><span className={"exchange-status is-" + claim.verification_status}>{readable(claim.verification_status)}</span><h3>{claim.credential_type}</h3><p>{claim.issuing_authority}{claim.jurisdiction ? " · " + claim.jurisdiction : ""}</p></div></article>)}</div> : <Empty icon={BadgeCheck} title="No credential claims">Add only credentials that are relevant to the work you want to perform.</Empty>}</section></>}
           </section>
         </div>
