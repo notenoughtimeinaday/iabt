@@ -48,7 +48,7 @@ export default function Legal() {
             <p>Last updated {IABT_POLICY_UPDATED}</p>
             <div className="iabt-legal-launch-note">
               <strong>Prelaunch policy set.</strong>
-              <span>These operational policies are built into IABT, but paid public launch remains gated on final review by licensed counsel and publication of verified privacy and support contact details.</span>
+              <span>These operational policies are built into IABT and verified business contact channels are published. Paid public launch remains gated on final review by licensed counsel and completion of the remaining payment and supplier controls.</span>
             </div>
           </div>
 
@@ -117,7 +117,15 @@ export default function Legal() {
           </Section>
 
           <Section id="contact" title="Contact and complaints">
-            <p>Users may report privacy, safety, copyright, billing, or abuse concerns through the authenticated IABT support channel. Dedicated privacy, legal, and support addresses and the final operating-entity details must be verified and published before paid public launch.</p>
+            <p>IABT and JERICHO Studio are software products operated by Insured Spending, LLC. Public business contacts are monitored through the company's verified domain mailbox.</p>
+            <ul>
+              <li>Product and account support: <a href="mailto:support@insuredspending.org">support@insuredspending.org</a></li>
+              <li>Billing: <a href="mailto:billing@insuredspending.org">billing@insuredspending.org</a></li>
+              <li>Privacy requests: <a href="mailto:privacy@insuredspending.org">privacy@insuredspending.org</a></li>
+              <li>Legal notices: <a href="mailto:legal@insuredspending.org">legal@insuredspending.org</a></li>
+              <li>Security and abuse: <a href="mailto:security@insuredspending.org">security@insuredspending.org</a></li>
+            </ul>
+            <p>For response expectations and safe-reporting guidance, visit the <Link to="/support">Public Support Center</Link>.</p>
           </Section>
         </article>
       </main>
