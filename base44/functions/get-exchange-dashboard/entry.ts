@@ -78,6 +78,7 @@ Deno.serve(async (req) => {
       return {
         id: match.id,
         project_need_id: match.project_need_id,
+        candidate_user_id: String(match.candidate_user_id || ""),
         total_score: Number(match.total_score || 0),
         score_breakdown: match.score_breakdown || {},
         hard_filter_results: match.hard_filter_results || {},
