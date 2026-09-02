@@ -1,4 +1,4 @@
-export const SELF_HEALING_VERSION = "iabt-self-healing-2026-08-28.3";
+export const SELF_HEALING_VERSION = "iabt-self-healing-2026-09-02.4";
 
 const TRANSIENT_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const SETUP_CODES = new Set([
@@ -63,8 +63,8 @@ export function classifySystemFailure(error: any, fallbackMessage = "The operati
   if (code === "managed_llm_request_invalid") {
     category = "provider";
     retryable = false;
-    recovery_action = "manual_review";
-    safe_message = "IABT's managed AI rejected the internal generation request before producing content. The request schema and recovery path require review; the user's requested website was not the validation failure.";
+    recovery_action = "deterministic_recovery";
+    safe_message = "IABT's managed AI rejected the internal structured request. App and website production can continue through IABT's validated deterministic recovery path.";
   } else if (code === "elevenlabs_authentication_failed") {
     category = "configuration";
     retryable = false;
