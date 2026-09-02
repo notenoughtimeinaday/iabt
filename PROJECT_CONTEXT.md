@@ -40,7 +40,8 @@ IABT Exchange is an opt-in, privacy-preserving collaboration and team-formation 
 
 ### Exchange implementation
 
-- Frontend: `/exchange`, `/exchange/rooms/:roomId`, and owner-only `/admin/exchange`.
+- Frontend: `/exchange`, conversational `/exchange/assistant`, private `/exchange/rooms/:roomId`, and owner-only `/admin/exchange`.
+- Dedicated agent: `base44/agents/iabt_exchange.jsonc`, with narrow Exchange tools and action-time consent rules.
 - Core entities: `CollaborationProfile`, `ProjectNeed`, `MatchRecord`, `IntroductionRequest`, `CollaborationRoom`, `RoomMessage`, `CredentialClaim`, `ExchangeSafetyReport`, `ExchangeAuditEvent`, and `ExchangeBlock`.
 - Backend functions cover dashboard loading, profile and project-need management, JERICHO capability-gap analysis, matching, introductions, rooms and messages, credentials, blocking, reporting, and administrator review.
 - Legal policy version `2026-09-01.1` adds Exchange privacy, terms, consent, credential, and acceptable-use disclosures.
@@ -51,7 +52,7 @@ IABT Exchange is an opt-in, privacy-preserving collaboration and team-formation 
 - Perform authenticated two-user end-to-end testing with separate accounts.
 - Review privacy and collaboration terms with licensed counsel before public beta.
 - Configure transactional notifications for introduction requests and messages.
-- Enable selected App MCP custom tools through the Base44 MCP dashboard only after function testing; publishing and reconnecting assistants require separate explicit approval.
+- Enable the dedicated Exchange agent and selected App MCP tools through the Base44 MCP dashboard only after authenticated function testing; publishing and reconnecting assistants require separate explicit approval.
 - Do not seed fake public professional profiles in production.
 
 ## External setup
