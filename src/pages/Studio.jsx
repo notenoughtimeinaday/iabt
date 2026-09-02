@@ -592,6 +592,19 @@ export default function Studio() {
     }
   }
 
+  async function removeAttachedAsset(asset) {
+    if (!asset?.id) return;
+    const confirmed = window.confirm(`Remove "${asset.name || "this file"}" from this JERICHO context?`);
+    if (!confirmed) return;
+    try {
+      await base44.entities.Asset.delete(asset.id);
+      setAssets((current) => current.filter((item) => item.id !== asset.id));
+      toast({ title: "File removed from JERICHO context" });
+    } catch (error) {
+      toast({ title: "File was not removed", description: errorMessage(error), variant: "destructive" });
+    }
+  }
+
   async function approvePlan() {
     if (!activePlan || !quoteAccepted || approvalBusy || quoteExpired) return;
 
