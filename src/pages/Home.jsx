@@ -33,6 +33,7 @@ import {
   normalizeAppDefinition,
 } from "@/lib/appDefinition";
 import { legacyTag, readLegacyProjects } from "@/lib/legacyProjects";
+import "@/home-exchange.css";
 
 export default function Home() {
   const navigate = useNavigate();
