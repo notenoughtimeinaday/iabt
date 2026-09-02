@@ -16,6 +16,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import "@/exchange.css";
+import "@/exchange-assistant.css";
 
 const EXCHANGE_AGENT = "iabt_exchange";
 const STARTERS = [
