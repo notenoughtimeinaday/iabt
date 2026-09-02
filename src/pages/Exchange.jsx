@@ -41,6 +41,7 @@ const TABS = [
   ["introductions", "Introductions", Inbox],
   ["rooms", "Rooms", MessageSquare],
   ["credentials", "Credentials", BadgeCheck],
+  ["safety", "Safety", ShieldCheck],
 ];
 
 const EMPTY_PROFILE = {
@@ -395,6 +396,24 @@ export default function Exchange() {
       await load();
     } catch (error) {
       toast({ title: "Block failed", description: errorMessage(error), variant: "destructive" });
+    } finally {
+      setWorking("");
+    }
+  }
+
+  async function unblockUser(userId) {
+    setWorking("unblock:" + userId);
+    try {
+      const response = await base44.functions.invoke("block-exchange-user", {
+        target_user_id: userId,
+        action: "unblock",
+      });
+      const next = payload(response);
+      if (!next?.ok) throw new Error(next?.error || "Member was not unblocked.");
+      toast({ title: "Block removed", description: "Future matching may include this member again when all other requirements are met." });
+      await load();
+    } catch (error) {
+      toast({ title: "Unblock failed", description: errorMessage(error), variant: "destructive" });
     } finally {
       setWorking("");
     }
