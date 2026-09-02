@@ -63,6 +63,8 @@ function artifactBase(user: any, plan: any, job: any, key: string) {
       execution_key: key,
       source_intent: plan.intent,
       plan_title: plan.title,
+      input_asset_ids: Array.isArray(plan?.normalized_spec?.input_asset_ids) ? plan.normalized_spec.input_asset_ids.slice(0, 12) : [],
+      software_advancement_enabled: plan?.normalized_spec?.software_advancement?.enabled === true,
       created_by: "iabt-orchestrator",
     },
     ephemeral: false,
@@ -421,6 +423,8 @@ Deno.serve(async (req) => {
       owner_demo_only: ownerDemoOnly,
       commercial_release_approved: commercialAssessment.allowed,
       ai_generated_output: true,
+      input_asset_ids: Array.isArray(plan.normalized_spec?.input_asset_ids) ? plan.normalized_spec.input_asset_ids.slice(0, 12) : [],
+      software_advancement_enabled: plan.normalized_spec?.software_advancement?.enabled === true,
     };
 
     job = await service.entities.GenerationJob.create({
