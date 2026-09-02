@@ -348,15 +348,18 @@ export default function Studio() {
   const loadResources = useCallback(async (conversationId, quiet = false) => {
     if (!conversationId) return;
     try {
-      const [planRows, jobRows, artifactRows, entitlementResponse] = await Promise.all([
+      const scopeId = assetScopeFor(conversationId, targetProjectId);
+      const [planRows, jobRows, artifactRows, assetRows, entitlementResponse] = await Promise.all([
         base44.entities.CreationPlan.filter({ conversation_id: conversationId }, "-created_date", 25),
         base44.entities.GenerationJob.filter({ conversation_id: conversationId }, "-created_date", 50),
         base44.entities.CreationArtifact.filter({ conversation_id: conversationId }, "-created_date", 100),
+        scopeId ? base44.entities.Asset.filter({ project_id: scopeId }, "-created_date", 100).catch(() => []) : Promise.resolve([]),
         base44.functions.invoke("get-account-entitlement", {}).catch(() => null),
       ]);
       setPlans(planRows || []);
       setJobs(jobRows || []);
       setArtifacts(artifactRows || []);
+      setAssets(assetRows || []);
       const entitlementPayload = entitlementResponse?.data || entitlementResponse;
       if (entitlementPayload?.entitlement) {
         setEntitlement(entitlementPayload.entitlement);
@@ -368,7 +371,7 @@ export default function Studio() {
         toast({ title: "Could not refresh this creation", description: errorMessage(error), variant: "destructive" });
       }
     }
-  }, [resolvePrivateArtifacts, toast]);
+  }, [resolvePrivateArtifacts, targetProjectId, toast]);
 
   const openConversation = useCallback(async (conversationId, quiet = false) => {
     if (!conversationId) return;
