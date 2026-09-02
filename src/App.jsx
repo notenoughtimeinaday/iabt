@@ -19,6 +19,9 @@ import Legal from '@/pages/Legal';
 import AdminCompliance from '@/pages/AdminCompliance';
 import Integrations from '@/pages/Integrations';
 import Connect from '@/pages/Connect';
+import Exchange from '@/pages/Exchange';
+import ExchangeRoom from '@/pages/ExchangeRoom';
+import AdminExchange from '@/pages/AdminExchange';
 import LegalAcceptanceGate from '@/components/LegalAcceptanceGate';
 import OAuthConsent from '@/pages/OAuthConsent';
 import { Navigate, useLocation } from 'react-router-dom';
@@ -78,8 +81,11 @@ const AuthenticatedApp = () => {
           <Route path="/deliverables" element={<Deliverables />} />
           <Route path="/integrations" element={<Integrations />} />
           <Route path="/connect" element={<Connect />} />
+          <Route path="/exchange" element={<Exchange />} />
+          <Route path="/exchange/rooms/:roomId" element={<ExchangeRoom />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/admin/compliance" element={<AdminCompliance />} />
+          <Route path="/admin/exchange" element={<AdminExchange />} />
         </Route>
       </Route>
       <Route path="*" element={<PageNotFound />} />
