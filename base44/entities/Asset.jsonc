@@ -18,6 +18,25 @@
       "type": "string",
       "title": "Project ID"
     },
+    "conversation_id": {
+      "type": "string",
+      "title": "JERICHO Conversation ID"
+    },
+    "source": {
+      "type": "string",
+      "title": "Upload Source",
+      "enum": [
+        "project_upload",
+        "jericho_conversation_upload",
+        "generated_artifact",
+        "import"
+      ],
+      "default": "project_upload"
+    },
+    "metadata": {
+      "type": "object",
+      "title": "Metadata"
+    },
     "file_url": {
       "type": "string",
       "title": "File URL"
