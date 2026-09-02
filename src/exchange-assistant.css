@@ -317,9 +317,14 @@
   resize: vertical;
   border: 1px solid #dfe2eb;
   border-radius: 13px;
+  background: #ffffff;
   color: #17142a;
   font-size: 12px;
   outline: none;
+}
+
+.exchange-assistant-compose textarea::placeholder {
+  color: #8a90a1;
 }
 
 .exchange-assistant-compose textarea:focus {

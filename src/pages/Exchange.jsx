@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   BadgeCheck,
   Ban,
+  Bot,
   BriefcaseBusiness,
   CheckCircle2,
   ChevronRight,
