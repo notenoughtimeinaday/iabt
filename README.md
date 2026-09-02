@@ -23,6 +23,7 @@ The Intelligent Application Building Tool (IABT) is an autonomous creation and p
 - Monthly IABT credit allowances, hourly safety limits, and one-time credit packs
 - Bounded self-healing with safe transient retries, durable incident fingerprints, user-visible diagnoses, credit-protection evidence, JERICHO system-health inspection, and pre-revision generated-project inspection
 - A user-scoped Integration Center that separates IABT billing from generated-project commerce, records provider cost ownership, and keeps authorization requirements out of the main Studio screen
+- IABT Exchange Beta: opt-in collaboration profiles, project capability needs, JERICHO gap analysis, deterministic explainable matching, mutual-consent introductions, private rooms, credential claims, blocking, safety reports, and owner-only review controls
 - Plan-enforced cloud-project and export access
 - Professional dark-neon JERICHO interface based on the canonical launch artwork
 - Professional Plans & Billing interface with visible IABT credit balances and private supplier economics
@@ -42,12 +43,24 @@ The Intelligent Application Building Tool (IABT) is an autonomous creation and p
 - Owner-scoped `Project`, `AiUsage`, and `SystemIncident` entities
 - User-readable, administrator-managed `AccountEntitlement` entity
 - AI function at `base44/functions/generate-app/entry.ts`
+- Exchange shared policy and matching logic at `base44/shared/exchange.ts`
+- Exchange functions under `base44/functions/*exchange*`, plus project-need, matching, introduction, room, message, credential, block, and report functions
 - Stripe functions under `base44/functions/stripe-*`
 - Shared Stripe mode/readiness guard at `base44/shared/stripe.ts`
 - AppDefinition schema version 1.0
 - Local draft recovery plus Base44 cloud persistence
 
 The AI functions use `OPENAI_API_KEY` and the OpenAI Responses API when that secret is configured. Without it, app generation falls back to Base44 managed AI. Every creation reserves authenticated-user IABT credits atomically, captures them only after durable output is verified, and restores them when work fails before a durable result. Usage is tracked in hourly safety and UTC monthly buckets. Paid subscriptions use eligible included credits first; Free-plan paid production and paid-plan overages use purchased credits.
+
+## IABT Exchange Beta
+
+Exchange is a separate collaboration module, not a financial pooling feature. It is available through `/exchange`, with private collaboration rooms at `/exchange/rooms/:roomId` and administrator controls at `/admin/exchange`.
+
+The matching algorithm applies hard eligibility filters first, then scores eligible profiles using disclosed weights: capability fit 35%, jurisdiction and verified credentials 20%, availability 15%, project-stage fit 15%, relationship and compensation fit 10%, and verified reputation signals 5%. Ranking is deterministic; no random selection is used.
+
+Privacy is fail-closed: profiles are opt-in, there is no public contact directory, contact fields are hidden in match results, and each participant separately authorizes disclosure when accepting an introduction. Credential claims are self-reported until administrator review records a verification method. The beta does not process pooled funds, investments, employment placement fees, banking services, insurance, brokerage, or fundraising transactions.
+
+Before public beta, run an authenticated two-account test of profile creation, project needs, matching, introduction acceptance/decline/withdrawal, contact disclosure, private messaging, blocking, reporting, and administrator review. Final privacy and collaboration terms require licensed-counsel review.
 
 ## Local development
 
