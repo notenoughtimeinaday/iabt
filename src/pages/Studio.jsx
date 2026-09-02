@@ -411,6 +411,7 @@ export default function Studio() {
       setPlans([]);
       setJobs([]);
       setArtifacts([]);
+      setAssets([]);
       setQuoteAccepted(false);
       setMobileNavOpen(false);
       await refreshConversationList();
@@ -467,6 +468,7 @@ export default function Studio() {
           setConversation(created);
           setMessages(created.messages || []);
           setConversations([created]);
+          setAssets([]);
         }
       } catch (error) {
         if (active) setLoadError(errorMessage(error, "The AI project operator could not start."));
