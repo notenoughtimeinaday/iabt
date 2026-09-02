@@ -137,6 +137,40 @@ function readable(value = "") {
   return String(value).replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function assetScopeFor(conversationId, projectId) {
+  return projectId || (conversationId ? "conversation:" + conversationId : "");
+}
+
+function formatFileSize(bytes) {
+  const size = Number(bytes || 0);
+  if (!size) return "Unknown size";
+  if (size < 1024) return size + " B";
+  if (size < 1024 * 1024) return (size / 1024).toFixed(1) + " KB";
+  return (size / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+function assetForContext(asset) {
+  return {
+    id: asset.id,
+    name: asset.name,
+    kind: asset.kind || "other",
+    mime_type: asset.mime_type || "application/octet-stream",
+    file_type: asset.file_type || "",
+    size_bytes: Number(asset.size_bytes || 0),
+    notes: asset.notes || "",
+  };
+}
+
+function assetIconFor(asset) {
+  const kind = String(asset?.kind || "").toLowerCase();
+  if (kind === "image") return ImageIcon;
+  if (kind === "audio") return Music2;
+  if (kind === "video") return Video;
+  if (kind === "code") return Code2;
+  if (kind === "archive") return Box;
+  return FileText;
+}
+
 function downloadInlineArtifact(artifact) {
   if (!artifact?.content) return;
   const blob = new Blob([artifact.content], { type: artifact.mime_type || "text/plain;charset=utf-8" });
