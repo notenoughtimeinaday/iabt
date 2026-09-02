@@ -23,6 +23,37 @@ The original **Pooled Layout** for Insured Spending is a foundational IABT use c
 
 The initial IABT version of this concept must remain a no-real-money prototype and simulation until its exact structure is legally classified and implemented with appropriate licensed partners.
 
+## IABT Exchange Beta
+
+IABT Exchange is an opt-in, privacy-preserving collaboration and team-formation module inside the canonical Base44-native application. It helps a project owner describe missing capabilities, receive deterministic explainable matches against opted-in collaboration profiles, request a mutual-consent introduction, and work in a private collaboration room.
+
+### Exchange boundaries
+
+- No public contact directory.
+- No automatic identity or contact disclosure.
+- No real-money pooling, investment solicitation, fundraising marketplace, banking, insurance, brokerage, or employment guarantee.
+- Match results contain only match-safe profile information.
+- Contact fields are disclosed only after both parties accept an introduction and only according to each member's selected fields.
+- Credential claims remain unverified until an administrator records a documented review method.
+- Matching uses a deterministic weighted score rather than randomness: capability 35%, jurisdiction and credentials 20%, availability 15%, project stage 15%, relationship and compensation 10%, reputation 5%.
+- Blocks exclude both members from future matching and can suspend active rooms; safety reports are reviewed separately.
+
+### Exchange implementation
+
+- Frontend: `/exchange`, `/exchange/rooms/:roomId`, and owner-only `/admin/exchange`.
+- Core entities: `CollaborationProfile`, `ProjectNeed`, `MatchRecord`, `IntroductionRequest`, `CollaborationRoom`, `RoomMessage`, `CredentialClaim`, `ExchangeSafetyReport`, `ExchangeAuditEvent`, and `ExchangeBlock`.
+- Backend functions cover dashboard loading, profile and project-need management, JERICHO capability-gap analysis, matching, introductions, rooms and messages, credentials, blocking, reporting, and administrator review.
+- Legal policy version `2026-09-01.1` adds Exchange privacy, terms, consent, credential, and acceptable-use disclosures.
+- Frontend lint, typecheck, and production build pass after integration. Backend Exchange modules also pass syntax bundling checks.
+
+### Remaining Exchange release work
+
+- Perform authenticated two-user end-to-end testing with separate accounts.
+- Review privacy and collaboration terms with licensed counsel before public beta.
+- Configure transactional notifications for introduction requests and messages.
+- Enable selected App MCP custom tools through the Base44 MCP dashboard only after function testing; publishing and reconnecting assistants require separate explicit approval.
+- Do not seed fake public professional profiles in production.
+
 ## External setup
 
 - Sign in through the Base44-hosted login.
