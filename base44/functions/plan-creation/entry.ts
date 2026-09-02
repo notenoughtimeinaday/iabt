@@ -178,7 +178,15 @@ Deno.serve(async (req) => {
     }
 
     await verifyProjectAccess(base44, user, projectId);
-    const details = await planRequest(base44, requestText, context);
+    const inputAssets = await resolveInputAssets(base44, user, context || {}, conversationId, projectId);
+    const planningContext = {
+      ...(context || {}),
+      ...(inputAssets.length ? {
+        input_assets: inputAssets,
+        input_asset_ids: inputAssets.map((asset: any) => asset.id).filter(Boolean),
+      } : {}),
+    };
+    const details = await planRequest(base44, requestText, planningContext);
     const ownerDemoRequested = user.role === "admin";
     const audioProvider = details.intent === "audio"
       ? await verifyElevenLabsAuthentication()
