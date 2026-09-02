@@ -1,6 +1,7 @@
 import { secrets } from "base44:runtime";
+import { createFallbackAppDefinition, createFallbackInteractiveApp } from "./deterministic-app.ts";
 
-export const CREATION_PRICING_VERSION = "iabt-creation-2026-08-28.3";
+export const CREATION_PRICING_VERSION = "iabt-creation-2026-09-02.4";
 export const CREATION_QUOTE_TTL_MS = 30 * 60 * 1000;
 export const LUMA_MODEL = "ray-3.2";
 export const LUMA_API_BASE = "https://agents.lumalabs.ai/v1";
@@ -918,13 +919,22 @@ export async function generateAppDefinition(base44: any, requestText: string, sp
     "NORMALIZED SPEC:",
     JSON.stringify(spec).slice(0, 12000),
   ].join("\n");
-  const raw = await invokeStructuredWithRecovery(
-    base44,
-    prompt,
-    APP_SCHEMA,
-    "Use top-level keys app, theme, pages, data, workflows, integrations, permissions, and implementation_notes. app has name and description. theme has primary, background, surface, text, and radius. Every page has name, route, layout set to column, and components using only Text, Input, Button, or ScannerInput. Every data item has name, description, and a fields string array. Every workflow has name, trigger, and a steps string array.",
-  );
-  const value = parseStructured(raw);
+  let value: any;
+  let generationStrategy = "managed_structured_generation";
+  try {
+    const raw = await invokeStructuredWithRecovery(
+      base44,
+      prompt,
+      APP_SCHEMA,
+      "Use top-level keys app, theme, pages, data, workflows, integrations, permissions, and implementation_notes. app has name and description. theme has primary, background, surface, text, and radius. Every page has name, route, layout set to column, and components using only Text, Input, Button, or ScannerInput. Every data item has name, description, and a fields string array. Every workflow has name, trigger, and a steps string array.",
+    );
+    value = parseStructured(raw);
+  } catch (error) {
+    if (String((error as any)?.code || "") !== "managed_llm_request_invalid") throw error;
+    console.warn("Managed app architecture generation was rejected; using IABT deterministic recovery.");
+    value = createFallbackAppDefinition(requestText, spec);
+    generationStrategy = "iabt_deterministic_recovery";
+  }
   const usedRoutes = new Set<string>();
   const pages = (Array.isArray(value?.pages) ? value.pages : []).slice(0, 12).map((page: any, index: number) => ({
     id: "page_" + crypto.randomUUID(),
@@ -958,7 +968,13 @@ export async function generateAppDefinition(base44: any, requestText: string, sp
     workflows: Array.isArray(value?.workflows) ? value.workflows.slice(0, 30) : [],
     integrations: stringList(value?.integrations, [], 30),
     permissions: stringList(value?.permissions, [], 30),
-    implementation_notes: stringList(value?.implementation_notes, [], 30),
+    implementation_notes: [
+      ...stringList(value?.implementation_notes, [], 29),
+      ...(generationStrategy === "iabt_deterministic_recovery"
+        ? ["IABT deterministic recovery was used because managed structured generation rejected the internal request."]
+        : []),
+    ],
+    generation_strategy: generationStrategy,
   };
 }
 
@@ -994,13 +1010,20 @@ export async function generateInteractiveApp(base44: any, requestText: string, s
     "APP ARCHITECTURE:",
     JSON.stringify(definition).slice(0, 16000),
   ].join("\n");
-  const raw = await invokeStructuredWithRecovery(
-    base44,
-    prompt,
-    INTERACTIVE_APP_SCHEMA,
-    "Use exactly three top-level keys: implementation_summary as a string, preview_html as one complete self-contained HTML document string, and test_cases as an array containing at least three test-description strings.",
-  );
-  const value = parseStructured(raw);
+  let value: any;
+  try {
+    const raw = await invokeStructuredWithRecovery(
+      base44,
+      prompt,
+      INTERACTIVE_APP_SCHEMA,
+      "Use exactly three top-level keys: implementation_summary as a string, preview_html as one complete self-contained HTML document string, and test_cases as an array containing at least three test-description strings.",
+    );
+    value = parseStructured(raw);
+  } catch (error) {
+    if (String((error as any)?.code || "") !== "managed_llm_request_invalid") throw error;
+    console.warn("Managed interactive generation was rejected; using IABT deterministic recovery.");
+    value = createFallbackInteractiveApp(requestText, spec, definition);
+  }
   const previewHtml = String(value?.preview_html || "").trim();
   if (previewHtml.length < 500) throw new Error("The application generator returned an incomplete interactive implementation.");
   if (previewHtml.length > 300000) throw new Error("The generated interactive implementation exceeded the 300 KB safety limit.");
@@ -1008,6 +1031,7 @@ export async function generateInteractiveApp(base44: any, requestText: string, s
     implementation_summary: clampText(value?.implementation_summary, 3000, "Interactive application implementation"),
     preview_html: previewHtml,
     test_cases: stringList(value?.test_cases, [], 20),
+    generation_strategy: clampText(value?.generation_strategy, 100, "managed_structured_generation"),
   };
 }
 
