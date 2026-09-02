@@ -4,6 +4,7 @@ import {
   classifySystemFailure,
   recordSystemIncident,
 } from "../../shared/self-healing.ts";
+import { getAudioReadiness, getMediaReadiness } from "../../shared/creation.ts";
 
 function safeIncident(row: any, admin: boolean) {
   return {
@@ -107,6 +108,24 @@ Deno.serve(async (req) => {
         ? "degraded"
         : "healthy";
 
+    const latestByIntent = new Map<string, any>();
+    for (const job of jobs || []) {
+      const intent = String(job.intent || "other");
+      if (!latestByIntent.has(intent)) latestByIntent.set(intent, job);
+    }
+    const evidenceFor = (intent: string) => {
+      const recent = (jobs || []).filter((job: any) => String(job.intent || "") === intent);
+      const succeeded = recent.find((job: any) => job.status === "succeeded");
+      const latest = latestByIntent.get(intent);
+      return {
+        latest_status: latest?.status || "not_tested",
+        last_success_at: succeeded?.completed_at || null,
+        last_job_id: latest?.id || null,
+      };
+    };
+    const audioReadiness = getAudioReadiness();
+    const mediaReadiness = getMediaReadiness();
+
     return Response.json({
       ok: true,
       health,
@@ -123,8 +142,41 @@ Deno.serve(async (req) => {
         critical: critical.length,
         recovered: incidents.filter((incident: any) => incident.status === "recovered").length,
       },
+      production_routes: {
+        app: {
+          available: true,
+          primary: "managed structured generation",
+          deterministic_recovery: true,
+          recovery_scope: ["keyboard piano", "merchandise storefront", "general interactive workspace"],
+          ...evidenceFor("app"),
+        },
+        website: {
+          available: true,
+          primary: "managed structured generation",
+          deterministic_recovery: true,
+          recovery_scope: ["merchandise storefront", "general interactive website"],
+          ...evidenceFor("website"),
+        },
+        document: { available: true, formats: ["markdown", "docx", "pdf"], ...evidenceFor("document") },
+        audio: {
+          configured: audioReadiness.audio_technical_ready === true,
+          commercial_ready: audioReadiness.audio_commercial_ready === true,
+          owner_demo_available: audioReadiness.audio_technical_ready === true,
+          blocker_codes: audioReadiness.blocker_codes || [],
+          ...evidenceFor("audio"),
+        },
+        video: {
+          configured: mediaReadiness.luma_technical_ready === true,
+          commercial_ready: mediaReadiness.luma_commercial_ready === true,
+          owner_demo_available: mediaReadiness.luma_technical_ready === true,
+          blocker_codes: mediaReadiness.blocker_codes || [],
+          ...evidenceFor("video"),
+        },
+      },
       automatic_actions: [
         "Retry safe internal transient generation steps within the configured retry limit.",
+        "Use deterministic in-app recovery when managed app or website structured generation is rejected.",
+        "Validate request-specific interactions before accepting an app artifact.",
         "Reject invalid artifacts before completion.",
         "Restore reserved IABT credits when no durable result exists.",
         "Resume tracking when a paid provider accepted a job but the callback path failed.",
