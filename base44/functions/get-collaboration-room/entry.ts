@@ -43,9 +43,9 @@ Deno.serve(async (req) => {
     const otherFields = otherIsRequester
       ? (Array.isArray(intro.requester_disclosure_fields) ? intro.requester_disclosure_fields : [])
       : (Array.isArray(intro.recipient_disclosure_fields) ? intro.recipient_disclosure_fields : []);
-    const canSeePrivateSummary = !otherIsRequester &&
-      String(intro.requester_user_id || "") === String(user.id) &&
-      (intro.requester_disclosure_fields || []).includes("private_project_summary");
+    const canSeePrivateSummary = otherIsRequester &&
+      Array.isArray(intro.requester_disclosure_fields) &&
+      intro.requester_disclosure_fields.includes("private_project_summary");
     const aliases = room.member_aliases || {};
 
     return Response.json({
