@@ -1,0 +1,1268 @@
+.exchange-page {
+  min-height: 100vh;
+  color: #17142a;
+  background:
+    radial-gradient(circle at 8% -10%, rgba(124, 58, 237, 0.16), transparent 31%),
+    radial-gradient(circle at 94% 12%, rgba(14, 165, 233, 0.1), transparent 26%),
+    #f7f8fc;
+}
+
+.exchange-header {
+  min-height: 72px;
+  padding: 12px clamp(18px, 4vw, 64px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid rgba(115, 120, 148, 0.16);
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+}
+
+.exchange-header nav,
+.exchange-brand,
+.exchange-brand span {
+  display: flex;
+  align-items: center;
+}
+
+.exchange-header nav {
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.exchange-header nav svg,
+.exchange-card-actions svg,
+.exchange-form-actions svg {
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+}
+
+.exchange-brand {
+  gap: 11px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.exchange-brand img {
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
+  box-shadow: 0 10px 25px rgba(105, 64, 190, 0.2);
+}
+
+.exchange-brand span {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.exchange-brand strong {
+  font-size: 16px;
+}
+
+.exchange-brand small {
+  color: #697086;
+  font-size: 11px;
+}
+
+.exchange-main,
+.exchange-admin-main {
+  width: min(1440px, calc(100% - 36px));
+  margin: 0 auto;
+  padding: 38px 0 80px;
+}
+
+.exchange-hero,
+.exchange-admin-hero {
+  padding: clamp(28px, 5vw, 58px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+  align-items: center;
+  gap: 42px;
+  overflow: hidden;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 28px;
+  background: linear-gradient(135deg, #ffffff, #faf8ff 60%, #eef4ff);
+  box-shadow: 0 24px 70px rgba(57, 43, 105, 0.09);
+}
+
+.exchange-hero > div > p,
+.exchange-eyebrow {
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.exchange-hero > div > p svg,
+.exchange-eyebrow svg {
+  width: 15px;
+  height: 15px;
+}
+
+.exchange-hero h1,
+.exchange-admin-hero h1 {
+  max-width: 850px;
+  margin: 0;
+  font-size: clamp(2.3rem, 5vw, 5rem);
+  line-height: 0.99;
+  letter-spacing: -0.06em;
+}
+
+.exchange-hero > div > span,
+.exchange-admin-hero > div > p {
+  max-width: 760px;
+  margin-top: 20px;
+  display: block;
+  color: #62697d;
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.exchange-hero > article,
+.exchange-admin-hero > article {
+  padding: 24px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  border: 1px solid rgba(124, 58, 237, 0.16);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 46px rgba(72, 46, 140, 0.1);
+}
+
+.exchange-hero > article > svg,
+.exchange-admin-hero > article > svg {
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  flex: 0 0 auto;
+  border-radius: 14px;
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.exchange-hero article strong,
+.exchange-admin-hero article strong {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.exchange-hero article p,
+.exchange-admin-hero article small {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.exchange-shell {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: 238px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.exchange-nav {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: sticky;
+  top: 92px;
+  border: 1px solid rgba(115, 120, 148, 0.18);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 38px rgba(34, 42, 70, 0.06);
+}
+
+.exchange-nav > button {
+  width: 100%;
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  position: relative;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #555d73;
+  text-align: left;
+  cursor: pointer;
+}
+
+.exchange-nav > button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.exchange-nav > button:hover,
+.exchange-nav > button.is-active {
+  background: #f1edff;
+  color: #5b21b6;
+}
+
+.exchange-nav > button.is-active {
+  font-weight: 700;
+}
+
+.exchange-nav > button b {
+  min-width: 21px;
+  height: 21px;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #7c3aed;
+  color: white;
+  font-size: 10px;
+}
+
+.exchange-profile-state {
+  margin-top: 8px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-top: 1px solid #eceef5;
+}
+
+.exchange-profile-state > i {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 5px rgba(245, 158, 11, 0.12);
+}
+
+.exchange-profile-state > i.is-ready {
+  background: #16a34a;
+  box-shadow: 0 0 0 5px rgba(22, 163, 74, 0.12);
+}
+
+.exchange-profile-state span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.exchange-profile-state strong {
+  font-size: 11px;
+}
+
+.exchange-profile-state small {
+  color: #81879a;
+  font-size: 9px;
+}
+
+.exchange-content {
+  min-width: 0;
+}
+
+.exchange-section-head,
+.exchange-panel-title {
+  margin-bottom: 18px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.exchange-section-head h2,
+.exchange-panel-title h2,
+.exchange-panel-title h3 {
+  margin: 0;
+  letter-spacing: -0.035em;
+}
+
+.exchange-section-head h2,
+.exchange-panel-title h2 {
+  font-size: clamp(1.7rem, 3vw, 2.5rem);
+}
+
+.exchange-panel-title h3 {
+  font-size: 1.35rem;
+}
+
+.exchange-section-head p:not(.exchange-eyebrow),
+.exchange-panel-title p {
+  max-width: 720px;
+  margin: 6px 0 0;
+  color: #73798b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.exchange-panel {
+  margin-bottom: 18px;
+  padding: clamp(18px, 2.5vw, 28px);
+  border: 1px solid rgba(118, 127, 153, 0.18);
+  border-radius: 22px;
+  background: white;
+  box-shadow: 0 14px 42px rgba(34, 42, 70, 0.055);
+}
+
+.exchange-stat-grid {
+  margin-bottom: 18px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.exchange-admin-main .exchange-stat-grid {
+  margin: 22px 0;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.exchange-stat-grid article {
+  min-height: 132px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid rgba(118, 127, 153, 0.16);
+  border-radius: 18px;
+  background: white;
+  box-shadow: 0 12px 32px rgba(34, 42, 70, 0.05);
+}
+
+.exchange-stat-grid article > svg {
+  width: 22px;
+  color: #7c3aed;
+}
+
+.exchange-stat-grid article span {
+  color: #777e91;
+  font-size: 11px;
+}
+
+.exchange-stat-grid article strong {
+  margin-top: auto;
+  font-size: 30px;
+  letter-spacing: -0.05em;
+}
+
+.exchange-stat-grid article small {
+  color: #7b8195;
+  font-size: 9px;
+}
+
+.exchange-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.exchange-steps article {
+  min-height: 188px;
+  padding: 18px;
+  border: 1px solid #e9eaf1;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #ffffff, #fafafe);
+}
+
+.exchange-steps article > span {
+  color: #7c3aed;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.exchange-steps article strong {
+  margin-top: 32px;
+  display: block;
+  font-size: 14px;
+}
+
+.exchange-steps article p {
+  color: #73798b;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.exchange-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.exchange-form label,
+.exchange-modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #565d70;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.exchange-form label.is-wide {
+  grid-column: 1 / -1;
+}
+
+.exchange-form input,
+.exchange-form textarea,
+.exchange-form select,
+.exchange-modal input,
+.exchange-modal textarea,
+.exchange-modal select,
+.exchange-chat-compose textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid #dfe2eb;
+  border-radius: 12px;
+  background: #fff;
+  color: #17142a;
+  font-size: 13px;
+  font-weight: 400;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.exchange-form input:focus,
+.exchange-form textarea:focus,
+.exchange-form select:focus,
+.exchange-modal input:focus,
+.exchange-modal textarea:focus,
+.exchange-modal select:focus,
+.exchange-chat-compose textarea:focus {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+}
+
+.exchange-fieldset {
+  margin: 18px 0 0;
+  padding: 14px;
+  border: 1px solid #e6e8f0;
+  border-radius: 15px;
+}
+
+.exchange-fieldset legend {
+  padding: 0 7px;
+  color: #555d70;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.exchange-chip-grid,
+.exchange-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.exchange-choice {
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #dde0e9;
+  border-radius: 999px;
+  background: white;
+  color: #656c7e;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.exchange-choice svg {
+  width: 13px;
+  height: 13px;
+}
+
+.exchange-choice.is-selected {
+  border-color: rgba(124, 58, 237, 0.35);
+  background: #f1edff;
+  color: #5b21b6;
+  font-weight: 700;
+}
+
+.exchange-form-actions,
+.exchange-card-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.exchange-status {
+  width: fit-content;
+  padding: 5px 8px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #eef1f7;
+  color: #626a7d;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.exchange-status.is-active,
+.exchange-status.is-accepted,
+.exchange-status.is-verified,
+.exchange-status.is-ready,
+.exchange-status.is-resolved {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.exchange-status.is-pending,
+.exchange-status.is-draft,
+.exchange-status.is-submitted,
+.exchange-status.is-reviewing {
+  background: #fef3c7;
+  color: #a16207;
+}
+
+.exchange-status.is-declined,
+.exchange-status.is-rejected,
+.exchange-status.is-suspended,
+.exchange-status.is-blocked {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.exchange-status.is-paused,
+.exchange-status.is-closed,
+.exchange-status.is-withdrawn,
+.exchange-status.is-expired,
+.exchange-status.is-unverified {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.exchange-card-list,
+.exchange-admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.exchange-need-card,
+.exchange-intro-card,
+.exchange-credential-card,
+.exchange-admin-list > article {
+  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 20px;
+  align-items: center;
+  border: 1px solid #e7e9f1;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.exchange-need-card h3,
+.exchange-intro-card h3,
+.exchange-credential-card h3,
+.exchange-admin-list h3 {
+  margin: 8px 0 4px;
+}
+
+.exchange-need-card h4,
+.exchange-intro-card h4 {
+  margin: 0 0 8px;
+  color: #60677a;
+  font-size: 12px;
+}
+
+.exchange-need-card p,
+.exchange-intro-card p,
+.exchange-admin-list p {
+  margin: 0 0 10px;
+  color: #6f7688;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.exchange-need-card small,
+.exchange-intro-card small,
+.exchange-admin-list small,
+.exchange-admin-list em {
+  display: block;
+  margin-top: 5px;
+  color: #777e91;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.exchange-admin-list a {
+  margin-top: 8px;
+  display: inline-flex;
+  color: #6d28d9;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.exchange-tags span {
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #f2f0fb;
+  color: #5f4b8b;
+  font-size: 9px;
+}
+
+.exchange-analysis {
+  border-color: rgba(124, 58, 237, 0.24);
+  background: linear-gradient(145deg, #fff, #fbf9ff);
+}
+
+.exchange-gap-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.exchange-gap-list article {
+  padding: 15px;
+  border: 1px solid #e4def7;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.exchange-gap-list article b {
+  color: #7c3aed;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.exchange-gap-list article strong {
+  margin: 7px 0;
+  display: block;
+  font-size: 13px;
+}
+
+.exchange-gap-list article p,
+.exchange-gap-list article small,
+.exchange-questions {
+  color: #70778a;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.exchange-questions {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #f6f4fc;
+}
+
+.exchange-match-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.exchange-match-card {
+  padding: 18px;
+  position: relative;
+  border: 1px solid #e3e5ee;
+  border-radius: 20px;
+  background: linear-gradient(150deg, #ffffff, #fbfbff);
+}
+
+.exchange-match-score {
+  width: 70px;
+  height: 70px;
+  margin-bottom: 14px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  border-radius: 20px;
+  background: #17142a;
+  color: white;
+}
+
+.exchange-match-score strong {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.exchange-match-score span {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.exchange-match-copy h3 {
+  margin: 8px 0 2px;
+  font-size: 18px;
+}
+
+.exchange-match-copy h4 {
+  margin: 0 0 10px;
+  color: #5d6476;
+  font-size: 12px;
+}
+
+.exchange-match-copy p,
+.exchange-match-copy > small {
+  color: #73798b;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.exchange-score-details {
+  margin-top: 15px;
+  padding-top: 12px;
+  border-top: 1px solid #e8eaf1;
+}
+
+.exchange-score-details summary {
+  color: #5c6375;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.exchange-score-row {
+  margin-top: 9px;
+  display: grid;
+  grid-template-columns: 135px minmax(70px, 1fr) 42px;
+  align-items: center;
+  gap: 8px;
+  font-size: 9px;
+}
+
+.exchange-score-row > div {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eceef4;
+}
+
+.exchange-score-row > div i {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8b5cf6, #2563eb);
+}
+
+.exchange-score-row strong {
+  text-align: right;
+}
+
+.exchange-room-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.exchange-room-card {
+  padding: 17px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border: 1px solid #e5e7ef;
+  border-radius: 17px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.exchange-room-card:hover {
+  border-color: rgba(124, 58, 237, 0.32);
+  background: #fbf9ff;
+}
+
+.exchange-room-card > svg:first-child {
+  width: 40px;
+  height: 40px;
+  padding: 10px;
+  flex: 0 0 auto;
+  border-radius: 13px;
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.exchange-room-card > svg:last-child {
+  width: 18px;
+  margin-left: auto;
+  color: #9096a7;
+}
+
+.exchange-room-card span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.exchange-room-card small {
+  color: #8a90a1;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.exchange-room-card strong {
+  margin: 3px 0;
+  font-size: 13px;
+}
+
+.exchange-room-card p {
+  margin: 0;
+  overflow: hidden;
+  color: #6f7688;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exchange-credential-card {
+  grid-template-columns: auto 1fr;
+}
+
+.exchange-credential-card > svg {
+  width: 38px;
+  height: 38px;
+  padding: 9px;
+  border-radius: 12px;
+  background: #ecfdf5;
+  color: #15803d;
+}
+
+.exchange-empty,
+.exchange-admin-empty {
+  min-height: 240px;
+  padding: 30px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  text-align: center;
+  border: 1px dashed #d8dbe5;
+  border-radius: 18px;
+  background: #fafbfe;
+}
+
+.exchange-empty > svg,
+.exchange-admin-empty > svg {
+  width: 42px;
+  height: 42px;
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 14px;
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.exchange-empty h3 {
+  margin: 0;
+}
+
+.exchange-empty p {
+  max-width: 520px;
+  margin: 7px 0 0;
+  color: #747b8e;
+  font-size: 11px;
+}
+
+.exchange-modal-backdrop {
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(20, 18, 38, 0.56);
+  backdrop-filter: blur(8px);
+}
+
+.exchange-modal {
+  width: min(680px, 100%);
+  max-height: calc(100vh - 48px);
+  padding: 28px;
+  overflow: auto;
+  position: relative;
+  border-radius: 24px;
+  background: white;
+  box-shadow: 0 30px 100px rgba(14, 10, 38, 0.35);
+}
+
+.exchange-modal h2 {
+  margin: 0 0 8px;
+}
+
+.exchange-modal > p:not(.exchange-eyebrow) {
+  color: #6e7588;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.exchange-modal-close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f2f6;
+  cursor: pointer;
+}
+
+.exchange-modal-close svg {
+  width: 16px;
+}
+
+.exchange-loading {
+  min-height: 100vh;
+  padding: 30px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  background: #f7f8fc;
+  text-align: center;
+}
+
+.exchange-loading > svg {
+  width: 42px;
+  height: 42px;
+  color: #7c3aed;
+}
+
+.exchange-loading h1,
+.exchange-loading p {
+  margin: 0;
+}
+
+.exchange-loading p {
+  color: #747b8e;
+  font-size: 12px;
+}
+
+.exchange-room-main {
+  width: min(1440px, calc(100% - 36px));
+  min-height: calc(100vh - 112px);
+  margin: 24px auto 50px;
+  display: grid;
+  grid-template-columns: 330px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.exchange-room-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.exchange-room-sidebar .exchange-panel {
+  margin: 0;
+}
+
+.exchange-room-sidebar h2 {
+  margin: 0 0 7px;
+}
+
+.exchange-room-sidebar p,
+.exchange-muted {
+  color: #73798b;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.exchange-contact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.exchange-contact-list span,
+.exchange-contact-list a {
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  background: #f6f7fb;
+  color: #4c5366;
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.exchange-contact-list svg {
+  width: 14px;
+}
+
+.exchange-room-safety {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+}
+
+.exchange-room-safety > svg {
+  width: 32px;
+  color: #7c3aed;
+}
+
+.exchange-room-safety .button,
+.exchange-room-safety button {
+  grid-column: 1 / -1;
+}
+
+.exchange-chat-panel {
+  min-height: calc(100vh - 116px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid rgba(118, 127, 153, 0.18);
+  border-radius: 24px;
+  background: white;
+  box-shadow: 0 18px 54px rgba(34, 42, 70, 0.07);
+}
+
+.exchange-chat-panel > header {
+  padding: 18px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #eceef4;
+}
+
+.exchange-chat-panel h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.exchange-chat-messages {
+  min-height: 420px;
+  max-height: calc(100vh - 310px);
+  padding: 22px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: linear-gradient(180deg, #fafbfe, #ffffff);
+}
+
+.exchange-message {
+  width: min(620px, 86%);
+  padding: 13px 15px;
+  align-self: flex-start;
+  border: 1px solid #e3e5ed;
+  border-radius: 16px 16px 16px 5px;
+  background: white;
+}
+
+.exchange-message.is-mine {
+  align-self: flex-end;
+  border-color: rgba(124, 58, 237, 0.25);
+  border-radius: 16px 16px 5px 16px;
+  background: #f2edff;
+}
+
+.exchange-message > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.exchange-message strong,
+.exchange-message time {
+  font-size: 9px;
+}
+
+.exchange-message time {
+  color: #8a90a1;
+}
+
+.exchange-message p {
+  margin: 7px 0 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.exchange-chat-empty {
+  margin: auto;
+  padding: 30px;
+  text-align: center;
+}
+
+.exchange-chat-empty svg {
+  width: 44px;
+  height: 44px;
+  padding: 11px;
+  border-radius: 15px;
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.exchange-chat-empty h3 {
+  margin: 10px 0 5px;
+}
+
+.exchange-chat-empty p {
+  max-width: 500px;
+  margin: 0;
+  color: #73798b;
+  font-size: 11px;
+}
+
+.exchange-chat-compose {
+  padding: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+  border-top: 1px solid #eceef4;
+}
+
+.exchange-chat-compose textarea {
+  resize: vertical;
+}
+
+.exchange-admin-main {
+  width: min(1320px, calc(100% - 36px));
+}
+
+.exchange-admin-list > article {
+  align-items: start;
+}
+
+.exchange-admin-list article > div:first-child {
+  min-width: 0;
+}
+
+.exchange-audit-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.exchange-audit-list article {
+  padding: 11px 0;
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  gap: 10px;
+  border-bottom: 1px solid #eceef4;
+}
+
+.exchange-audit-list article > i {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #8b5cf6;
+}
+
+.exchange-audit-list strong {
+  font-size: 11px;
+}
+
+.exchange-audit-list p,
+.exchange-audit-list small {
+  margin: 3px 0 0;
+  color: #73798b;
+  font-size: 10px;
+}
+
+@media (max-width: 1220px) {
+  .exchange-admin-main .exchange-stat-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .exchange-match-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 980px) {
+  .exchange-hero,
+  .exchange-admin-hero,
+  .exchange-shell,
+  .exchange-room-main {
+    grid-template-columns: 1fr;
+  }
+  .exchange-nav {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .exchange-profile-state {
+    grid-column: 1 / -1;
+  }
+  .exchange-stat-grid,
+  .exchange-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .exchange-room-sidebar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .exchange-chat-panel {
+    min-height: 700px;
+  }
+}
+
+@media (max-width: 720px) {
+  .exchange-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .exchange-header nav {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .exchange-main,
+  .exchange-admin-main,
+  .exchange-room-main {
+    width: min(100% - 20px, 1440px);
+    padding-top: 18px;
+  }
+  .exchange-hero,
+  .exchange-admin-hero {
+    padding: 24px;
+  }
+  .exchange-hero h1,
+  .exchange-admin-hero h1 {
+    font-size: 2.25rem;
+  }
+  .exchange-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .exchange-stat-grid,
+  .exchange-admin-main .exchange-stat-grid,
+  .exchange-steps,
+  .exchange-form-grid,
+  .exchange-gap-list,
+  .exchange-room-grid,
+  .exchange-room-sidebar {
+    grid-template-columns: 1fr;
+  }
+  .exchange-need-card,
+  .exchange-intro-card,
+  .exchange-admin-list > article {
+    grid-template-columns: 1fr;
+  }
+  .exchange-card-actions,
+  .exchange-form-actions {
+    justify-content: flex-start;
+  }
+  .exchange-chat-messages {
+    max-height: none;
+  }
+  .exchange-chat-compose {
+    grid-template-columns: 1fr;
+  }
+  .exchange-message {
+    width: 94%;
+  }
+}
