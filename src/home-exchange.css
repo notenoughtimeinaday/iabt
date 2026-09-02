@@ -1,0 +1,99 @@
+.iabt-exchange-callout {
+  margin-top: 18px;
+  padding: clamp(26px, 4vw, 44px);
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+  gap: clamp(24px, 5vw, 58px);
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 95% 5%, rgba(37, 99, 235, 0.13), transparent 34%),
+    radial-gradient(circle at 7% 95%, rgba(124, 58, 237, 0.14), transparent 34%),
+    linear-gradient(135deg, #ffffff, #faf8ff 56%, #eef4ff);
+  box-shadow: 0 22px 64px rgba(40, 35, 80, 0.08);
+}
+
+.iabt-exchange-callout-copy {
+  min-width: 0;
+}
+
+.iabt-exchange-callout-copy h2 {
+  margin: 0;
+  max-width: 720px;
+  color: #17142a;
+  font-size: clamp(1.9rem, 4vw, 3.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.055em;
+}
+
+.iabt-exchange-callout-copy > p:not(.iabt-eyebrow) {
+  max-width: 690px;
+  margin: 18px 0 0;
+  color: #60677a;
+  font-size: 0.98rem;
+  line-height: 1.7;
+}
+
+.iabt-exchange-callout-actions {
+  margin-top: 22px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.iabt-exchange-callout-actions button {
+  min-height: 45px;
+}
+
+.iabt-exchange-principles {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.iabt-exchange-principles article {
+  padding: 17px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 13px;
+  align-items: start;
+  border: 1px solid rgba(115, 120, 148, 0.17);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 12px 34px rgba(50, 45, 85, 0.055);
+}
+
+.iabt-exchange-principles article > svg {
+  width: 39px;
+  height: 39px;
+  padding: 9px;
+  border-radius: 13px;
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.iabt-exchange-principles article strong,
+.iabt-exchange-principles article span {
+  display: block;
+}
+
+.iabt-exchange-principles article strong {
+  color: #252136;
+  font-size: 0.98rem;
+}
+
+.iabt-exchange-principles article span {
+  margin-top: 4px;
+  color: #697086;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 980px) {
+  .iabt-exchange-callout {
+    grid-template-columns: 1fr;
+  }
+}
