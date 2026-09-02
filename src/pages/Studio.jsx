@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
+import FileUploader from "@/components/FileUploader";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -29,11 +30,14 @@ import {
   Music2,
   Network,
   Palette,
+  Paperclip,
   PlugZap,
   Play,
   RefreshCw,
   Rocket,
+  ShieldCheck,
   Sparkles,
+  Trash2,
   Video,
   Workflow,
   X,
@@ -41,6 +45,7 @@ import {
 
 const CREATOR_AGENT = "iabt_creator";
 const ACTIVE_JOB_STATUSES = new Set(["queued", "running", "waiting_provider"]);
+const ATTACHED_ASSET_LIMIT = 12;
 const MODE_OPTIONS = [
   { id: "app", label: "App", icon: AppWindow, description: "Product flows, data and working screens" },
   { id: "website", label: "Website", icon: Globe2, description: "Marketable sites with a clear purpose" },
