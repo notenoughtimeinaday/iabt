@@ -2191,7 +2191,7 @@
 .creator-welcome {
   min-height: 0;
   flex: 1;
-  padding: clamp(48px, 8vh, 92px) 0 210px;
+  padding: clamp(48px, 8vh, 92px) 0 360px;
   overflow-y: auto;
   text-align: center;
 }
@@ -2374,7 +2374,7 @@
 .creator-message-list {
   min-height: 0;
   flex: 1;
-  padding: 28px 0 190px;
+  padding: 28px 0 330px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: #cdd1dc transparent;
@@ -2612,10 +2612,173 @@
   text-transform: uppercase;
 }
 
+.creator-upload-dock {
+  display: grid;
+  gap: 8px;
+  margin: 8px 3px 9px;
+  padding: 9px;
+  border: 1px solid #eceef4;
+  border-radius: 13px;
+  background: #fbfcff;
+}
+
+.creator-upload-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #747b8d;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.creator-upload-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.creator-upload-head svg {
+  width: 12px;
+  color: #6530cc;
+}
+
+.creator-upload-head small {
+  color: #9aa0ad;
+  font-size: 8px;
+  text-transform: none;
+}
+
+.creator-upload-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px;
+  max-height: 92px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.creator-upload-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 7px;
+  border: 1px solid #e5e8ef;
+  border-radius: 9px;
+  background: white;
+}
+
+.creator-upload-item > svg {
+  width: 14px;
+  color: #6530cc;
+}
+
+.creator-upload-item span,
+.creator-upload-item strong,
+.creator-upload-item small {
+  min-width: 0;
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator-upload-item strong {
+  color: #353a4e;
+  font-size: 9px;
+}
+
+.creator-upload-item small {
+  margin-top: 1px;
+  color: #8990a1;
+  font-size: 7px;
+}
+
+.creator-upload-item button {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: #9a475d;
+}
+
+.creator-upload-item button:hover {
+  color: #b4233e;
+  background: #fff0f2;
+}
+
+.creator-upload-item button svg {
+  width: 12px;
+}
+
+.creator-upload-list em {
+  align-self: center;
+  color: #858c9d;
+  font-size: 8px;
+  font-style: normal;
+}
+
+.creator-advancement-toggle {
+  display: grid;
+  grid-template-columns: 16px 28px minmax(0, auto) 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: 0 4px 6px;
+  padding: 8px 9px;
+  border: 1px solid #e7e9f0;
+  border-radius: 12px;
+  color: #61697d;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.creator-advancement-toggle.is-on {
+  border-color: #d8c9fa;
+  background: #fbf8ff;
+}
+
+.creator-advancement-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: #6d3be8;
+}
+
+.creator-advancement-toggle > span {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  color: #6630cc;
+  background: #f0eaff;
+}
+
+.creator-advancement-toggle svg {
+  width: 13px;
+}
+
+.creator-advancement-toggle strong {
+  color: #33384b;
+  font-size: 9px;
+}
+
+.creator-advancement-toggle small {
+  min-width: 0;
+  overflow: hidden;
+  color: #858c9d;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .creator-composer textarea {
   width: 100%;
-  min-height: 74px;
-  max-height: 190px;
+  min-height: 68px;
+  max-height: 160px;
   display: block;
   padding: 9px 8px;
   resize: vertical;
