@@ -266,6 +266,7 @@ export default function Studio() {
   const [plans, setPlans] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [artifacts, setArtifacts] = useState([]);
+  const [assets, setAssets] = useState([]);
   const [artifactAccessUrls, setArtifactAccessUrls] = useState({});
   const [capabilities, setCapabilities] = useState([]);
   const [connectionFabric, setConnectionFabric] = useState(null);
@@ -281,6 +282,7 @@ export default function Studio() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [systemAlert, setSystemAlert] = useState(null);
+  const [softwareAdvancementEnabled, setSoftwareAdvancementEnabled] = useState(true);
 
   const activePlan = plans[0] || null;
   const currentIntent = targetProjectId ? "app" : activePlan?.intent || "auto";
@@ -304,6 +306,8 @@ export default function Studio() {
   const monthlyLimit = Number(entitlement?.ai_monthly_limit || 0);
   const bonusCredits = Number(entitlement?.bonus_ai_credits || 0);
   const remainingCredits = Math.max(0, monthlyLimit - monthlyUsed) + bonusCredits;
+  const assetScopeId = assetScopeFor(conversation?.id, targetProjectId);
+  const attachedAssets = assets.slice(0, ATTACHED_ASSET_LIMIT);
 
   const resolvePrivateArtifacts = useCallback(async (rows = []) => {
     const refreshBefore = Date.now() + 45_000;
