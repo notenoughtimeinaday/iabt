@@ -20,6 +20,7 @@ import AdminCompliance from '@/pages/AdminCompliance';
 import Integrations from '@/pages/Integrations';
 import Connect from '@/pages/Connect';
 import Exchange from '@/pages/Exchange';
+import ExchangeAssistant from '@/pages/ExchangeAssistant';
 import ExchangeRoom from '@/pages/ExchangeRoom';
 import AdminExchange from '@/pages/AdminExchange';
 import LegalAcceptanceGate from '@/components/LegalAcceptanceGate';
@@ -82,6 +83,7 @@ const AuthenticatedApp = () => {
           <Route path="/integrations" element={<Integrations />} />
           <Route path="/connect" element={<Connect />} />
           <Route path="/exchange" element={<Exchange />} />
+          <Route path="/exchange/assistant" element={<ExchangeAssistant />} />
           <Route path="/exchange/rooms/:roomId" element={<ExchangeRoom />} />
           <Route path="/projects/:id" element={<ProjectDetail />} />
           <Route path="/admin/compliance" element={<AdminCompliance />} />
