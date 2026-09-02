@@ -429,6 +429,7 @@ export default function Exchange() {
       <header className="exchange-header">
         <Link to="/" className="exchange-brand"><img src="/iabt-mark.svg" alt="" /><span><strong>IABT Exchange</strong><small>Find the missing capability. Form the right team.</small></span></Link>
         <nav>
+          <Button onClick={() => navigate("/exchange/assistant")}><Bot /> Ask Exchange AI</Button>
           <Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? "animate-spin" : ""} /> Refresh</Button>
           {user?.role === "admin" && <Button variant="outline" onClick={() => navigate("/admin/exchange")}><ShieldCheck /> Safety center</Button>}
           <Button variant="ghost" onClick={() => navigate("/")}><ArrowLeft /> Projects</Button>
