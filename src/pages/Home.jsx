@@ -314,6 +314,23 @@ export default function Home() {
           </div>
         </section>
 
+        <section className="iabt-exchange-callout" aria-labelledby="iabt-exchange-title">
+          <div className="iabt-exchange-callout-copy">
+            <p className="iabt-eyebrow"><UsersRound className="h-4 w-4" /> IABT Exchange beta</p>
+            <h2 id="iabt-exchange-title">Find the missing capability. Form the right team.</h2>
+            <p>Create a match-safe professional profile, map what a project still needs, review explainable collaborator matches, and open a private room only after both people accept the introduction.</p>
+            <div className="iabt-exchange-callout-actions">
+              <Button onClick={() => navigate("/exchange")}><UsersRound className="h-4 w-4 mr-2" /> Open Exchange</Button>
+              <Button variant="outline" onClick={() => navigate("/exchange/assistant")}><Bot className="h-4 w-4 mr-2" /> Ask Exchange AI</Button>
+            </div>
+          </div>
+          <div className="iabt-exchange-principles">
+            <article><Sparkles /><div><strong>Capability-gap analysis</strong><span>JERICHO helps identify the expertise, credentials, and institutional relationships a project is missing.</span></div></article>
+            <article><Search /><div><strong>Explainable matching</strong><span>Deterministic scores show why a profile fits. There is no random ranking or public contact directory.</span></div></article>
+            <article><ShieldCheck /><div><strong>Mutual consent</strong><span>Identity and selected contact details remain concealed until an introduction is accepted by both members.</span></div></article>
+          </div>
+        </section>
+
         <section className="iabt-projects">
           {legacyProjects.length > 0 && (
             <div className="iabt-legacy-banner">
