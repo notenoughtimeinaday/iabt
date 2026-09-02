@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, Bot, Database, Scale, ShieldCheck, WalletCards } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, Database, Scale, ShieldCheck, UsersRound, WalletCards } from "lucide-react";
 import { IABT_LEGAL_NAME, IABT_POLICY_UPDATED, IABT_POLICY_VERSION } from "@/lib/legal";
 
 const PROVIDERS = [
@@ -36,6 +36,7 @@ export default function Legal() {
           <a className={initial === "privacy" ? "is-active" : ""} href="#privacy"><Database /> Privacy</a>
           <a className={initial === "terms" ? "is-active" : ""} href="#terms"><Scale /> Terms</a>
           <a className={initial === "acceptable-use" ? "is-active" : ""} href="#acceptable-use"><AlertTriangle /> Acceptable use</a>
+          <a href="#exchange"><UsersRound /> IABT Exchange</a>
           <a href="#credits"><WalletCards /> Credits & refunds</a>
           <a href="#ai"><Bot /> AI disclosure</a>
         </aside>
@@ -69,6 +70,9 @@ export default function Legal() {
             <h3>Retention, security, and rights</h3>
             <p>IABT retains records only as reasonably necessary for service delivery, security, legal obligations, billing reconciliation, dispute handling, and recovery. Access is limited through authentication, owner-scoped records, administrative controls, private storage, and server-side credentials. Rights to access, correct, export, or delete personal information depend on applicable law and operational retention obligations.</p>
             <p>IABT is not intended for children. Accounts and adult-content workflows are restricted to adults, and any sexual exploitation, sexual content involving minors, or harm to children is prohibited.</p>
+            <h3>IABT Exchange data</h3>
+            <p>IABT Exchange is an opt-in professional collaboration feature. It processes collaboration profiles, project-need descriptions, match scores, introduction requests, consent records, credential claims, private-room messages, blocks, safety reports, and audit events needed to operate and secure the service. Match results use limited, match-safe profile fields. Full identity, contact information, confidential project notes, and private-room content are not placed in a public directory.</p>
+            <p>Contact fields are disclosed to another member only after a mutually accepted introduction and only to the extent each member has affirmatively selected. A member may still collaborate through an IABT room without sharing external contact details. Safety, legal, security, retention, and administrator-review obligations may require limited access to relevant records.</p>
           </Section>
 
           <Section id="terms" title="Terms of Use">
@@ -79,6 +83,9 @@ export default function Legal() {
             <p>You retain your rights in content you submit. Subject to applicable supplier terms and law, you may use delivered output under the commercial rights included in your plan. AI output can be incomplete, inaccurate, non-unique, or unsuitable. You must review it before publication, professional reliance, deployment, financial use, or physical execution.</p>
             <h3>Third-party services</h3>
             <p>IABT may use approved suppliers to complete requested work. Their service availability and lawful processing restrictions still apply. IABT may change or replace suppliers without changing the customer objective, provided the replacement passes IABT's technical, legal, privacy, quality, and cost controls.</p>
+            <h3>IABT Exchange</h3>
+            <p>Exchange helps opted-in members identify possible collaborators through structured profiles, project needs, deterministic compatibility scoring, mutual-consent introductions, and private collaboration rooms. A match score, AI explanation, credential claim, or verification badge is informational and does not guarantee identity, competence, licensing, suitability, funding, lawful operation, or a successful working relationship. Members must conduct their own diligence and use qualified professional review where appropriate.</p>
+            <p>IABT Exchange is not a public contact directory, employment agency, broker-dealer, investment marketplace, bank, insurer, escrow agent, money transmitter, or guarantor. IABT does not promise funding, employment, investment, banking access, licensing, regulatory approval, or project success. Separate agreements, payments, equity, professional services, or regulated activity between members remain their responsibility and may require independent contracts, licensed intermediaries, disclosures, and compliance.</p>
             <h3>Availability and warranties</h3>
             <p>The service is provided subject to applicable law and the purchased plan. No uninterrupted or error-free operation is promised. Preview, experimental, simulation, and preproduction outputs must not be represented as completed production artifacts.</p>
           </Section>
@@ -87,7 +94,15 @@ export default function Legal() {
             <p>You may not use IABT to violate law or another person's rights; gain unauthorized access; evade security or payment controls; distribute malware; facilitate fraud, exploitation, trafficking, abuse, stalking, non-consensual surveillance, or deceptive impersonation; or create instructions intended to cause unlawful injury or destructive physical operation.</p>
             <p>Sexual content involving minors, age ambiguity, coercion, exploitation, incest, trafficking, or non-consensual intimate imagery is prohibited. Lawful adult material may be processed only when the selected provider, distribution channel, verification process, and applicable law permit it. IABT does not promise that every provider will accept every lawful category.</p>
             <p>High-impact financial, legal, medical, employment, housing, insurance, weapons, industrial, and machine-control workflows require qualified review and additional safeguards. Generated G-code and physical instructions are simulation-first and are never machine-ready by default.</p>
-            <p>IABT may refuse, suspend, or restrict a workflow when authorization, safety, legality, contractual permission, provider capability, or payment capacity cannot be verified.</p>
+            <p>Exchange members may not scrape profiles; send spam or repeated unwanted introductions; misrepresent identity, credentials, licenses, employment, funding, authority, or project status; evade blocks; pressure another member to disclose private information; use the service for unlawful discrimination, harassment, stalking, deceptive recruiting, unregistered securities solicitation, fraudulent fundraising, money laundering, or prohibited financial activity.</p>
+            <p>IABT may refuse, suspend, or restrict a workflow, Exchange profile, introduction, room, or account when authorization, safety, legality, contractual permission, provider capability, payment capacity, identity, credentials, or conduct cannot be adequately verified.</p>
+          </Section>
+
+          <Section id="exchange" title="IABT Exchange collaboration terms">
+            <p>Participation is voluntary and profile visibility is controlled by the member. The default Exchange experience is match-only rather than a public directory. IABT may use structured rules and AI-assisted analysis to normalize project requirements and explain potential fit, but the final ranking is produced by a disclosed deterministic scoring model rather than random selection.</p>
+            <p>Introduction requests do not reveal private contact information. An accepted introduction creates a private collaboration room and makes available only the contact fields each participant authorized. Declining or withdrawing an introduction does not disclose contact information. Blocking a member prevents future matching between those accounts and may suspend active rooms.</p>
+            <p>Credential claims are self-reported until explicitly marked verified. Verification reflects only the evidence and method recorded at the time of review; it is not a warranty, endorsement, background check, or continuing-license guarantee. Users should independently confirm professional qualifications and standing through applicable official sources.</p>
+            <p>Exchange does not process pooled member funds, arrange investments, or provide regulated banking, insurance, legal, accounting, employment, or brokerage services. Any collaboration involving compensation, equity, fundraising, regulated services, intellectual property, confidentiality, or customer funds should be governed by appropriate independent agreements and qualified professional advice.</p>
           </Section>
 
           <Section id="credits" title="Plans, production credits, cancellations, and refunds">
