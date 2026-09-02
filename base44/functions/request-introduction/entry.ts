@@ -55,8 +55,11 @@ Deno.serve(async (req) => {
     const permittedRequesterFields = new Set(Array.isArray(requesterProfile.contact_disclosure_fields)
       ? requesterProfile.contact_disclosure_fields
       : []);
-    const requestedFields = enumList(body?.disclosure_fields, DISCLOSURE_FIELDS, 10)
-      .filter((field) => permittedRequesterFields.has(field));
+    const requestedFields = enumList(
+      body?.disclosure_fields,
+      [...DISCLOSURE_FIELDS, "private_project_summary"],
+      10,
+    ).filter((field) => field === "private_project_summary" || permittedRequesterFields.has(field));
     const requesterClaims = await service.entities.CredentialClaim
       .filter({ user_id: user.id }, "-submitted_at", 50)
       .catch(() => []);
