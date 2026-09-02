@@ -3783,7 +3783,7 @@
   }
 
   .creator-welcome {
-    padding: 40px 0 205px;
+    padding: 40px 0 360px;
   }
 
   .creator-mode-grid {
@@ -3818,6 +3818,20 @@
 
   .creator-composer-foot > span {
     max-width: 48%;
+  }
+
+  .creator-upload-list {
+    grid-template-columns: 1fr;
+    max-height: 78px;
+  }
+
+  .creator-advancement-toggle {
+    grid-template-columns: 16px 26px 1fr;
+  }
+
+  .creator-advancement-toggle small {
+    grid-column: 3;
+    white-space: normal;
   }
 
   .creator-deliverables {
