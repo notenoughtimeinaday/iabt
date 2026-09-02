@@ -543,15 +543,35 @@ export default function Studio() {
       const target = conversation || await createConversation();
       if (!target) return;
 
+      const scopeId = assetScopeFor(target.id, targetProjectId);
+      const uploadedAssets = assets
+        .filter((asset) => !scopeId || asset.project_id === scopeId)
+        .slice(0, ATTACHED_ASSET_LIMIT)
+        .map(assetForContext);
+      const autonomyPolicy = autonomyProfile?.policy || {};
+      const advancementContext = {
+        enabled: softwareAdvancementEnabled,
+        mode: autonomyPolicy.mode || "bounded_autonomous",
+        scope: targetProjectId ? "existing_project_revision" : "current_creation",
+        allowed_action_classes: autonomyPolicy.allowed_action_classes || ["read", "plan", "internal_reversible_write", "test", "create_artifact"],
+        always_confirm_action_classes: autonomyPolicy.always_confirm_action_classes || ["external_representation", "financial", "destructive", "access_change", "sensitive_transmission", "machine_control"],
+        max_runtime_minutes: Number(autonomyPolicy.max_runtime_minutes || 30),
+        approval_boundary: "JERICHO may advance safe internal software work, but external, financial, destructive, access-changing, sensitive-data, and machine-control actions still require explicit approval.",
+      };
+
       const sent = await base44.agents.addMessage(target, {
         role: "user",
         content: request,
         custom_context: [{
           type: "iabt_creation_request",
-          message: "Infer the correct output type and required integrations from the user's objective. Use this exact conversation_id when calling plan-creation: " + target.id + "." + (targetProjectId ? " This is an existing app revision: pass this exact top-level project_id to inspect-project and plan-creation: " + targetProjectId + ", and keep selected_mode as app for the revision." : " Do not invent or pass selected_mode; let the server infer intent from the full request.") + " Plan and quote first. Never execute without explicit approval.",
+          message: "Infer the correct output type and required integrations from the user's objective. Use this exact conversation_id when calling plan-creation: " + target.id + "." + (targetProjectId ? " This is an existing app revision: pass this exact top-level project_id to inspect-project and plan-creation: " + targetProjectId + ", and keep selected_mode as app for the revision." : " Do not invent or pass selected_mode; let the server infer intent from the full request.") + (uploadedAssets.length ? " Include the uploaded file IDs and asset_scope_id in plan-creation context so JERICHO can use those files as references." : "") + " Plan and quote first. Never execute without explicit approval.",
           data: {
             routing_mode: "automatic",
             conversation_id: target.id,
+            asset_scope_id: scopeId,
+            uploaded_asset_ids: uploadedAssets.map((asset) => asset.id).filter(Boolean),
+            uploaded_assets: uploadedAssets,
+            software_advancement: advancementContext,
             ...(targetProjectId ? { project_id: targetProjectId, selected_mode: "app" } : {}),
             approval_required: true,
             surface: "creator_studio",
