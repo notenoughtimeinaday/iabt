@@ -39,6 +39,111 @@ async function verifyProjectAccess(base44: any, user: any, projectId: string) {
   }
 }
 
+const TEXT_EXTENSIONS = new Set([
+  "txt", "md", "csv", "tsv", "json", "jsonc", "yaml", "yml", "xml", "html", "css",
+  "js", "jsx", "ts", "tsx", "py", "java", "cpp", "c", "h", "go", "rs", "rb", "php",
+  "sql", "sh", "env", "log", "rtf",
+]);
+const TEXT_MIME_RE = /^(text\/|application\/(json|xml|javascript|x-javascript|typescript|csv|sql|yaml|x-yaml)|image\/svg\+xml)/i;
+
+function uniqueTextList(values: unknown[], max = 12) {
+  return [...new Set(values.map((value) => text(value, 240)).filter(Boolean))].slice(0, max);
+}
+
+function ownsAsset(user: any, asset: any) {
+  return Boolean(asset && (
+    user.role === "admin" ||
+    String(asset.user_id || "") === String(user.id) ||
+    String(asset.created_by || "") === String(user.email)
+  ));
+}
+
+function assetIdList(context: any) {
+  const fromArrays = [
+    ...(Array.isArray(context?.uploaded_asset_ids) ? context.uploaded_asset_ids : []),
+    ...(Array.isArray(context?.input_asset_ids) ? context.input_asset_ids : []),
+    ...(Array.isArray(context?.asset_ids) ? context.asset_ids : []),
+    ...(Array.isArray(context?.uploaded_assets) ? context.uploaded_assets.map((asset: any) => asset?.id || asset?.asset_id) : []),
+  ];
+  return uniqueTextList(fromArrays, 12);
+}
+
+function assetScopeList(context: any, conversationId: string, projectId: string) {
+  return uniqueTextList([
+    context?.asset_scope_id,
+    projectId,
+    conversationId ? "conversation:" + conversationId : "",
+  ], 4);
+}
+
+function shouldExtractText(asset: any) {
+  const ext = text(asset?.file_type || String(asset?.name || "").split(".").pop(), 40).toLowerCase();
+  const mime = text(asset?.mime_type, 120).toLowerCase();
+  return TEXT_EXTENSIONS.has(ext) || TEXT_MIME_RE.test(mime);
+}
+
+async function extractTextExcerpt(asset: any) {
+  if (!shouldExtractText(asset)) return { status: "metadata_only", text_excerpt: "" };
+  const size = Number(asset?.size_bytes || 0);
+  if (size > 1_000_000) return { status: "metadata_only_large_file", text_excerpt: "" };
+  const url = text(asset?.file_url, 4000);
+  if (!/^https:\/\//i.test(url)) return { status: "metadata_only_no_url", text_excerpt: "" };
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return { status: "text_fetch_failed", text_excerpt: "" };
+    const declared = Number(response.headers.get("content-length") || size || 0);
+    if (declared > 1_000_000) return { status: "metadata_only_large_file", text_excerpt: "" };
+    const contentType = String(response.headers.get("content-type") || asset?.mime_type || "");
+    if (!TEXT_MIME_RE.test(contentType) && !shouldExtractText(asset)) {
+      return { status: "metadata_only", text_excerpt: "" };
+    }
+    const raw = await response.text();
+    const cleaned = raw.replace(/\u0000/g, "").replace(/[\t ]+$/gm, "").trim();
+    return {
+      status: cleaned ? "text_excerpt_ready" : "metadata_only_empty_text",
+      text_excerpt: cleaned.slice(0, 12000),
+    };
+  } catch {
+    return { status: "text_fetch_failed", text_excerpt: "" };
+  }
+}
+
+async function summarizeAsset(asset: any) {
+  const extracted = await extractTextExcerpt(asset);
+  return {
+    id: text(asset?.id, 200),
+    name: text(asset?.name, 240),
+    kind: text(asset?.kind, 40) || "other",
+    mime_type: text(asset?.mime_type, 120),
+    file_type: text(asset?.file_type, 40),
+    size_bytes: Number.isFinite(Number(asset?.size_bytes)) ? Number(asset.size_bytes) : 0,
+    notes: text(asset?.notes, 1000),
+    processing_status: extracted.status,
+    ...(extracted.text_excerpt ? { text_excerpt: extracted.text_excerpt } : {}),
+  };
+}
+
+async function resolveInputAssets(base44: any, user: any, context: any, conversationId: string, projectId: string) {
+  const service = base44.asServiceRole;
+  const ids = assetIdList(context || {});
+  const scopes = assetScopeList(context || {}, conversationId, projectId);
+  const records = new Map<string, any>();
+
+  for (const id of ids) {
+    const asset = await service.entities.Asset.get(id).catch(() => null);
+    if (asset?.id) records.set(String(asset.id), asset);
+  }
+  for (const scope of scopes) {
+    const rows = await service.entities.Asset.filter({ project_id: scope }, "-created_date", 20).catch(() => []);
+    for (const asset of rows || []) {
+      if (asset?.id) records.set(String(asset.id), asset);
+    }
+  }
+
+  const owned = [...records.values()].filter((asset) => ownsAsset(user, asset)).slice(0, 12);
+  return Promise.all(owned.map(summarizeAsset));
+}
+
 Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") {
