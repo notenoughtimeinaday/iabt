@@ -16,6 +16,7 @@ import Studio from '@/pages/Studio';
 import ProjectDetail from '@/pages/ProjectDetail';
 import Deliverables from '@/pages/Deliverables';
 import Legal from '@/pages/Legal';
+import Support from '@/pages/Support';
 import AdminCompliance from '@/pages/AdminCompliance';
 import Integrations from '@/pages/Integrations';
 import Connect from '@/pages/Connect';
@@ -40,6 +41,7 @@ const AuthenticatedApp = () => {
     "/privacy",
     "/terms",
     "/acceptable-use",
+    "/support",
   ]);
   const isPublicPath = publicPaths.has(pathname);
 
@@ -74,6 +76,7 @@ const AuthenticatedApp = () => {
       <Route path="/privacy" element={<Legal />} />
       <Route path="/terms" element={<Legal />} />
       <Route path="/acceptable-use" element={<Legal />} />
+      <Route path="/support" element={<Support />} />
       <Route path="/oauth/consent" element={<OAuthConsent />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<LegalAcceptanceGate />}>
