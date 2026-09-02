@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleUserRound,
-  FileSearch2,
   Handshake,
   Inbox,
   KeyRound,
