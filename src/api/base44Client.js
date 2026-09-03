@@ -21,5 +21,6 @@ export const getBase44PublicSettings = async () => {
     token,
     interceptResponses: true,
   });
-  return appClient.get(`/prod/public-settings/by-id/${appId}`);
+  const settings = await appClient.get(`/prod/public-settings/by-id/${appId}`);
+  return { ...settings, has_session: Boolean(token) };
 };
