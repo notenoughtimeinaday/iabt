@@ -202,5 +202,7 @@ export const standaloneClient = {
   },
 };
 
-export const getStandalonePublicSettings = () =>
-  request("/v1/public-settings", { auth: false });
+export const getStandalonePublicSettings = async () => {
+  const settings = await request("/v1/public-settings", { auth: false });
+  return { ...settings, has_session: Boolean(accessToken) };
+};
