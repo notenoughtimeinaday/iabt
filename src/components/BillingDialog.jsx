@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, CreditCard, Loader2, ShieldCheck, Sparkles, Zap } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { base44 } from "@/api/iabtClient";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
