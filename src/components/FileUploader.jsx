@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { UploadCloud, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { base44 } from "@/api/base44Client";
+import { base44 } from "@/api/iabtClient";
 import { useAuth } from "@/lib/AuthContext";
 
 function classifyKind(mimeType, name) {
