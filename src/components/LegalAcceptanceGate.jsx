@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { base44 } from "@/api/iabtClient";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/AuthContext";
 import { IABT_POLICY_VERSION } from "@/lib/legal";
