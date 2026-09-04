@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export const CREATION_PRICING_VERSION = "iabt-standalone-2026-09-04.3";
+export const CREATION_PRICING_VERSION = "iabt-standalone-2026-09-04.4";
 const QUOTE_TTL_MS = 30 * 60 * 1000;
 
 const normalize = (value, max = 12000) =>
@@ -8,13 +8,16 @@ const normalize = (value, max = 12000) =>
 
 export const inferCreationIntent = (requestText) => {
   const text = normalize(requestText).toLowerCase();
+  if (/\b(g-?code|cnc|toolpath|machining)\b/.test(text)) return "gcode_simulation";
+  if (/\b(automation|automate|workflow|scheduled task|webhook workflow)\b/.test(text)) return "automation";
+  if (/\b(wireframe|design system|design tokens|interface design|brand guide|mockup)\b/.test(text)) return "design";
   if (/\b(website|web site|landing page|storefront|e-?commerce site)\b/.test(text)) return "website";
   if (/\b(app|application|mobile app|web app|software|piano app)\b/.test(text)) return "app";
   if (/\b(video|mp4|film|animation|commercial clip)\b/.test(text)) return "video";
   if (/\b(audio|song|music track|mp3|voiceover|sound effect)\b/.test(text)) return "audio";
   if (/\b(document|report|proposal|letter|pdf|docx|manual)\b/.test(text)) return "document";
   if (/\b(image|photo|illustration|logo|poster|graphic)\b/.test(text)) return "image";
-  if (/\b(code|script|library|api)\b/.test(text)) return "code";
+  if (/\b(code|script|library|api|command line|cli)\b/.test(text)) return "code";
   return "app";
 };
 
@@ -26,6 +29,10 @@ const titleFor = (requestText, intent) => {
   if (intent === "video") return "Video Production";
   if (intent === "document") return "JERICHO Document";
   if (intent === "image") return "Original Image";
+  if (intent === "code") return "JERICHO Code Project";
+  if (intent === "design") return "JERICHO Design Specification";
+  if (intent === "gcode_simulation") return "JERICHO G-code Simulation";
+  if (intent === "automation") return "JERICHO Automation Runbook";
   return text.slice(0, 90) || "IABT Creation";
 };
 
@@ -221,6 +228,100 @@ const capabilityFor = (intent, user, providers, requestText) => {
         : ready
           ? []
           : ["VIDEO RENDERER NOT READY: IABT will create a production brief without claiming an MP4."]
+    };
+  }
+  if (intent === "code") {
+    return {
+      id: "iabt-code-scaffold-v1",
+      provider: "iabt-standalone",
+      providerReady: true,
+      renderReady: true,
+      creditCost: 1,
+      providerCostCents: 0,
+      jobType: "creation.code",
+      deliverables: [
+        "Runnable dependency-free JavaScript project scaffold",
+        "Automated scaffold test",
+        "Transparent validation and limitation report"
+      ],
+      steps: [
+        { order: 1, title: "Preserve objective", deliverable: "Request-bound project definition" },
+        { order: 2, title: "Create runnable scaffold", deliverable: "Source ZIP" },
+        { order: 3, title: "Validate delivery boundary", deliverable: "Validation report" }
+      ],
+      warnings: [
+        "The package is a runnable scaffold. It does not claim request-specific business logic, deployment, or third-party integrations are complete."
+      ]
+    };
+  }
+  if (intent === "design") {
+    return {
+      id: "iabt-design-specification-v1",
+      provider: "iabt-standalone",
+      providerReady: true,
+      renderReady: true,
+      creditCost: 1,
+      providerCostCents: 0,
+      jobType: "creation.design",
+      deliverables: [
+        "Reviewable Markdown design specification",
+        "Machine-readable design tokens",
+        "Accessible SVG design board"
+      ],
+      steps: [
+        { order: 1, title: "Define experience direction", deliverable: "Design specification" },
+        { order: 2, title: "Create reusable tokens", deliverable: "Design Tokens JSON" },
+        { order: 3, title: "Render review board", deliverable: "SVG design board" }
+      ],
+      warnings: ["No Figma file or implemented production interface is claimed."]
+    };
+  }
+  if (intent === "gcode_simulation") {
+    return {
+      id: "iabt-gcode-simulation-v1",
+      provider: "iabt-standalone",
+      providerReady: true,
+      renderReady: true,
+      creditCost: 1,
+      providerCostCents: 0,
+      jobType: "creation.gcode-simulation",
+      deliverables: [
+        "Simulation-only manufacturing runbook",
+        "Machine-profile template",
+        "Machine-readiness safety report"
+      ],
+      steps: [
+        { order: 1, title: "Identify missing machine inputs", deliverable: "Machine profile template" },
+        { order: 2, title: "Define simulation path", deliverable: "Simulation runbook" },
+        { order: 3, title: "Enforce physical safety boundary", deliverable: "Safety report" }
+      ],
+      warnings: [
+        "No executable machine-motion G-code will be produced without a verified machine profile, controller post-processor, collision simulation, and operator approval."
+      ]
+    };
+  }
+  if (intent === "automation") {
+    return {
+      id: "iabt-automation-runbook-v1",
+      provider: "iabt-standalone",
+      providerReady: true,
+      renderReady: true,
+      creditCost: 1,
+      providerCostCents: 0,
+      jobType: "creation.automation",
+      deliverables: [
+        "Disabled dry-run automation runbook",
+        "Integration activation guide",
+        "Safety validation report"
+      ],
+      steps: [
+        { order: 1, title: "Define trigger and steps", deliverable: "Automation Runbook JSON" },
+        { order: 2, title: "Bind authorization gates", deliverable: "Activation guide" },
+        { order: 3, title: "Validate safe defaults", deliverable: "Validation report" }
+      ],
+      warnings: [
+        "The runbook is disabled by default. No message, payment, publication, deletion, or external action is performed."
+      ]
     };
   }
   return {
