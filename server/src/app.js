@@ -9,6 +9,10 @@ import {
   verifyPassword
 } from "./security.js";
 import { readSingleFile } from "./multipart.js";
+import {
+  createCreationPlan,
+  executeCreationPlan
+} from "./creation/planner.js";
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -311,7 +315,14 @@ const handleEntity = async ({ req, segments, body, repository, config }) => {
   throw new HttpError(405, "method_not_allowed", "Method is not allowed");
 };
 
-const handleAgents = async ({ req, segments, body, repository }) => {
+const handleAgents = async ({
+  req,
+  segments,
+  body,
+  repository,
+  config,
+  providers
+}) => {
   const { user } = await authenticate(req, repository);
   const conversationId = segments[3];
 
@@ -490,7 +501,15 @@ const handleJobs = async ({ req, segments, repository }) => {
   throw new HttpError(405, "method_not_allowed", "Method is not allowed");
 };
 
-const handleFunction = async ({ req, segments, repository, config, storage, providers }) => {
+const handleFunction = async ({
+  req,
+  segments,
+  body,
+  repository,
+  config,
+  storage,
+  providers
+}) => {
   if (req.method !== "POST") throw new HttpError(405, "method_not_allowed", "Method is not allowed");
   const { user } = await authenticate(req, repository);
   const name = decodeURIComponent(segments[2] || "");
@@ -649,7 +668,14 @@ export const createIabtHandler = ({
       segments[1] === "agents" &&
       segments[2] === "conversations"
     ) {
-      result = await handleAgents({ req, segments, body, repository, config });
+      result = await handleAgents({
+        req,
+        segments,
+        body,
+        repository,
+        config,
+        providers
+      });
     } else if (segments[0] === "v1" && segments[1] === "functions") {
       result = await handleFunction({
         req,
