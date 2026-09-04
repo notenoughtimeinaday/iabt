@@ -59,6 +59,7 @@ export class MemoryRepository {
     this.creditEntries = [];
     this.incidents = new Map();
     this.storedObjects = new Map();
+    this.stripeEvents = new Map();
   }
 
   async createUser({ email, passwordHash, name = "", role = "user", emailVerified = false }) {
@@ -224,6 +225,46 @@ export class MemoryRepository {
       metadata: clone(metadata),
       created_date: nowIso()
     });
+  }
+
+  async startStripeEvent({ eventId, eventType, livemode, payloadSha256 }) {
+    const existing = this.stripeEvents.get(eventId);
+    if (existing && existing.status !== "failed") {
+      return { claimed: false, event: clone(existing) };
+    }
+    const timestamp = nowIso();
+    const event = {
+      event_id: eventId,
+      event_type: eventType,
+      livemode: Boolean(livemode),
+      status: "processing",
+      payload_sha256: payloadSha256,
+      error_code: null,
+      created_date: existing?.created_date || timestamp,
+      updated_date: timestamp,
+      completed_date: null
+    };
+    this.stripeEvents.set(eventId, event);
+    return { claimed: true, event: clone(event) };
+  }
+
+  async finishStripeEvent(eventId) {
+    const event = this.stripeEvents.get(eventId);
+    if (!event) return null;
+    event.status = "succeeded";
+    event.error_code = null;
+    event.updated_date = nowIso();
+    event.completed_date = event.updated_date;
+    return clone(event);
+  }
+
+  async failStripeEvent(eventId, errorCode) {
+    const event = this.stripeEvents.get(eventId);
+    if (!event) return null;
+    event.status = "failed";
+    event.error_code = String(errorCode || "stripe_event_failed");
+    event.updated_date = nowIso();
+    return clone(event);
   }
 
   creditAccount(ownerId) {
