@@ -53,45 +53,80 @@ const request = async (path, options = {}) => {
   return payload;
 };
 
-const entity = (name) => ({
-  list: (sort = "-created_date", limit = 50, skip = 0) =>
-    request(`/v1/entities/${encodeURIComponent(name)}/list`, {
-      method: "POST",
-      body: { sort, limit, skip },
-    }),
-  filter: (query = {}, sort = "-created_date", limit = 50, skip = 0) =>
-    request(`/v1/entities/${encodeURIComponent(name)}/filter`, {
-      method: "POST",
-      body: { query, sort, limit, skip },
-    }),
-  get: (id) =>
-    request(`/v1/entities/${encodeURIComponent(name)}/${encodeURIComponent(id)}`),
-  create: (record) =>
-    request(`/v1/entities/${encodeURIComponent(name)}`, {
-      method: "POST",
-      body: record,
-    }),
-  update: (id, record) =>
-    request(`/v1/entities/${encodeURIComponent(name)}/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: record,
-    }),
-  delete: (id) =>
-    request(`/v1/entities/${encodeURIComponent(name)}/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    }),
-  deleteMany: (query) =>
-    request(`/v1/entities/${encodeURIComponent(name)}/delete-many`, {
-      method: "POST",
-      body: { query },
-    }),
-  bulkCreate: (records) =>
-    request(`/v1/entities/${encodeURIComponent(name)}/bulk`, {
-      method: "POST",
-      body: { records },
-    }),
-  subscribe: () => () => {},
-});
+const specialCollection = async (name) => {
+  if (name === "GenerationJob") return request("/v1/jobs");
+  if (name === "CreationArtifact") return request("/v1/artifacts");
+  return null;
+};
+
+const sortAndPage = (records, sort, limit, skip) => {
+  const descending = String(sort || "").startsWith("-");
+  const field = String(sort || "created_date").replace(/^-/, "");
+  return [...records]
+    .sort((left, right) => {
+      const a = left[field] ?? "";
+      const b = right[field] ?? "";
+      return (a === b ? 0 : a > b ? 1 : -1) * (descending ? -1 : 1);
+    })
+    .slice(skip, skip + limit);
+};
+
+const entity = (name) => {
+  const special = name === "GenerationJob" || name === "CreationArtifact";
+  return {
+    list: async (sort = "-created_date", limit = 50, skip = 0) => {
+      if (special) return sortAndPage(await specialCollection(name), sort, limit, skip);
+      return request(`/v1/entities/${encodeURIComponent(name)}/list`, {
+        method: "POST",
+        body: { sort, limit, skip },
+      });
+    },
+    filter: async (query = {}, sort = "-created_date", limit = 50, skip = 0) => {
+      if (special) {
+        const records = await specialCollection(name);
+        const filtered = records.filter((record) =>
+          Object.entries(query).every(([key, value]) => record[key] === value),
+        );
+        return sortAndPage(filtered, sort, limit, skip);
+      }
+      return request(`/v1/entities/${encodeURIComponent(name)}/filter`, {
+        method: "POST",
+        body: { query, sort, limit, skip },
+      });
+    },
+    get: (id) =>
+      special
+        ? specialCollection(name).then((records) =>
+            records.find((record) => record.id === id) || null,
+          )
+        : request(`/v1/entities/${encodeURIComponent(name)}/${encodeURIComponent(id)}`),
+    create: (record) =>
+      request(`/v1/entities/${encodeURIComponent(name)}`, {
+        method: "POST",
+        body: record,
+      }),
+    update: (id, record) =>
+      request(`/v1/entities/${encodeURIComponent(name)}/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: record,
+      }),
+    delete: (id) =>
+      request(`/v1/entities/${encodeURIComponent(name)}/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      }),
+    deleteMany: (query) =>
+      request(`/v1/entities/${encodeURIComponent(name)}/delete-many`, {
+        method: "POST",
+        body: { query },
+      }),
+    bulkCreate: (records) =>
+      request(`/v1/entities/${encodeURIComponent(name)}/bulk`, {
+        method: "POST",
+        body: { records },
+      }),
+    subscribe: () => () => {},
+  };
+};
 
 const entities = new Proxy(
   {},
