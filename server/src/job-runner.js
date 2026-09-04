@@ -3,6 +3,12 @@ import {
   buildDocumentArtifacts,
   buildInteractiveArtifacts
 } from "./creation/app-packager.js";
+import {
+  buildAutomationArtifacts,
+  buildCodeArtifacts,
+  buildDesignArtifacts,
+  buildGcodeSimulationArtifacts
+} from "./creation/specialized-artifacts.js";
 import { createId } from "./security.js";
 
 const safeFilename = (value, fallback) => {
@@ -74,6 +80,30 @@ const resultFor = async (job, providers) => {
       title: job.input.title,
       requestText: job.input.request_text,
       intent: job.input.intent
+    });
+  }
+  if (job.job_type === "creation.code") {
+    return buildCodeArtifacts({
+      title: job.input.title,
+      requestText: job.input.request_text
+    });
+  }
+  if (job.job_type === "creation.design") {
+    return buildDesignArtifacts({
+      title: job.input.title,
+      requestText: job.input.request_text
+    });
+  }
+  if (job.job_type === "creation.gcode-simulation") {
+    return buildGcodeSimulationArtifacts({
+      title: job.input.title,
+      requestText: job.input.request_text
+    });
+  }
+  if (job.job_type === "creation.automation") {
+    return buildAutomationArtifacts({
+      title: job.input.title,
+      requestText: job.input.request_text
     });
   }
   const task = providerTask(job);
