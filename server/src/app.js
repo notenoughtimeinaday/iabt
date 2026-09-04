@@ -212,6 +212,16 @@ const handleEntity = async ({ req, segments, body, repository, config }) => {
   const { user } = await authenticate(req, repository);
   const entityName = requireEntity(config, decodeURIComponent(segments[2] || ""));
   const operation = segments[3];
+  const readOperation =
+    req.method === "GET" ||
+    (req.method === "POST" && (operation === "list" || operation === "filter"));
+  if (config.serverManagedEntities.has(entityName) && !readOperation) {
+    throw new HttpError(
+      403,
+      "server_managed_entity",
+      "This record type can be changed only through its verified IABT workflow"
+    );
+  }
 
   if (req.method === "POST" && operation === "list") {
     return {
