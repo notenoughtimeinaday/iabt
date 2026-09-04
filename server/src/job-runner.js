@@ -93,6 +93,91 @@ const resultFor = async (job, providers) => {
   };
 };
 
+const providerContext = (job) => ({
+  approval: job.approval,
+  idempotencyKey: job.idempotency_key
+});
+
+const lumaStep = async (job, providers, pollDelayMs) => {
+  let providerJobId = String(job.input.provider_job_id || "");
+  let providerResult;
+  if (!providerJobId) {
+    providerResult = await providers.execute(
+      "luma",
+      "submit_video",
+      job.input,
+      providerContext(job)
+    );
+    providerJobId = String(providerResult.providerJobId || "");
+    if (!providerJobId) {
+      throw Object.assign(new Error("The managed video renderer returned no job ID"), {
+        code: "luma_invalid_response"
+      });
+    }
+  } else {
+    providerResult = await providers.execute(
+      "luma",
+      "get_video",
+      { ...job.input, provider_job_id: providerJobId },
+      providerContext(job)
+    );
+  }
+
+  if (providerResult.state === "failed") {
+    throw Object.assign(
+      new Error(providerResult.error || "The managed video renderer could not complete the job"),
+      { code: "luma_generation_failed", retryable: false }
+    );
+  }
+
+  if (providerResult.state === "succeeded" && providerResult.outputUrl) {
+    const video = await providers.execute(
+      "luma",
+      "download_video",
+      {
+        ...job.input,
+        provider_job_id: providerJobId,
+        output_url: providerResult.outputUrl,
+        filename: safeFilename(job.input.title, "JERICHO Video") + ".mp4"
+      },
+      providerContext(job)
+    );
+    return {
+      deferred: false,
+      result: {
+        metadata: {
+          provider_job_id: providerJobId,
+          provider_state: "succeeded",
+          poll_count: Number(job.input.provider_poll_count || 0)
+        },
+        artifacts: [{ ...video, kind: "video", metadata: video.metadata || {} }]
+      }
+    };
+  }
+
+  const pollCount = Number(job.input.provider_poll_count || 0) +
+    (job.input.provider_job_id ? 1 : 0);
+  if (pollCount >= 120) {
+    throw Object.assign(new Error("The managed video renderer did not finish within the polling window"), {
+      code: "luma_generation_timeout",
+      retryable: false
+    });
+  }
+  return {
+    deferred: true,
+    inputPatch: {
+      provider_job_id: providerJobId,
+      provider_poll_count: pollCount
+    },
+    outputPatch: {
+      provider_job_id: providerJobId,
+      provider_state: "processing",
+      provider_poll_count: pollCount
+    },
+    availableAt: new Date(Date.now() + pollDelayMs).toISOString()
+  };
+};
+
 const syncPlanStatus = async (repository, job, status) => {
   if (!job.input?.plan_id) return;
   const user = await repository.getUser(job.owner_id);
@@ -108,10 +193,32 @@ export const runClaimedJob = async ({
   workerId,
   repository,
   storage,
-  providers
+  providers,
+  pollDelayMs = 5000
 }) => {
   try {
-    const result = await resultFor(job, providers);
+    let result;
+    if (job.job_type === "provider.luma.video") {
+      const step = await lumaStep(job, providers, pollDelayMs);
+      if (step.deferred) {
+        const deferred = await repository.deferJob({
+          jobId: job.id,
+          workerId,
+          inputPatch: step.inputPatch,
+          outputPatch: step.outputPatch,
+          availableAt: step.availableAt
+        });
+        return {
+          job: deferred,
+          deferred: true,
+          artifacts: [],
+          released_credits: 0
+        };
+      }
+      result = step.result;
+    } else {
+      result = await resultFor(job, providers);
+    }
     if (!Array.isArray(result?.artifacts) || !result.artifacts.length) {
       throw Object.assign(new Error("The job did not produce a durable artifact"), {
         code: "durable_output_required"
