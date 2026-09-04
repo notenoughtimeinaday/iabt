@@ -785,7 +785,7 @@ const handleFunction = async ({
           production_routes: {
             app: { configured: true, reason: "deterministic_creation_and_packaging_ready" },
             website: { configured: true, reason: "deterministic_creation_and_packaging_ready" },
-            document: { configured: true, reason: "markdown_generation_and_storage_ready" },
+            document: { configured: true, reason: "markdown_docx_pdf_generation_and_storage_ready" },
             audio: {
               configured: Boolean(providers?.readiness?.().elevenlabs?.configured),
               reason: providers?.readiness?.().elevenlabs?.configured
