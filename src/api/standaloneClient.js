@@ -130,8 +130,15 @@ export const standaloneClient = {
     },
     register: (input) =>
       request("/v1/auth/register", { method: "POST", auth: false, body: input }),
-    verifyOtp: (input) =>
-      request("/v1/auth/verify-otp", { method: "POST", auth: false, body: input }),
+    verifyOtp: async (input) => {
+      const result = await request("/v1/auth/verify-otp", {
+        method: "POST",
+        auth: false,
+        body: input,
+      });
+      setToken(result?.access_token);
+      return result;
+    },
     resendOtp: (email) =>
       request("/v1/auth/resend-otp", { method: "POST", auth: false, body: { email } }),
     resetPasswordRequest: (email) =>
@@ -139,9 +146,13 @@ export const standaloneClient = {
     resetPassword: (input) =>
       request("/v1/auth/reset", { method: "POST", auth: false, body: input }),
     loginWithProvider: oauthRedirect,
-    logout: (returnTo) => {
-      setToken(null);
-      if (returnTo && typeof window !== "undefined") window.location.assign(returnTo);
+    logout: async (returnTo) => {
+      try {
+        if (accessToken) await request("/v1/auth/logout", { method: "POST" });
+      } finally {
+        setToken(null);
+        if (returnTo && typeof window !== "undefined") window.location.assign(returnTo);
+      }
     },
     redirectToLogin: (returnTo) => {
       if (typeof window === "undefined") return;
@@ -158,6 +169,16 @@ export const standaloneClient = {
         method: "POST",
         body: args,
       }),
+  },
+  jobs: {
+    list: () => request("/v1/jobs"),
+    get: (id) => request(`/v1/jobs/${encodeURIComponent(id)}`),
+  },
+  providers: {
+    readiness: () => request("/v1/providers/readiness"),
+  },
+  files: {
+    access: (id) => request(`/v1/files/${encodeURIComponent(id)}/access`),
   },
   integrations: {
     Core: {
