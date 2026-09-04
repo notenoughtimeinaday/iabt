@@ -345,10 +345,12 @@ export const executeCreationPlan = async ({
       request_text: plan.request_text,
       plan_id: plan.id,
       conversation_id: plan.conversation_id || "",
-      project_id: plan.project_id || ""
+      project_id: plan.project_id || "",
+      render_ready: Boolean(plan.render_ready)
     },
     approval: {
       approved: true,
+      pricing_version: plan.pricing_version,
       approval_id: "plan:" + plan.id,
       approved_at: new Date().toISOString(),
       scope: ownerDemo ? "owner_demo" : "commercial",
