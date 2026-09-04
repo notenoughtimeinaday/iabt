@@ -17,7 +17,16 @@ export const createJobWorker = ({
       leaseMs: config.worker.leaseMs
     });
     if (!job) return null;
-    return runClaimedJob({ job, workerId, repository, storage, providers });
+    return runClaimedJob({
+      job,
+      workerId,
+      repository,
+      storage,
+      providers,
+      pollDelayMs: config.environment === "test"
+        ? 0
+        : Math.max(5000, Math.min(15000, config.worker.pollMs * 3))
+    });
   };
 
   const tick = async () => {
