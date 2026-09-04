@@ -385,6 +385,15 @@ export class MemoryRepository {
     return clone(this.storedObjects.get(id) || null);
   }
 
+  async listStoredObjects(user, { limit = 100 } = {}) {
+    return clone(
+      [...this.storedObjects.values()]
+        .filter((record) => this.canAccess(record, user))
+        .sort((a, b) => b.created_date.localeCompare(a.created_date))
+        .slice(0, limit)
+    );
+  }
+
   async completeJob({ jobId, workerId, output = {}, artifact = null, artifacts = [] }) {
     const job = this.jobs.get(jobId);
     if (!job || job.status !== "running" || job.locked_by !== workerId) {
