@@ -514,6 +514,17 @@ export class PostgresRepository {
     return objectFromRow(result.rows[0]);
   }
 
+  async listStoredObjects(user, { limit = 100 } = {}) {
+    const params = [];
+    const ownerClause = user.role === "admin" ? "" : " WHERE owner_id = $" + params.push(user.id);
+    params.push(Math.max(1, Math.min(500, limit)));
+    const result = await this.pool.query(
+      "SELECT * FROM iabt_stored_objects" + ownerClause + " ORDER BY created_at DESC LIMIT $" + params.length,
+      params
+    );
+    return result.rows.map(objectFromRow);
+  }
+
   async completeJob({ jobId, workerId, output = {}, artifact = null, artifacts = [] }) {
     return this.withTransaction(async (client) => {
       const locked = await client.query(
