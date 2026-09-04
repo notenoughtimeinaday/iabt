@@ -385,22 +385,35 @@ export class MemoryRepository {
     return clone(this.storedObjects.get(id) || null);
   }
 
-  async completeJob({ jobId, workerId, output = {}, artifact = null }) {
+  async completeJob({ jobId, workerId, output = {}, artifact = null, artifacts = [] }) {
     const job = this.jobs.get(jobId);
     if (!job || job.status !== "running" || job.locked_by !== workerId) {
       throw Object.assign(new Error("Job lease is no longer owned by this worker"), {
         code: "job_lease_lost"
       });
     }
-    if (job.credit_amount > 0 && !artifact) {
+    const artifactInputs = artifacts.length ? artifacts : artifact ? [artifact] : [];
+    if (job.credit_amount > 0 && !artifactInputs.length) {
       throw Object.assign(new Error("Credits cannot be captured without a durable artifact"), {
         code: "durable_output_required"
       });
     }
-    const stored = artifact ? await this.createStoredObject({ ...artifact, jobId }) : null;
+    const storedArtifacts = [];
+    for (const item of artifactInputs) {
+      storedArtifacts.push(await this.createStoredObject({ ...item, jobId }));
+    }
+    const stored = storedArtifacts[0] || null;
     const timestamp = nowIso();
     job.status = "succeeded";
-    job.output = { ...clone(output), ...(stored ? { artifact_id: stored.id } : {}) };
+    job.output = {
+      ...clone(output),
+      ...(stored
+        ? {
+            artifact_id: stored.id,
+            artifact_ids: storedArtifacts.map((item) => item.id)
+          }
+        : {})
+    };
     job.locked_at = null;
     job.locked_by = null;
     job.updated_date = timestamp;
@@ -420,7 +433,7 @@ export class MemoryRepository {
         created_date: timestamp
       });
     }
-    return { job: clone(job), artifact: stored };
+    return { job: clone(job), artifact: stored, artifacts: storedArtifacts };
   }
 
   async failJob({ jobId, workerId, error, retryAt = null }) {
