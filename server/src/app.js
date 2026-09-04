@@ -547,7 +547,7 @@ const publicJob = (job) => ({
   conversation_id: job.input?.conversation_id || job.output?.conversation_id || "",
   project_id: job.input?.project_id || job.output?.project_id || "",
   intent: job.input?.intent || job.output?.intent || "",
-  mode: job.input?.intent === "audio" ? "render" : "prepare",
+  mode: job.input?.render_ready ? "render" : "prepare",
   provider: job.job_type.startsWith("provider.")
     ? job.job_type.split(".")[1]
     : "iabt-standalone",
