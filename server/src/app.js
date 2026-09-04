@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   createId,
   createOpaqueToken,
@@ -7,6 +8,7 @@ import {
   normalizeEmail,
   verifyPassword
 } from "./security.js";
+import { readSingleFile } from "./multipart.js";
 
 class HttpError extends Error {
   constructor(status, code, message) {
