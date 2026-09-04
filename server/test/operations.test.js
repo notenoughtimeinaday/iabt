@@ -251,6 +251,199 @@ test("provider adapters reject unapproved paid calls before network access", asy
   assert.equal(fetchCalls, 0);
 });
 
+test("asynchronous Luma jobs submit once, poll durably, and capture only after verified MP4 storage", async () => {
+  const repository = new MemoryRepository();
+  const user = await repository.createUser({
+    email: "video-owner@example.com",
+    passwordHash: "unused",
+    emailVerified: true,
+    role: "admin"
+  });
+  await repository.grantCredits({
+    ownerId: user.id,
+    amount: 2,
+    idempotencyKey: "video-opening-balance"
+  });
+  const job = await repository.enqueueJob({
+    ownerId: user.id,
+    jobType: "provider.luma.video",
+    input: {
+      title: "Owner Demo",
+      prompt: "Create a five-second original abstract motion test",
+      duration_seconds: 5,
+      estimated_cost_cents: 3,
+      render_ready: true
+    },
+    approval: {
+      approved: true,
+      approval_id: "video-owner-quote",
+      scope: "owner_demo",
+      max_cost_cents: 3
+    },
+    idempotencyKey: "video-owner-job",
+    creditAmount: 1
+  });
+
+  let submissions = 0;
+  let polls = 0;
+  let downloads = 0;
+  const mp4 = Buffer.concat([
+    Buffer.from([0, 0, 0, 24]),
+    Buffer.from("ftypmp42", "ascii"),
+    Buffer.alloc(64)
+  ]);
+  const config = loadConfig({
+    NODE_ENV: "test",
+    IABT_AUTH_SECRET: "luma-test-secret",
+    LUMA_API_KEY: "configured-test-key",
+    IABT_ENABLE_PAID_MEDIA: "true",
+    IABT_MEDIA_BILLING_READY: "true",
+    IABT_LUMA_COST_PER_5_SECONDS_CENTS: "3"
+  });
+  const providers = createProviderRegistry(config, {
+    fetchImpl: async (url, options = {}) => {
+      if (url === "https://agents.lumalabs.ai/v1/generations" && options.method === "POST") {
+        submissions += 1;
+        return new Response(JSON.stringify({ id: "generation_123", state: "queued" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      if (url === "https://agents.lumalabs.ai/v1/generations/generation_123") {
+        polls += 1;
+        return new Response(JSON.stringify(
+          polls === 1
+            ? { id: "generation_123", state: "dreaming" }
+            : {
+                id: "generation_123",
+                state: "completed",
+                assets: { video: "https://media.example.test/video.mp4" }
+              }
+        ), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      if (url === "https://media.example.test/video.mp4") {
+        downloads += 1;
+        return new Response(mp4, {
+          status: 200,
+          headers: {
+            "Content-Type": "video/mp4",
+            "Content-Length": String(mp4.length)
+          }
+        });
+      }
+      throw new Error("Unexpected test URL: " + url);
+    }
+  });
+  const storage = await makeStorage();
+  const worker = createJobWorker({
+    repository,
+    storage,
+    providers,
+    config,
+    workerId: "worker-luma"
+  });
+
+  const submitted = await worker.runOnce();
+  assert.equal(submitted.deferred, true);
+  assert.equal(submitted.job.status, "queued");
+  assert.equal(submitted.job.input.provider_job_id, "generation_123");
+  assert.equal(submitted.job.attempt_count, 0);
+
+  const waiting = await worker.runOnce();
+  assert.equal(waiting.deferred, true);
+  assert.equal(waiting.job.output.provider_state, "processing");
+  assert.equal(waiting.job.input.provider_poll_count, 1);
+
+  const completed = await worker.runOnce();
+  assert.equal(completed.job.id, job.id);
+  assert.equal(completed.job.status, "succeeded");
+  assert.equal(submissions, 1);
+  assert.equal(polls, 2);
+  assert.equal(downloads, 1);
+  assert.equal(completed.artifacts.length, 1);
+  assert.equal(completed.artifact.content_type, "video/mp4");
+  const stored = await storage.read(completed.artifact.storage_key);
+  assert.equal(stored.subarray(4, 8).toString("ascii"), "ftyp");
+
+  const account = await repository.getCreditAccount(user.id);
+  assert.equal(account.available_credits, 1);
+  assert.equal(account.reserved_credits, 0);
+});
+
+test("invalid asynchronous video output creates an incident and releases reserved credits", async () => {
+  const repository = new MemoryRepository();
+  const user = await makeUser(repository, "invalid-video@example.com");
+  await repository.grantCredits({
+    ownerId: user.id,
+    amount: 1,
+    idempotencyKey: "invalid-video-balance"
+  });
+  await repository.enqueueJob({
+    ownerId: user.id,
+    jobType: "provider.luma.video",
+    input: {
+      title: "Invalid Video Test",
+      prompt: "Original test",
+      duration_seconds: 5,
+      estimated_cost_cents: 3,
+      render_ready: true
+    },
+    approval: {
+      approved: true,
+      approval_id: "invalid-video-quote",
+      scope: "owner_demo",
+      max_cost_cents: 3
+    },
+    idempotencyKey: "invalid-video-job",
+    creditAmount: 1
+  });
+  const config = loadConfig({
+    NODE_ENV: "test",
+    IABT_AUTH_SECRET: "luma-invalid-test-secret",
+    LUMA_API_KEY: "configured-test-key",
+    IABT_ENABLE_PAID_MEDIA: "true",
+    IABT_MEDIA_BILLING_READY: "true",
+    IABT_LUMA_COST_PER_5_SECONDS_CENTS: "3"
+  });
+  const providers = createProviderRegistry(config, {
+    fetchImpl: async (url) => {
+      if (url === "https://agents.lumalabs.ai/v1/generations") {
+        return new Response(JSON.stringify({
+          id: "generation_bad",
+          state: "completed",
+          assets: { video: "https://media.example.test/not-video.mp4" }
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      return new Response("not an mp4", {
+        status: 200,
+        headers: { "Content-Type": "text/plain" }
+      });
+    }
+  });
+  const worker = createJobWorker({
+    repository,
+    storage: await makeStorage(),
+    providers,
+    config,
+    workerId: "worker-invalid-luma"
+  });
+
+  const failed = await worker.runOnce();
+  assert.equal(failed.job.status, "failed");
+  assert.equal(failed.job.last_error_code, "luma_invalid_video");
+  assert.equal(failed.released_credits, 1);
+  assert.equal(failed.incident.error_code, "luma_invalid_video");
+  const account = await repository.getCreditAccount(user.id);
+  assert.equal(account.available_credits, 1);
+  assert.equal(account.reserved_credits, 0);
+});
+
 test("production refuses local artifact storage", async () => {
   const config = loadConfig({
     NODE_ENV: "production",
