@@ -564,7 +564,12 @@ const handleFunction = async ({ req, segments, repository, config, storage, prov
   );
 };
 
-export const createIabtHandler = ({ repository, config }) => async (req, res) => {
+export const createIabtHandler = ({
+  repository,
+  config,
+  storage = null,
+  providers = null
+}) => async (req, res) => {
   const requestId = createId();
   const origin = req.headers.origin || "";
   try {
@@ -583,7 +588,10 @@ export const createIabtHandler = ({ repository, config }) => async (req, res) =>
 
     const url = new URL(req.url || "/", "http://iabt.local");
     const segments = url.pathname.split("/").filter(Boolean);
-    const body = ["POST", "PATCH", "PUT"].includes(req.method)
+    const isMultipart = /^multipart\/form-data\b/i.test(
+      String(req.headers["content-type"] || "")
+    );
+    const body = ["POST", "PATCH", "PUT"].includes(req.method) && !isMultipart
       ? await readJson(req)
       : {};
 
@@ -594,7 +602,7 @@ export const createIabtHandler = ({ repository, config }) => async (req, res) =>
         payload: {
           ok: true,
           service: "iabt-standalone",
-          version: "0.1.0",
+          version: "0.2.0",
           base44_required: false
         }
       };
@@ -622,18 +630,44 @@ export const createIabtHandler = ({ repository, config }) => async (req, res) =>
     ) {
       result = await handleAgents({ req, segments, body, repository, config });
     } else if (segments[0] === "v1" && segments[1] === "functions") {
-      result = await handleFunction({ req, segments, body, repository, config });
-    } else if (segments[0] === "v1" && segments[1] === "files") {
+      result = await handleFunction({
+        req,
+        segments,
+        body,
+        repository,
+        config,
+        storage,
+        providers
+      });
+    } else if (segments[0] === "v1" && segments[1] === "jobs") {
+      result = await handleJobs({ req, segments, repository });
+    } else if (
+      req.method === "GET" &&
+      segments[0] === "v1" &&
+      segments[1] === "providers" &&
+      segments[2] === "readiness"
+    ) {
       await authenticate(req, repository);
-      throw new HttpError(
-        501,
-        "storage_not_configured",
-        "Private object storage is not configured in this milestone"
-      );
+      result = {
+        status: 200,
+        payload: providers?.readiness?.() || {}
+      };
+    } else if (segments[0] === "v1" && segments[1] === "files") {
+      result = await handleFiles({
+        req,
+        res,
+        url,
+        segments,
+        repository,
+        config,
+        storage,
+        origin
+      });
     } else {
       throw new HttpError(404, "route_not_found", "Route was not found");
     }
 
+    if (result?.direct) return;
     send(res, result.status, result.payload, origin);
   } catch (error) {
     const status = Number(error.status) || 500;
