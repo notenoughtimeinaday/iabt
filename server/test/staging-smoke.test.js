@@ -19,7 +19,7 @@ test("staging smoke test verifies independent infrastructure without mutations",
         return jsonResponse({
           ok: true,
           service: "iabt-standalone",
-          version: "0.5.0",
+          version: "0.6.0",
           base44_required: false
         });
       }
