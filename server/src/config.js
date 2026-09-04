@@ -123,7 +123,15 @@ export const loadConfig = (env = process.env) => {
       stripe: freezeProvider({
         secretKey: env.STRIPE_SECRET_KEY || "",
         webhookSecret: env.STRIPE_WEBHOOK_SECRET || "",
-        mode: env.IABT_STRIPE_MODE === "live" ? "live" : "test"
+        mode: env.IABT_STRIPE_MODE === "live" ? "live" : "test",
+        metadataAppId: env.IABT_STRIPE_METADATA_APP_ID || "6a849bcd3e04d068553b4af7",
+        creditPackSize: asPositiveInteger(env.IABT_CREDIT_PACK_SIZE, 100),
+        creditPackPriceId: env.STRIPE_AI_CREDIT_PACK_PRICE_ID || "",
+        prices: freezeProvider({
+          builder: env.STRIPE_BUILDER_PRICE_ID || "",
+          pro: env.STRIPE_PRO_PRICE_ID || "",
+          agency: env.STRIPE_AGENCY_PRICE_ID || ""
+        })
       })
     }),
     allowedEntities: new Set(ALLOWED_ENTITIES),
