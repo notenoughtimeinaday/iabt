@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
 import { after, before, test } from "node:test";
 import { createServer } from "node:http";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -15,7 +16,8 @@ const config = loadConfig({
   NODE_ENV: "test",
   IABT_AUTH_SECRET: "test-only-auth-secret",
   IABT_PUBLIC_ORIGIN: "http://localhost:5173",
-  IABT_EXPOSE_DEV_OTP: "true"
+  IABT_EXPOSE_DEV_OTP: "true",
+  STRIPE_WEBHOOK_SECRET: "whsec_http_route_test"
 });
 const repository = new MemoryRepository();
 const storageDirectory = await mkdtemp(join(tmpdir(), "iabt-api-"));
@@ -103,6 +105,33 @@ test("health and public settings are Base44-independent", async () => {
   assert.equal(settings.response.status, 200);
   assert.equal(settings.payload.standalone, true);
   assert.equal(settings.payload.public_settings.operator, "Insured Spending, LLC");
+});
+
+test("Stripe webhook route preserves the raw signed body and does not require a user session", async () => {
+  const event = {
+    id: "evt_http_route_1",
+    type: "ping",
+    livemode: false,
+    data: { object: {} }
+  };
+  const rawBody = JSON.stringify(event);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = createHmac("sha256", "whsec_http_route_test")
+    .update(timestamp + "." + rawBody)
+    .digest("hex");
+  const response = await fetch(origin + "/v1/webhooks/stripe", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Stripe-Signature": "t=" + timestamp + ",v1=" + signature
+    },
+    body: rawBody
+  });
+  const payload = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(payload.received, true);
+  assert.equal(payload.action, "ignored");
+  assert.equal(repository.stripeEvents.get(event.id).status, "succeeded");
 });
 
 test("registration, verification, login, and sessions work without provider credentials", async () => {
