@@ -32,6 +32,10 @@ The Intelligent Application Building Tool (IABT) is an autonomous creation and p
 - Public Trust & Legal Center plus versioned in-app Terms, Privacy, and Acceptable Use acceptance
 - JSON import/export
 - Standalone HTML, static multi-page HTML ZIP, React source, and runnable Vite/React ZIP exports
+- Prompt-inferred runnable JavaScript code scaffolds with tests and explicit limitation reports
+- Design specifications with JSON tokens and accessible SVG review boards
+- Simulation-only G-code readiness packages with no unverified machine motion
+- Disabled dry-run automation runbooks with authorization, idempotency, and recovery gates
 - Browser-generated ZIPs with no temporary server filesystem
 - Responsive desktop/mobile editor
 
