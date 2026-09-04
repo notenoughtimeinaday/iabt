@@ -13,6 +13,7 @@ import {
   createCreationPlan,
   executeCreationPlan
 } from "./creation/planner.js";
+import { processStripeWebhook } from "./billing/stripe-webhook.js";
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -31,7 +32,7 @@ const parseLimit = (value, fallback = 50, max = 500) => {
   return Math.min(Math.floor(parsed), max);
 };
 
-const readJson = async (req) => {
+const readBodyBuffer = async (req) => {
   const chunks = [];
   let bytes = 0;
   for await (const chunk of req) {
@@ -41,9 +42,14 @@ const readJson = async (req) => {
     }
     chunks.push(chunk);
   }
-  if (!chunks.length) return {};
+  return chunks.length ? Buffer.concat(chunks) : Buffer.alloc(0);
+};
+
+const readJson = async (req) => {
+  const body = await readBodyBuffer(req);
+  if (!body.length) return {};
   try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    return JSON.parse(body.toString("utf8"));
   } catch {
     throw new HttpError(400, "invalid_json", "Request body must be valid JSON");
   }
@@ -877,12 +883,27 @@ export const createIabtHandler = ({
     const isMultipart = /^multipart\/form-data\b/i.test(
       String(req.headers["content-type"] || "")
     );
-    const body = ["POST", "PATCH", "PUT"].includes(req.method) && !isMultipart
+    const isStripeWebhook = url.pathname === "/v1/webhooks/stripe";
+    const webhookBody = isStripeWebhook ? await readBodyBuffer(req) : null;
+    const body = ["POST", "PATCH", "PUT"].includes(req.method) && !isMultipart && !isStripeWebhook
       ? await readJson(req)
       : {};
 
     let result;
-    if (req.method === "GET" && url.pathname === "/healthz") {
+    if (isStripeWebhook) {
+      if (req.method !== "POST") {
+        throw new HttpError(405, "method_not_allowed", "Method is not allowed");
+      }
+      result = {
+        status: 200,
+        payload: await processStripeWebhook({
+          rawBody: webhookBody,
+          signatureHeader: req.headers["stripe-signature"] || "",
+          repository,
+          config
+        })
+      };
+    } else if (req.method === "GET" && url.pathname === "/healthz") {
       result = {
         status: 200,
         payload: {
