@@ -355,4 +355,298 @@ export class PostgresRepository {
       [createId(), user?.id || null, action, JSON.stringify(metadata)]
     );
   }
+
+  async withTransaction(operation) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await operation(client);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getCreditAccount(ownerId, client = this.pool) {
+    const result = await client.query(
+      "SELECT owner_id, available_credits, reserved_credits, updated_at FROM iabt_credit_accounts WHERE owner_id = $1",
+      [ownerId]
+    );
+    const row = result.rows[0];
+    return row
+      ? {
+          owner_id: row.owner_id,
+          available_credits: row.available_credits,
+          reserved_credits: row.reserved_credits,
+          updated_date: timestamp(row.updated_at)
+        }
+      : { owner_id: ownerId, available_credits: 0, reserved_credits: 0, updated_date: null };
+  }
+
+  async grantCredits({ ownerId, amount, idempotencyKey, metadata = {} }) {
+    const value = Math.floor(Number(amount));
+    if (!Number.isInteger(value) || value <= 0) throw new Error("Credit grant must be positive");
+    return this.withTransaction(async (client) => {
+      const existing = await client.query(
+        "SELECT id FROM iabt_credit_entries WHERE owner_id = $1 AND entry_type = 'grant' AND idempotency_key = $2",
+        [ownerId, idempotencyKey]
+      );
+      if (existing.rowCount) return this.getCreditAccount(ownerId, client);
+      await client.query(
+        "INSERT INTO iabt_credit_accounts (owner_id, available_credits) VALUES ($1, 0) ON CONFLICT (owner_id) DO NOTHING",
+        [ownerId]
+      );
+      await client.query(
+        "UPDATE iabt_credit_accounts SET available_credits = available_credits + $2, updated_at = now() WHERE owner_id = $1",
+        [ownerId, value]
+      );
+      await client.query(
+        "INSERT INTO iabt_credit_entries (id, owner_id, entry_type, amount, idempotency_key, metadata) VALUES ($1, $2, 'grant', $3, $4, $5::jsonb)",
+        [createId(), ownerId, value, idempotencyKey, JSON.stringify(metadata)]
+      );
+      return this.getCreditAccount(ownerId, client);
+    });
+  }
+
+  async enqueueJob({
+    ownerId,
+    jobType,
+    input = {},
+    approval = {},
+    idempotencyKey,
+    creditAmount = 0,
+    maxAttempts = 3
+  }) {
+    return this.withTransaction(async (client) => {
+      const existing = await client.query(
+        "SELECT * FROM iabt_jobs WHERE owner_id = $1 AND idempotency_key = $2 LIMIT 1",
+        [ownerId, idempotencyKey]
+      );
+      if (existing.rowCount) return jobFromRow(existing.rows[0]);
+      const credits = Math.max(0, Math.floor(Number(creditAmount) || 0));
+      await client.query(
+        "INSERT INTO iabt_credit_accounts (owner_id) VALUES ($1) ON CONFLICT (owner_id) DO NOTHING",
+        [ownerId]
+      );
+      const account = await client.query(
+        "SELECT available_credits FROM iabt_credit_accounts WHERE owner_id = $1 FOR UPDATE",
+        [ownerId]
+      );
+      if (credits > account.rows[0].available_credits) {
+        throw Object.assign(new Error("Insufficient IABT credits"), {
+          status: 402,
+          code: "insufficient_credits"
+        });
+      }
+      const id = createId();
+      const inserted = await client.query(
+        "INSERT INTO iabt_jobs (id, owner_id, job_type, input, approval, idempotency_key, credit_amount, max_attempts) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8) RETURNING *",
+        [
+          id,
+          ownerId,
+          jobType,
+          JSON.stringify(input),
+          JSON.stringify(approval),
+          idempotencyKey,
+          credits,
+          Math.max(1, Math.min(10, Math.floor(maxAttempts)))
+        ]
+      );
+      if (credits > 0) {
+        await client.query(
+          "UPDATE iabt_credit_accounts SET available_credits = available_credits - $2, reserved_credits = reserved_credits + $2, updated_at = now() WHERE owner_id = $1",
+          [ownerId, credits]
+        );
+        await client.query(
+          "INSERT INTO iabt_credit_entries (id, owner_id, job_id, entry_type, amount, idempotency_key) VALUES ($1, $2, $3, 'reserve', $4, $5)",
+          [createId(), ownerId, id, credits, idempotencyKey]
+        );
+      }
+      return jobFromRow(inserted.rows[0]);
+    });
+  }
+
+  async claimNextJob({ workerId, leaseMs = 300000 }) {
+    const result = await this.pool.query(
+      "WITH candidate AS (SELECT id FROM iabt_jobs WHERE (status = 'queued' AND available_at <= now()) OR (status = 'running' AND locked_at <= now() - ($2::bigint * interval '1 millisecond')) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE iabt_jobs job SET status = 'running', locked_by = $1, locked_at = now(), attempt_count = job.attempt_count + 1, updated_at = now() FROM candidate WHERE job.id = candidate.id RETURNING job.*",
+      [workerId, leaseMs]
+    );
+    return jobFromRow(result.rows[0]);
+  }
+
+  async createStoredObject({
+    id = createId(),
+    ownerId,
+    jobId = null,
+    storageProvider,
+    storageKey,
+    originalName,
+    contentType,
+    sizeBytes,
+    sha256
+  }, client = this.pool) {
+    const result = await client.query(
+      "INSERT INTO iabt_stored_objects (id, owner_id, job_id, storage_provider, storage_key, original_name, content_type, size_bytes, sha256) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *",
+      [id, ownerId, jobId, storageProvider, storageKey, originalName, contentType, sizeBytes, sha256]
+    );
+    return objectFromRow(result.rows[0]);
+  }
+
+  async getStoredObject(id, user) {
+    const params = [id];
+    const ownerClause = user.role === "admin" ? "" : " AND owner_id = $" + params.push(user.id);
+    const result = await this.pool.query(
+      "SELECT * FROM iabt_stored_objects WHERE id = $1" + ownerClause + " LIMIT 1",
+      params
+    );
+    return objectFromRow(result.rows[0]);
+  }
+
+  async getStoredObjectById(id) {
+    const result = await this.pool.query(
+      "SELECT * FROM iabt_stored_objects WHERE id = $1 LIMIT 1",
+      [id]
+    );
+    return objectFromRow(result.rows[0]);
+  }
+
+  async completeJob({ jobId, workerId, output = {}, artifact = null }) {
+    return this.withTransaction(async (client) => {
+      const locked = await client.query(
+        "SELECT * FROM iabt_jobs WHERE id = $1 FOR UPDATE",
+        [jobId]
+      );
+      const job = jobFromRow(locked.rows[0]);
+      if (!job || job.status !== "running" || job.locked_by !== workerId) {
+        throw Object.assign(new Error("Job lease is no longer owned by this worker"), {
+          code: "job_lease_lost"
+        });
+      }
+      if (job.credit_amount > 0 && !artifact) {
+        throw Object.assign(new Error("Credits cannot be captured without a durable artifact"), {
+          code: "durable_output_required"
+        });
+      }
+      const stored = artifact
+        ? await this.createStoredObject({ ...artifact, jobId }, client)
+        : null;
+      const finalOutput = { ...output, ...(stored ? { artifact_id: stored.id } : {}) };
+      const updated = await client.query(
+        "UPDATE iabt_jobs SET status = 'succeeded', output = $3::jsonb, locked_at = NULL, locked_by = NULL, updated_at = now(), completed_at = now() WHERE id = $1 AND locked_by = $2 RETURNING *",
+        [jobId, workerId, JSON.stringify(finalOutput)]
+      );
+      if (job.credit_amount > 0) {
+        await client.query(
+          "UPDATE iabt_credit_accounts SET reserved_credits = reserved_credits - $2, updated_at = now() WHERE owner_id = $1 AND reserved_credits >= $2",
+          [job.owner_id, job.credit_amount]
+        );
+        await client.query(
+          "INSERT INTO iabt_credit_entries (id, owner_id, job_id, entry_type, amount, idempotency_key) VALUES ($1,$2,$3,'capture',$4,$5)",
+          [createId(), job.owner_id, job.id, job.credit_amount, job.idempotency_key]
+        );
+      }
+      return { job: jobFromRow(updated.rows[0]), artifact: stored };
+    });
+  }
+
+  async failJob({ jobId, workerId, error, retryAt = null }) {
+    return this.withTransaction(async (client) => {
+      const locked = await client.query(
+        "SELECT * FROM iabt_jobs WHERE id = $1 FOR UPDATE",
+        [jobId]
+      );
+      const job = jobFromRow(locked.rows[0]);
+      if (!job || job.status !== "running" || job.locked_by !== workerId) {
+        throw Object.assign(new Error("Job lease is no longer owned by this worker"), {
+          code: "job_lease_lost"
+        });
+      }
+      const errorCode = String(error.code || "job_failed");
+      const safeMessage = String(error.safeMessage || "IABT could not complete this job").slice(0, 500);
+      const canRetry = Boolean(retryAt) && job.attempt_count < job.max_attempts;
+      if (canRetry) {
+        const updated = await client.query(
+          "UPDATE iabt_jobs SET status = 'queued', available_at = $3, locked_at = NULL, locked_by = NULL, last_error_code = $4, last_error_message = $5, updated_at = now() WHERE id = $1 AND locked_by = $2 RETURNING *",
+          [jobId, workerId, retryAt, errorCode, safeMessage]
+        );
+        return { job: jobFromRow(updated.rows[0]), incident: null, released_credits: 0 };
+      }
+      const status = error.needsSetup ? "needs_setup" : "failed";
+      const updated = await client.query(
+        "UPDATE iabt_jobs SET status = $3, locked_at = NULL, locked_by = NULL, last_error_code = $4, last_error_message = $5, updated_at = now(), completed_at = now() WHERE id = $1 AND locked_by = $2 RETURNING *",
+        [jobId, workerId, status, errorCode, safeMessage]
+      );
+      if (job.credit_amount > 0) {
+        await client.query(
+          "UPDATE iabt_credit_accounts SET reserved_credits = reserved_credits - $2, available_credits = available_credits + $2, updated_at = now() WHERE owner_id = $1 AND reserved_credits >= $2",
+          [job.owner_id, job.credit_amount]
+        );
+        await client.query(
+          "INSERT INTO iabt_credit_entries (id, owner_id, job_id, entry_type, amount, idempotency_key, metadata) VALUES ($1,$2,$3,'release',$4,$5,$6::jsonb)",
+          [
+            createId(),
+            job.owner_id,
+            job.id,
+            job.credit_amount,
+            job.idempotency_key,
+            JSON.stringify({ error_code: errorCode })
+          ]
+        );
+      }
+      const incidentId = createId();
+      const incidentResult = await client.query(
+        "INSERT INTO iabt_incidents (id, owner_id, job_id, category, error_code, safe_message, details) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING *",
+        [
+          incidentId,
+          job.owner_id,
+          job.id,
+          error.category || "execution",
+          errorCode,
+          safeMessage,
+          JSON.stringify(error.details || {})
+        ]
+      );
+      const incidentRow = incidentResult.rows[0];
+      return {
+        job: jobFromRow(updated.rows[0]),
+        incident: {
+          id: incidentRow.id,
+          owner_id: incidentRow.owner_id,
+          job_id: incidentRow.job_id,
+          category: incidentRow.category,
+          error_code: incidentRow.error_code,
+          safe_message: incidentRow.safe_message,
+          details: incidentRow.details,
+          resolved_at: timestamp(incidentRow.resolved_at),
+          created_date: timestamp(incidentRow.created_at)
+        },
+        released_credits: job.credit_amount
+      };
+    });
+  }
+
+  async getJob(id, user) {
+    const params = [id];
+    const ownerClause = user.role === "admin" ? "" : " AND owner_id = $" + params.push(user.id);
+    const result = await this.pool.query(
+      "SELECT * FROM iabt_jobs WHERE id = $1" + ownerClause + " LIMIT 1",
+      params
+    );
+    return jobFromRow(result.rows[0]);
+  }
+
+  async listJobs(user, { limit = 50 } = {}) {
+    const params = [];
+    const ownerClause = user.role === "admin" ? "" : " WHERE owner_id = $" + params.push(user.id);
+    params.push(Math.max(1, Math.min(250, limit)));
+    const result = await this.pool.query(
+      "SELECT * FROM iabt_jobs" + ownerClause + " ORDER BY created_at DESC LIMIT $" + params.length,
+      params
+    );
+    return result.rows.map(jobFromRow);
+  }
 }
