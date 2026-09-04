@@ -376,13 +376,68 @@ const handleAgents = async ({
       content: String(body.content || ""),
       created_date: new Date().toISOString()
     };
-    const updated = await repository.updateRecord("AgentConversation", conversationId, user, {
-      messages: [...(record.messages || []), message]
+    let messages = [...(record.messages || []), message];
+    let updated = await repository.updateRecord("AgentConversation", conversationId, user, {
+      messages
     });
     await repository.appendAudit(user, "conversation.message", {
       conversation_id: conversationId,
       message_id: message.id
     });
+
+    if (message.role === "user" && message.content.trim().length >= 3) {
+      try {
+        const planned = await createCreationPlan({
+          repository,
+          config,
+          providers,
+          user,
+          requestText: message.content,
+          conversationId,
+          projectId: String(record.metadata?.project_id || "")
+        });
+        const plan = planned.plan;
+        const assistant = {
+          id: createId(),
+          role: "assistant",
+          content:
+            "I inferred **" +
+            plan.intent +
+            "** from your request and prepared a server-owned plan.\n\n" +
+            plan.assistant_summary +
+            "\n\n**Deliverables**\n" +
+            plan.deliverables.map((item) => "- " + item).join("\n") +
+            "\n\n**Exact quote:** " +
+            plan.credit_cost +
+            " IABT credit" +
+            (plan.credit_cost === 1 ? "" : "s") +
+            ". Review the approval panel before production.",
+          created_date: new Date().toISOString(),
+          metadata: { plan_id: plan.id, intent: plan.intent }
+        };
+        messages = [...messages, assistant];
+        updated = await repository.updateRecord("AgentConversation", conversationId, user, {
+          messages
+        });
+        await repository.appendAudit(user, "creation.plan_created", {
+          conversation_id: conversationId,
+          plan_id: plan.id,
+          inferred_intent: plan.intent
+        });
+      } catch (error) {
+        const assistant = {
+          id: createId(),
+          role: "assistant",
+          content:
+            "I could not create a valid plan yet. " +
+            String(error.message || "Please revise the request.").slice(0, 500),
+          created_date: new Date().toISOString()
+        };
+        updated = await repository.updateRecord("AgentConversation", conversationId, user, {
+          messages: [...messages, assistant]
+        });
+      }
+    }
     return { status: 200, payload: updated };
   }
 
