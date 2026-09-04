@@ -661,6 +661,96 @@ const handleFunction = async ({
   const { user } = await authenticate(req, repository);
   const name = decodeURIComponent(segments[2] || "");
 
+  if (name === "plan-creation") {
+    const planned = await createCreationPlan({
+      repository,
+      config,
+      providers,
+      user,
+      requestText: body.request_text || body.request || body.prompt,
+      conversationId: String(body.conversation_id || body.context?.conversation_id || ""),
+      projectId: String(body.project_id || "")
+    });
+    return { status: 200, payload: planned };
+  }
+
+  if (name === "execute-creation") {
+    return {
+      status: 200,
+      payload: await executeCreationPlan({ repository, config, user, body })
+    };
+  }
+
+  if (name === "get-account-entitlement") {
+    const account = await repository.getCreditAccount(user.id);
+    return {
+      status: 200,
+      payload: {
+        data: {
+          plan: "standalone",
+          status: "active",
+          credits_remaining: account.available_credits,
+          reserved_credits: account.reserved_credits,
+          total_remaining: account.available_credits,
+          base44_required: false
+        }
+      }
+    };
+  }
+
+  if (name === "get-creation-capabilities") {
+    const readiness = providers?.readiness?.() || {};
+    return {
+      status: 200,
+      payload: {
+        data: {
+          routing_mode: "automatic",
+          capabilities: {
+            app: { configured: true, provider: "iabt-standalone" },
+            website: { configured: true, provider: "iabt-standalone" },
+            document: { configured: true, provider: "iabt-standalone" },
+            audio: {
+              configured: Boolean(readiness.elevenlabs?.configured),
+              provider: "elevenlabs"
+            },
+            video: {
+              configured: false,
+              provider: "luma",
+              reason: "asynchronous_completion_orchestrator_pending"
+            }
+          }
+        }
+      }
+    };
+  }
+
+  if (name === "get-artifact-access-url") {
+    if (!storage) {
+      throw new HttpError(501, "storage_not_configured", "Private object storage is not configured");
+    }
+    const artifactId = String(body.artifact_id || "");
+    const record = await repository.getStoredObject(artifactId, user);
+    if (!record) throw new HttpError(404, "artifact_not_found", "Artifact was not found");
+    return {
+      status: 200,
+      payload: {
+        data: {
+          artifact_id: record.id,
+          url: await storage.createReadUrl(record, { expiresInSeconds: 300 }),
+          file_url: await storage.createReadUrl(record, { expiresInSeconds: 300 }),
+          expires_in_seconds: 300
+        }
+      }
+    };
+  }
+
+  if (name === "refresh-generation-job" || name === "get-creation-status") {
+    const jobId = String(body.job_id || "");
+    const job = await repository.getJob(jobId, user);
+    if (!job) throw new HttpError(404, "job_not_found", "Job was not found");
+    return { status: 200, payload: { data: { job: publicJob(job) } } };
+  }
+
   if (name === "get-system-health") {
     const incidents = await repository.listIncidents(user, { limit: 20 });
     return {
