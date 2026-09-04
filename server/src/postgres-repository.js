@@ -1,5 +1,6 @@
 import pg from "pg";
 import { createId } from "./security.js";
+import { applyMigrations } from "./migrations.js";
 
 const { Pool } = pg;
 const clone = (value) => structuredClone(value);
@@ -122,6 +123,13 @@ export class PostgresRepository {
 
   async ready() {
     await this.pool.query("SELECT 1");
+    this.migrationState = await applyMigrations(this.pool);
+    return this.migrationState;
+  }
+
+  async health() {
+    await this.pool.query("SELECT 1");
+    return { ok: true, adapter: "postgres" };
   }
 
   async close() {
