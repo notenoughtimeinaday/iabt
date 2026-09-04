@@ -51,6 +51,36 @@ const responseError = async (provider, response) => {
   );
 };
 
+const lumaVideoOutput = (data) => {
+  const candidates = [
+    ...(Array.isArray(data?.output) ? data.output : []),
+    data?.output,
+    data?.assets?.video,
+    data?.video
+  ];
+  for (const candidate of candidates) {
+    const url = typeof candidate === "string"
+      ? candidate
+      : candidate?.url || candidate?.video_url || candidate?.download_url;
+    if (/^https:\/\//i.test(String(url || ""))) return String(url);
+  }
+  return "";
+};
+
+const lumaState = (data) => {
+  const outputUrl = lumaVideoOutput(data);
+  if (outputUrl) return { state: "succeeded", outputUrl };
+  const raw = String(data?.state || data?.status || "").trim().toLowerCase();
+  if (["failed", "error", "canceled", "cancelled"].includes(raw)) {
+    return {
+      state: "failed",
+      outputUrl: "",
+      error: String(data?.failure_reason || data?.error || "The video renderer could not complete the generation").slice(0, 500)
+    };
+  }
+  return { state: "processing", outputUrl: "" };
+};
+
 export class ProviderRegistry {
   constructor(config, { fetchImpl = fetch } = {}) {
     this.config = config;
@@ -69,7 +99,9 @@ export class ProviderRegistry {
     const lumaTechnical =
       Boolean(p.luma.apiKey) &&
       p.luma.paidEnabled &&
-      p.luma.billingReady;
+      p.luma.billingReady &&
+      Number.isInteger(p.luma.costPerFiveSecondsCents) &&
+      p.luma.costPerFiveSecondsCents > 0;
     const stripe =
       Boolean(p.stripe.secretKey) &&
       Boolean(p.stripe.webhookSecret) &&
@@ -101,6 +133,7 @@ export class ProviderRegistry {
           ...(!p.luma.apiKey ? ["luma_key_missing"] : []),
           ...(!p.luma.paidEnabled ? ["paid_media_disabled"] : []),
           ...(!p.luma.billingReady ? ["media_billing_not_ready"] : []),
+          ...(!(p.luma.costPerFiveSecondsCents > 0) ? ["media_cost_policy_invalid"] : []),
           ...(!p.luma.commercialApproved ? ["commercial_approval_pending"] : [])
         ]
       },
@@ -152,6 +185,9 @@ export class ProviderRegistry {
     }
     if (provider === "luma" && operation === "get_video") {
       return this.lumaGet(payload);
+    }
+    if (provider === "luma" && operation === "download_video") {
+      return this.lumaDownload(payload);
     }
     if (provider === "stripe" && operation === "post") {
       return this.stripePost(payload, context);
@@ -245,7 +281,12 @@ export class ProviderRegistry {
     if (!response.ok) await responseError("luma", response);
     const data = await response.json();
     if (!data?.id) throw new ProviderCallError("luma_invalid_response", "Luma returned no generation ID");
-    return { durable: false, providerJobId: data.id, data };
+    return {
+      durable: false,
+      providerJobId: data.id,
+      data,
+      ...lumaState(data)
+    };
   }
 
   async lumaGet(payload) {
@@ -263,7 +304,54 @@ export class ProviderRegistry {
       }
     );
     if (!response.ok) await responseError("luma", response);
-    return { durable: false, providerJobId: id, data: await response.json() };
+    const data = await response.json();
+    return {
+      durable: false,
+      providerJobId: id,
+      data,
+      ...lumaState(data)
+    };
+  }
+
+  async lumaDownload(payload) {
+    const url = String(payload.output_url || "");
+    if (!/^https:\/\//i.test(url)) {
+      throw new ProviderCallError("luma_invalid_output_url", "Luma returned an invalid video URL", {
+        status: 502
+      });
+    }
+    const response = await this.fetch(url, {
+      headers: { Accept: "video/mp4,video/*;q=0.9,application/octet-stream;q=0.5" }
+    });
+    if (!response.ok) await responseError("luma", response);
+    const declaredLength = Number(response.headers.get("content-length") || 0);
+    if (declaredLength > 200_000_000) {
+      throw new ProviderCallError("luma_video_too_large", "The rendered video exceeds the secure-copy limit", {
+        status: 413
+      });
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > 200_000_000) {
+      throw new ProviderCallError("luma_video_too_large", "The rendered video exceeds the secure-copy limit", {
+        status: 413
+      });
+    }
+    const hasFtyp = bytes.length >= 12 && bytes.subarray(4, 8).toString("ascii") === "ftyp";
+    if (!hasFtyp) {
+      throw new ProviderCallError("luma_invalid_video", "Luma did not return a valid MP4", {
+        status: 502
+      });
+    }
+    return {
+      durable: true,
+      bytes,
+      contentType: "video/mp4",
+      filename: payload.filename || "jericho-video.mp4",
+      metadata: {
+        provider_id: String(payload.provider_job_id || ""),
+        media_verified: true
+      }
+    };
   }
 
   async stripePost(payload, context) {
