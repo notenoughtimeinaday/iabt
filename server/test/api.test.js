@@ -99,7 +99,21 @@ test("health and public settings are Base44-independent", async () => {
   const health = await api("/healthz");
   assert.equal(health.response.status, 200);
   assert.equal(health.payload.ok, true);
+  assert.equal(health.payload.version, "0.5.0");
   assert.equal(health.payload.base44_required, false);
+
+  const readiness = await api("/readyz");
+  assert.equal(readiness.response.status, 200);
+  assert.equal(readiness.payload.ok, true);
+  assert.deepEqual(readiness.payload.database, {
+    ok: true,
+    adapter: "memory"
+  });
+  assert.deepEqual(readiness.payload.object_storage, {
+    ok: true,
+    adapter: "local"
+  });
+  assert.equal(readiness.payload.base44_required, false);
 
   const settings = await api("/v1/public-settings");
   assert.equal(settings.response.status, 200);
