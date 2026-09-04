@@ -90,6 +90,11 @@ export class ProviderRegistry {
   readiness() {
     const p = this.config.providers;
     const openai = Boolean(p.openai.apiKey) && p.openai.paidEnabled;
+    const openaiImageTechnical =
+      Boolean(p.openai.apiKey) &&
+      p.openai.imagePaidEnabled &&
+      Number.isInteger(p.openai.imageCostCents) &&
+      p.openai.imageCostCents > 0;
     const elevenTechnical =
       Boolean(p.elevenlabs.apiKey) &&
       p.elevenlabs.paidEnabled &&
@@ -117,6 +122,16 @@ export class ProviderRegistry {
         blocker_codes: [
           ...(!p.openai.apiKey ? ["openai_key_missing"] : []),
           ...(!p.openai.paidEnabled ? ["paid_ai_disabled"] : [])
+        ]
+      },
+      openai_image: {
+        configured: openaiImageTechnical,
+        commercial_ready: openaiImageTechnical && p.openai.imageCommercialApproved,
+        blocker_codes: [
+          ...(!p.openai.apiKey ? ["openai_key_missing"] : []),
+          ...(!p.openai.imagePaidEnabled ? ["paid_images_disabled"] : []),
+          ...(!(p.openai.imageCostCents > 0) ? ["image_cost_policy_invalid"] : []),
+          ...(!p.openai.imageCommercialApproved ? ["commercial_approval_pending"] : [])
         ]
       },
       elevenlabs: {
@@ -165,7 +180,7 @@ export class ProviderRegistry {
       );
     }
     if (
-      (provider === "elevenlabs" || provider === "luma") &&
+      (provider === "elevenlabs" || provider === "luma" || provider === "openai_image") &&
       !readiness.commercial_ready &&
       approval.scope !== "owner_demo"
     ) {
@@ -179,10 +194,17 @@ export class ProviderRegistry {
   async execute(provider, operation, payload = {}, context = {}) {
     const expectedCost = Math.max(0, Number(payload.estimated_cost_cents) || 0);
     const approval = requireApproval(context, expectedCost);
-    this.assertProviderReady(provider, approval);
+    const readinessProvider =
+      provider === "openai" && operation === "generate_image"
+        ? "openai_image"
+        : provider;
+    this.assertProviderReady(readinessProvider, approval);
 
     if (provider === "openai" && operation === "response") {
       return this.openaiResponse(payload, context);
+    }
+    if (provider === "openai" && operation === "generate_image") {
+      return this.openaiImage(payload, context);
     }
     if (provider === "elevenlabs" && operation === "compose_music") {
       return this.elevenMusic(payload);
@@ -227,6 +249,47 @@ export class ProviderRegistry {
       contentType: "application/json",
       filename: payload.filename || "jericho-response.json",
       metadata: { provider_id: data.id }
+    };
+  }
+
+  async openaiImage(payload, context) {
+    const response = await this.fetch("https://api.openai.com/v1/images/generations", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + this.config.providers.openai.apiKey,
+        "Content-Type": "application/json",
+        "Idempotency-Key": context.idempotencyKey
+      },
+      body: JSON.stringify({
+        model: payload.model || this.config.providers.openai.imageModel,
+        prompt: String(payload.prompt || "").slice(0, 32000),
+        n: 1,
+        output_format: "png",
+        quality: payload.quality || "medium",
+        size: payload.size || "1024x1024"
+      })
+    });
+    if (!response.ok) await responseError("openai", response);
+    const data = await response.json();
+    const encoded = String(data?.data?.[0]?.b64_json || "");
+    if (!encoded) {
+      throw new ProviderCallError("openai_invalid_image", "OpenAI returned no image data");
+    }
+    const bytes = Buffer.from(encoded, "base64");
+    const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    if (bytes.length < 64 || !bytes.subarray(0, 8).equals(pngSignature)) {
+      throw new ProviderCallError("openai_invalid_image", "OpenAI did not return a valid PNG");
+    }
+    return {
+      durable: true,
+      bytes,
+      contentType: "image/png",
+      filename: payload.filename || "jericho-image.png",
+      metadata: {
+        model: payload.model || this.config.providers.openai.imageModel,
+        output_format: "png",
+        usage: data?.usage || {}
+      }
     };
   }
 
