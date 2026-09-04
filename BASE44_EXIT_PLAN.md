@@ -50,11 +50,17 @@ Completed in the independent runtime:
 - development-only local object storage with signed links
 - fail-closed OpenAI, ElevenLabs, Luma, and Stripe adapters
 - worker contract that captures credits only after verified durable storage
+- prompt-first automatic intent inference with no required mode selector
+- signed server-owned quotes and exact approval matching
+- protected server-managed plan, billing, consent, artifact, and incident records
+- deterministic app and website orchestration with working preview, AppDefinition, source ZIP, and validation report
+- standalone piano-app and merchandise-storefront golden-path tests
 
 Still required before cutover:
 
-- creation planner/orchestrator migration and server-owned quote verification
 - asynchronous Luma completion polling and media ingestion
+- standalone DOCX and PDF export
+- remaining image, code, design, G-code, and automation renderers
 - Stripe webhook and entitlement migration
 - Base44 record/file export and staged import reconciliation
 - independent staging deployment, monitoring, backups, and 20 golden-path runs
