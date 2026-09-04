@@ -62,6 +62,10 @@ export class MemoryRepository {
     this.stripeEvents = new Map();
   }
 
+  async health() {
+    return { ok: true, adapter: "memory" };
+  }
+
   async createUser({ email, passwordHash, name = "", role = "user", emailVerified = false }) {
     if (this.userIdsByEmail.has(email)) return null;
     const timestamp = nowIso();
