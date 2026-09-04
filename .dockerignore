@@ -1,0 +1,14 @@
+.git
+.github
+.agents
+node_modules
+server/node_modules
+dist
+coverage
+*.log
+.env
+.env.*
+!.env.example
+!standalone.env.example
+!staging.env.example
+server/.iabt-storage
