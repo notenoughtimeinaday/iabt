@@ -579,6 +579,32 @@ export class PostgresRepository {
     });
   }
 
+  async deferJob({
+    jobId,
+    workerId,
+    inputPatch = {},
+    outputPatch = {},
+    availableAt
+  }) {
+    const updated = await this.pool.query(
+      "UPDATE iabt_jobs SET status = 'queued', input = input || $3::jsonb, output = output || $4::jsonb, available_at = $5, locked_at = NULL, locked_by = NULL, attempt_count = GREATEST(0, attempt_count - 1), updated_at = now() WHERE id = $1 AND status = 'running' AND locked_by = $2 RETURNING *",
+      [
+        jobId,
+        workerId,
+        JSON.stringify(inputPatch),
+        JSON.stringify(outputPatch),
+        availableAt || new Date().toISOString()
+      ]
+    );
+    const job = jobFromRow(updated.rows[0]);
+    if (!job) {
+      throw Object.assign(new Error("Job lease is no longer owned by this worker"), {
+        code: "job_lease_lost"
+      });
+    }
+    return job;
+  }
+
   async failJob({ jobId, workerId, error, retryAt = null }) {
     return this.withTransaction(async (client) => {
       const locked = await client.query(
