@@ -1021,7 +1021,7 @@ export const createIabtHandler = ({
         payload: {
           ok: true,
           service: "iabt-standalone",
-          version: "0.5.0",
+          version: "0.6.0",
           base44_required: false
         }
       };
@@ -1036,7 +1036,7 @@ export const createIabtHandler = ({
         payload: {
           ok: ready,
           service: "iabt-standalone",
-          version: "0.5.0",
+          version: "0.6.0",
           database,
           object_storage: objectStorage,
           migrations: repository.migrationState
