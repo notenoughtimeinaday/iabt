@@ -67,6 +67,7 @@ export const loadConfig = (env = process.env) => {
   const storageProvider = String(env.IABT_STORAGE_PROVIDER || "").trim().toLowerCase() ||
     (environment === "production" ? "s3" : "local");
   const costPerMinuteCents = Number(env.IABT_ELEVENLABS_COST_PER_MINUTE_CENTS);
+  const lumaCostPerFiveSecondsCents = Number(env.IABT_LUMA_COST_PER_5_SECONDS_CENTS);
 
   return Object.freeze({
     environment,
@@ -113,7 +114,11 @@ export const loadConfig = (env = process.env) => {
         apiKey: env.LUMA_API_KEY || env.LUMA_AGENTS_API_KEY || "",
         paidEnabled: asBoolean(env.IABT_ENABLE_PAID_MEDIA),
         billingReady: asBoolean(env.IABT_MEDIA_BILLING_READY),
-        commercialApproved: asBoolean(env.IABT_LUMA_COMMERCIAL_APPROVED)
+        commercialApproved: asBoolean(env.IABT_LUMA_COMMERCIAL_APPROVED),
+        costPerFiveSecondsCents:
+          Number.isInteger(lumaCostPerFiveSecondsCents) && lumaCostPerFiveSecondsCents > 0
+            ? lumaCostPerFiveSecondsCents
+            : 0
       }),
       stripe: freezeProvider({
         secretKey: env.STRIPE_SECRET_KEY || "",
