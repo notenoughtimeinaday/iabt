@@ -597,6 +597,17 @@ const publicJob = (job) => ({
           : "none",
   artifact_id: job.output?.artifact_id || "",
   error_message: job.last_error_message || "",
+  diagnosis: {
+    error_code: job.last_error_code || "",
+    incident_id: job.output?.incident_id || "",
+    recovery: job.output?.recovery || "",
+    released_credits: Number(job.output?.released_credits || 0),
+    provider_state: job.output?.provider_state || "",
+    next_check_at:
+      job.status === "queued" && job.input?.provider_job_id
+        ? job.available_at
+        : null
+  },
   quote_snapshot: {
     pricing_version: job.approval?.pricing_version || "",
     credits_reserved: job.credit_amount > 0
@@ -847,6 +858,10 @@ const handleFunction = async ({
             private_object_storage: Boolean(storage),
             storage_provider: storage?.kind || "not_configured",
             direct_provider_adapters: Boolean(providers),
+            asynchronous_media_polling: true,
+            verified_media_ingestion: true,
+            stripe_signature_verification: true,
+            stripe_event_replay_protection: true,
             active_incident_count: incidents.filter((incident) => !incident.resolved_at).length
           },
           recent_incidents: incidents.map((incident) => ({
@@ -882,7 +897,10 @@ const handleFunction = async ({
             "credit_release_on_no_durable_output",
             "request_specific_validation",
             "expired_worker_lease_recovery",
-            "idempotent_job_submission"
+            "idempotent_job_submission",
+            "asynchronous_provider_polling",
+            "media_signature_verification",
+            "stripe_webhook_replay_protection"
           ]
         }
       }
@@ -971,7 +989,7 @@ export const createIabtHandler = ({
         payload: {
           ok: true,
           service: "iabt-standalone",
-          version: "0.2.0",
+          version: "0.3.0",
           base44_required: false
         }
       };
