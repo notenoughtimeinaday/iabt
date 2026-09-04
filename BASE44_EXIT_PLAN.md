@@ -36,6 +36,29 @@ legacy Base44 adapter or the standalone IABT API through
 7. monitoring, audit logs, backups, and restore tests
 8. independent hosting for the frontend and API
 
+## Implementation status
+
+Completed in the independent runtime:
+
+- IABT-owned frontend client boundary
+- standalone authentication, sessions, and tenant-owned entity API
+- PostgreSQL core schema
+- durable PostgreSQL job queue with lease recovery and idempotency
+- transactional reserve, capture, and release credit lifecycle
+- durable incidents with safe user-facing diagnoses
+- private S3-compatible object storage with short-lived download URLs
+- development-only local object storage with signed links
+- fail-closed OpenAI, ElevenLabs, Luma, and Stripe adapters
+- worker contract that captures credits only after verified durable storage
+
+Still required before cutover:
+
+- creation planner/orchestrator migration and server-owned quote verification
+- asynchronous Luma completion polling and media ingestion
+- Stripe webhook and entitlement migration
+- Base44 record/file export and staged import reconciliation
+- independent staging deployment, monitoring, backups, and 20 golden-path runs
+
 ## Safe cutover order
 
 1. Preserve GitHub source and export all Base44 records and files.
