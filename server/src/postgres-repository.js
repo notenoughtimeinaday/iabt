@@ -611,22 +611,55 @@ export class PostgresRepository {
         ]
       );
       const incidentRow = incidentResult.rows[0];
+      const incident = {
+        id: incidentRow.id,
+        owner_id: incidentRow.owner_id,
+        job_id: incidentRow.job_id,
+        category: incidentRow.category,
+        error_code: incidentRow.error_code,
+        safe_message: incidentRow.safe_message,
+        details: incidentRow.details,
+        resolved_at: timestamp(incidentRow.resolved_at),
+        created_date: timestamp(incidentRow.created_at)
+      };
+      const finalized = await client.query(
+        "UPDATE iabt_jobs SET output = $2::jsonb WHERE id = $1 RETURNING *",
+        [
+          job.id,
+          JSON.stringify({
+            incident_id: incident.id,
+            recovery: "credit_release",
+            released_credits: job.credit_amount
+          })
+        ]
+      );
       return {
-        job: jobFromRow(updated.rows[0]),
-        incident: {
-          id: incidentRow.id,
-          owner_id: incidentRow.owner_id,
-          job_id: incidentRow.job_id,
-          category: incidentRow.category,
-          error_code: incidentRow.error_code,
-          safe_message: incidentRow.safe_message,
-          details: incidentRow.details,
-          resolved_at: timestamp(incidentRow.resolved_at),
-          created_date: timestamp(incidentRow.created_at)
-        },
+        job: jobFromRow(finalized.rows[0] || updated.rows[0]),
+        incident,
         released_credits: job.credit_amount
       };
     });
+  }
+
+  async listIncidents(user, { limit = 50 } = {}) {
+    const params = [];
+    const ownerClause = user.role === "admin" ? "" : " WHERE owner_id = $" + params.push(user.id);
+    params.push(Math.max(1, Math.min(250, limit)));
+    const result = await this.pool.query(
+      "SELECT * FROM iabt_incidents" + ownerClause + " ORDER BY created_at DESC LIMIT $" + params.length,
+      params
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      owner_id: row.owner_id,
+      job_id: row.job_id,
+      category: row.category,
+      error_code: row.error_code,
+      safe_message: row.safe_message,
+      details: row.details,
+      resolved_at: timestamp(row.resolved_at),
+      created_date: timestamp(row.created_at)
+    }));
   }
 
   async getJob(id, user) {
