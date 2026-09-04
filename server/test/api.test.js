@@ -99,7 +99,7 @@ test("health and public settings are Base44-independent", async () => {
   const health = await api("/healthz");
   assert.equal(health.response.status, 200);
   assert.equal(health.payload.ok, true);
-  assert.equal(health.payload.version, "0.5.0");
+  assert.equal(health.payload.version, "0.6.0");
   assert.equal(health.payload.base44_required, false);
 
   const readiness = await api("/readyz");
