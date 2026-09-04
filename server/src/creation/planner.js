@@ -35,6 +35,9 @@ const durationSeconds = (requestText) => {
   return clock ? Math.max(3, Math.min(600, Number(clock[1]) * 60 + Number(clock[2]))) : 30;
 };
 
+const videoDurationSeconds = (requestText) =>
+  durationSeconds(requestText) >= 8 ? 10 : 5;
+
 const quoteFields = (plan) => [
   plan.id,
   plan.owner_id,
@@ -146,20 +149,41 @@ const capabilityFor = (intent, user, providers, requestText) => {
     };
   }
   if (intent === "video") {
+    const seconds = videoDurationSeconds(requestText);
+    const unitCost = Number(providers?.config?.providers?.luma?.costPerFiveSecondsCents || 0);
+    const providerCost = unitCost > 0 ? Math.ceil(seconds / 5) * unitCost : 0;
+    const technical = Boolean(readiness.luma?.configured);
+    const ownerDemo = user.role === "admin" && technical;
+    const ready = Boolean(readiness.luma?.commercial_ready || ownerDemo);
     return {
       id: "luma-ray-3.2",
       provider: "luma",
-      providerReady: Boolean(readiness.luma?.configured),
-      renderReady: false,
-      creditCost: 1,
-      providerCostCents: 0,
-      jobType: "creation.document",
-      deliverables: ["Downloadable video production brief"],
-      steps: [
-        { order: 1, title: "Video direction", deliverable: "Shot and motion plan" },
-        { order: 2, title: "Preproduction package", deliverable: "Renderer-ready document" }
-      ],
-      warnings: ["VIDEO ASYNC ORCHESTRATION PENDING: this standalone milestone will not claim an MP4."]
+      providerReady: technical,
+      renderReady: ready,
+      creditCost: Math.max(1, Math.ceil(providerCost / 3)),
+      providerCostCents: providerCost,
+      jobType: ready ? "provider.luma.video" : "creation.document",
+      deliverables: ready
+        ? ["Playable downloadable MP4"]
+        : [
+            "Downloadable Markdown video production brief",
+            "Microsoft Word-compatible DOCX production brief",
+            "Portable PDF production brief"
+          ],
+      steps: ready
+        ? [
+            { order: 1, title: "Video direction", deliverable: "Renderer-ready specification" },
+            { order: 2, title: "Managed video render", deliverable: "Verified private MP4" }
+          ]
+        : [
+            { order: 1, title: "Video direction", deliverable: "Shot and motion plan" },
+            { order: 2, title: "Preproduction package", deliverable: "Markdown, DOCX, and PDF brief" }
+          ],
+      warnings: ready && ownerDemo && !readiness.luma?.commercial_ready
+        ? ["OWNER DEMO ONLY: this video is not approved for customer production, resale, advertising, or white-label release."]
+        : ready
+          ? []
+          : ["VIDEO RENDERER NOT READY: IABT will create a production brief without claiming an MP4."]
     };
   }
   return {
@@ -223,8 +247,19 @@ export const createCreationPlan = async ({
       creative_prompt: request,
       ...(intent === "audio"
         ? {
+            prompt: request,
             music_length_ms: durationSeconds(request) * 1000,
             force_instrumental: !/vocal|voice|lyrics|sing/i.test(request),
+            estimated_cost_cents: capability.providerCostCents
+          }
+        : {}),
+      ...(intent === "video"
+        ? {
+            prompt: request,
+            model: "ray-3.2",
+            aspect_ratio: "16:9",
+            resolution: "720p",
+            duration_seconds: videoDurationSeconds(request),
             estimated_cost_cents: capability.providerCostCents
           }
         : {})
