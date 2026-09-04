@@ -15,6 +15,11 @@ import {
 } from "./creation/planner.js";
 import { processStripeWebhook } from "./billing/stripe-webhook.js";
 import { planDefaults } from "./billing/plans.js";
+import {
+  createCreditCheckout,
+  createCustomerPortal,
+  createSubscriptionCheckout
+} from "./billing/stripe-checkout.js";
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -693,6 +698,44 @@ const handleFunction = async ({
       status: 200,
       payload: await executeCreationPlan({ repository, config, user, body })
     };
+  }
+
+  if (
+    name === "stripe-create-checkout" ||
+    name === "stripe-create-credit-checkout" ||
+    name === "stripe-customer-portal"
+  ) {
+    if (!providers) {
+      throw new HttpError(503, "providers_not_configured", "Provider registry is not configured");
+    }
+    const idempotencyKey =
+      "billing:" + name + ":" + user.id + ":" +
+      String(body.idempotency_key || createId()).slice(0, 160);
+    const result = name === "stripe-create-checkout"
+      ? await createSubscriptionCheckout({
+          repository,
+          providers,
+          config,
+          user,
+          plan: String(body.plan || ""),
+          idempotencyKey
+        })
+      : name === "stripe-create-credit-checkout"
+        ? await createCreditCheckout({
+            repository,
+            providers,
+            config,
+            user,
+            idempotencyKey
+          })
+        : await createCustomerPortal({
+            repository,
+            providers,
+            config,
+            user,
+            idempotencyKey
+          });
+    return { status: 200, payload: { data: result } };
   }
 
   if (name === "get-account-entitlement") {
