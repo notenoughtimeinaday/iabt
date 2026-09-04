@@ -925,6 +925,8 @@ export const createIabtHandler = ({
       });
     } else if (segments[0] === "v1" && segments[1] === "jobs") {
       result = await handleJobs({ req, segments, repository });
+    } else if (segments[0] === "v1" && segments[1] === "artifacts") {
+      result = await handleArtifacts({ req, repository, storage });
     } else if (
       req.method === "GET" &&
       segments[0] === "v1" &&
