@@ -14,6 +14,7 @@ import {
   executeCreationPlan
 } from "./creation/planner.js";
 import { processStripeWebhook } from "./billing/stripe-webhook.js";
+import { planDefaults } from "./billing/plans.js";
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -696,16 +697,34 @@ const handleFunction = async ({
 
   if (name === "get-account-entitlement") {
     const account = await repository.getCreditAccount(user.id);
+    const existing = (
+      await repository.listRecords("AccountEntitlement", user, {
+        query: { user_id: user.id },
+        sort: "-updated_date",
+        limit: 1
+      })
+    )[0];
+    const plan = existing?.plan || "free";
+    const entitlement = existing || {
+      user_id: user.id,
+      user_email: user.email,
+      plan,
+      status: "active",
+      billing_provider: "none",
+      ...planDefaults(plan),
+      bonus_ai_credits: 0
+    };
     return {
       status: 200,
       payload: {
         data: {
-          plan: "standalone",
-          status: "active",
+          ...entitlement,
           credits_remaining: account.available_credits,
           reserved_credits: account.reserved_credits,
           total_remaining: account.available_credits,
-          base44_required: false
+          total_iabt_credits_remaining: account.available_credits,
+          base44_required: false,
+          billing: providers?.readiness?.().stripe || {}
         }
       }
     };
