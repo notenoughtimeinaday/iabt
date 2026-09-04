@@ -76,6 +76,25 @@ const send = (res, status, payload, origin) => {
   res.end(JSON.stringify(payload));
 };
 
+const probeHealth = async (component, fallbackAdapter) => {
+  if (!component?.health) {
+    return {
+      ok: false,
+      adapter: fallbackAdapter,
+      reason: "health_check_missing"
+    };
+  }
+  try {
+    return await component.health();
+  } catch {
+    return {
+      ok: false,
+      adapter: fallbackAdapter,
+      reason: "unavailable"
+    };
+  }
+};
+
 const challengeHash = (config, { email, purpose, code }) =>
   hashToken(`${config.authSecret}:${purpose}:${email}:${code}`);
 
@@ -1008,8 +1027,8 @@ export const createIabtHandler = ({
       };
     } else if (req.method === "GET" && url.pathname === "/readyz") {
       const [database, objectStorage] = await Promise.all([
-        repository.health?.() || Promise.resolve({ ok: true, adapter: "unknown" }),
-        storage?.health?.() || Promise.resolve({ ok: false, adapter: "missing" })
+        probeHealth(repository, "database"),
+        probeHealth(storage, storage?.kind || "missing")
       ]);
       const ready = Boolean(database.ok && objectStorage.ok);
       result = {
