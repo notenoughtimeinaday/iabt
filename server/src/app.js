@@ -1002,7 +1002,34 @@ export const createIabtHandler = ({
         payload: {
           ok: true,
           service: "iabt-standalone",
-          version: "0.4.0",
+          version: "0.5.0",
+          base44_required: false
+        }
+      };
+    } else if (req.method === "GET" && url.pathname === "/readyz") {
+      const [database, objectStorage] = await Promise.all([
+        repository.health?.() || Promise.resolve({ ok: true, adapter: "unknown" }),
+        storage?.health?.() || Promise.resolve({ ok: false, adapter: "missing" })
+      ]);
+      const ready = Boolean(database.ok && objectStorage.ok);
+      result = {
+        status: ready ? 200 : 503,
+        payload: {
+          ok: ready,
+          service: "iabt-standalone",
+          version: "0.5.0",
+          database,
+          object_storage: objectStorage,
+          migrations: repository.migrationState
+            ? {
+                total: repository.migrationState.total,
+                pending: 0
+              }
+            : {
+                total: 0,
+                pending: 0,
+                mode: "development_memory"
+              },
           base44_required: false
         }
       };
