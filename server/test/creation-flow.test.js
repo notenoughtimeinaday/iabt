@@ -173,3 +173,58 @@ test("storefront prompt is inferred without a mode selector and produces a worki
   assert.equal(account.available_credits, 1);
   assert.equal(account.reserved_credits, 0);
 });
+
+test("document prompt produces durable Markdown, DOCX, and PDF artifacts", async () => {
+  const planned = await createCreationPlan({
+    repository,
+    config,
+    providers,
+    user,
+    requestText:
+      "Create a document that explains the IABT launch checklist, includes a résumé section, and ends with owner actions.",
+    conversationId: "document-conversation"
+  });
+  assert.equal(planned.plan.intent, "document");
+  assert.equal(planned.plan.capability_id, "iabt-document-v2");
+  assert.deepEqual(
+    planned.plan.deliverables.map((item) => item.split(" ").at(-1)),
+    ["document", "DOCX", "document"]
+  );
+
+  const started = await executeCreationPlan({
+    repository,
+    config,
+    user,
+    body: approve(planned.plan)
+  });
+  assert.equal(started.job.status, "queued");
+
+  const completed = await worker.runOnce();
+  assert.equal(completed.job.status, "succeeded");
+  assert.equal(completed.artifacts.length, 3);
+  assert.equal(completed.job.output.artifact_manifest.length, 3);
+
+  const markdown = completed.artifacts.find((artifact) => artifact.original_name.endsWith(".md"));
+  const docx = completed.artifacts.find((artifact) => artifact.original_name.endsWith(".docx"));
+  const pdf = completed.artifacts.find((artifact) => artifact.original_name.endsWith(".pdf"));
+  assert.ok(markdown);
+  assert.ok(docx);
+  assert.ok(pdf);
+
+  const markdownBytes = await storage.read(markdown.storage_key);
+  assert.match(markdownBytes.toString("utf8"), /IABT launch checklist/);
+
+  const docxBytes = await storage.read(docx.storage_key);
+  assert.equal(docxBytes.subarray(0, 4).toString("hex"), "504b0304");
+  assert.match(docxBytes.toString("utf8"), /word\/document\.xml/);
+  assert.match(docxBytes.toString("utf8"), /résumé section/);
+
+  const pdfBytes = await storage.read(pdf.storage_key);
+  assert.equal(pdfBytes.subarray(0, 8).toString("latin1"), "%PDF-1.4");
+  assert.match(pdfBytes.toString("latin1"), /%%EOF/);
+
+  const account = await repository.getCreditAccount(user.id);
+  assert.equal(account.available_credits, 0);
+  assert.equal(account.reserved_credits, 0);
+  assert.equal(providerCalls, 0);
+});
