@@ -2,6 +2,7 @@ import {
   createHash,
   randomBytes,
   randomInt,
+  randomUUID,
   scrypt as scryptCallback,
   timingSafeEqual
 } from "node:crypto";
@@ -48,4 +49,4 @@ export const createOpaqueToken = () => randomBytes(32).toString("base64url");
 export const hashToken = (token) =>
   createHash("sha256").update(String(token || "")).digest("hex");
 export const createOtp = () => String(randomInt(100000, 1000000));
-export const createId = () => randomBytes(16).toString("hex");
+export const createId = () => randomUUID();
