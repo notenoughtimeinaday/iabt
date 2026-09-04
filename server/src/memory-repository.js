@@ -472,7 +472,21 @@ export class MemoryRepository {
       created_date: timestamp
     };
     this.incidents.set(incident.id, incident);
+    job.output = {
+      incident_id: incident.id,
+      recovery: "credit_release",
+      released_credits: job.credit_amount
+    };
     return { job: clone(job), incident: clone(incident), released_credits: job.credit_amount };
+  }
+
+  async listIncidents(user, { limit = 50 } = {}) {
+    return clone(
+      [...this.incidents.values()]
+        .filter((incident) => this.canAccess(incident, user))
+        .sort((a, b) => b.created_date.localeCompare(a.created_date))
+        .slice(0, limit)
+    );
   }
 
   async getJob(id, user) {
