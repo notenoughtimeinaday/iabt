@@ -1,0 +1,100 @@
+name: iabt-staging
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: iabt
+      POSTGRES_USER: iabt
+      POSTGRES_PASSWORD: ${IABT_DATABASE_PASSWORD:?Set IABT_DATABASE_PASSWORD in .env.staging}
+    volumes:
+      - iabt_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iabt -d iabt"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    env_file: .env.staging
+    environment:
+      NODE_ENV: production
+      PORT: 8787
+      IABT_DATABASE_URL: postgresql://iabt:${IABT_DATABASE_PASSWORD}@postgres:5432/iabt
+      IABT_JOB_WORKER_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8787:8787"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/readyz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    command: ["node", "src/worker-main.js"]
+    restart: unless-stopped
+    env_file: .env.staging
+    environment:
+      NODE_ENV: production
+      IABT_DATABASE_URL: postgresql://iabt:${IABT_DATABASE_PASSWORD}@postgres:5432/iabt
+      IABT_JOB_WORKER_ENABLED: "true"
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_IABT_BACKEND: standalone
+        VITE_IABT_API_URL: ${IABT_API_ORIGIN}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  iabt_postgres:
