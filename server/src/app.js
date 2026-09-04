@@ -486,6 +486,7 @@ const handleFunction = async ({ req, segments, repository, config, storage, prov
   const name = decodeURIComponent(segments[2] || "");
 
   if (name === "get-system-health") {
+    const incidents = await repository.listIncidents(user, { limit: 20 });
     return {
       status: 200,
       payload: {
@@ -502,8 +503,18 @@ const handleFunction = async ({ req, segments, repository, config, storage, prov
             transactional_credit_lifecycle: true,
             private_object_storage: Boolean(storage),
             storage_provider: storage?.kind || "not_configured",
-            direct_provider_adapters: Boolean(providers)
+            direct_provider_adapters: Boolean(providers),
+            active_incident_count: incidents.filter((incident) => !incident.resolved_at).length
           },
+          recent_incidents: incidents.map((incident) => ({
+            incident_id: incident.id,
+            job_id: incident.job_id,
+            category: incident.category,
+            error_code: incident.error_code,
+            safe_message: incident.safe_message,
+            recovery: incident.job_id ? "credit_release_on_terminal_failure" : "none",
+            created_date: incident.created_date
+          })),
           provider_readiness: providers?.readiness?.() || {},
           production_routes: {
             app: { configured: false, reason: "creation_orchestrator_pending" },
