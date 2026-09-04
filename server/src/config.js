@@ -48,6 +48,7 @@ export const loadConfig = (env = process.env) => {
     environment,
     port: asPositiveInteger(env.PORT, 8787),
     publicOrigin: env.IABT_PUBLIC_ORIGIN || "http://localhost:5173",
+    databaseUrl: env.IABT_DATABASE_URL || "",
     authSecret,
     sessionTtlMs: asPositiveInteger(env.IABT_SESSION_TTL_MS, 1000 * 60 * 60 * 24 * 14),
     challengeTtlMs: asPositiveInteger(env.IABT_CHALLENGE_TTL_MS, 1000 * 60 * 15),
