@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { createIabtHandler } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { MemoryRepository } from "../src/memory-repository.js";
+import { createRepository } from "../src/repository-factory.js";
 
 const config = loadConfig({
   NODE_ENV: "test",
@@ -58,6 +59,18 @@ const register = async (email) => {
   assert.ok(verification.payload.access_token);
   return verification.payload;
 };
+
+test("production refuses non-durable in-memory storage", async () => {
+  const productionConfig = loadConfig({
+    NODE_ENV: "production",
+    IABT_AUTH_SECRET: "production-test-secret",
+    IABT_PUBLIC_ORIGIN: "https://insuredspending.org"
+  });
+  await assert.rejects(
+    createRepository(productionConfig),
+    /IABT_DATABASE_URL is required in production/
+  );
+});
 
 test("health and public settings are Base44-independent", async () => {
   const health = await api("/healthz");
