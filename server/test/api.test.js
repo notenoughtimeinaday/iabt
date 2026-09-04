@@ -1,10 +1,15 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { createServer } from "node:http";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createIabtHandler } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { MemoryRepository } from "../src/memory-repository.js";
+import { createProviderRegistry } from "../src/providers/provider-registry.js";
 import { createRepository } from "../src/repository-factory.js";
+import { LocalObjectStorage } from "../src/storage/local-storage.js";
 
 const config = loadConfig({
   NODE_ENV: "test",
@@ -13,19 +18,35 @@ const config = loadConfig({
   IABT_EXPOSE_DEV_OTP: "true"
 });
 const repository = new MemoryRepository();
-const server = createServer(createIabtHandler({ repository, config }));
+const storageDirectory = await mkdtemp(join(tmpdir(), "iabt-api-"));
+const storage = new LocalObjectStorage({
+  rootDirectory: storageDirectory,
+  apiOrigin: "http://127.0.0.1",
+  signingSecret: config.authSecret
+});
+await storage.ready();
+const providers = createProviderRegistry(config, {
+  fetchImpl: async () => {
+    throw new Error("Provider network calls are forbidden in API tests");
+  }
+});
+const server = createServer(
+  createIabtHandler({ repository, config, storage, providers })
+);
 let origin;
 
 before(async () => {
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   origin = `http://127.0.0.1:${address.port}`;
+  storage.apiOrigin = origin;
 });
 
 after(async () => {
   await new Promise((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve()))
   );
+  await rm(storageDirectory, { recursive: true, force: true });
 });
 
 const api = async (path, { method = "GET", token, body, headers = {} } = {}) => {
@@ -183,6 +204,8 @@ test("JERICHO conversations and bounded autonomy health are independently persis
   assert.equal(health.response.status, 200);
   assert.equal(health.payload.data.runtime, "standalone");
   assert.equal(health.payload.data.base44_required, false);
+  assert.equal(health.payload.data.operational_core.durable_job_queue, true);
+  assert.equal(health.payload.data.operational_core.private_object_storage, true);
   assert.equal(health.payload.data.production_routes.app.configured, false);
 
   const missing = await api("/v1/functions/execute-creation", {
@@ -192,6 +215,35 @@ test("JERICHO conversations and bounded autonomy health are independently persis
   });
   assert.equal(missing.response.status, 501);
   assert.equal(missing.payload.error, "function_not_migrated");
+});
+
+test("private uploads are stored, signed, and tenant-authorized", async () => {
+  const user = await register("files@example.com");
+  const form = new FormData();
+  form.append(
+    "file",
+    new Blob(["private IABT artifact"], { type: "text/plain" }),
+    "artifact.txt"
+  );
+  const uploadedResponse = await fetch(origin + "/v1/files", {
+    method: "POST",
+    headers: { Authorization: "Bearer " + user.access_token },
+    body: form
+  });
+  const uploaded = await uploadedResponse.json();
+  assert.equal(uploadedResponse.status, 201);
+  assert.match(uploaded.sha256, /^[a-f0-9]{64}$/);
+  assert.ok(uploaded.file_url.startsWith(origin + "/v1/files/"));
+
+  const contentResponse = await fetch(uploaded.file_url);
+  assert.equal(contentResponse.status, 200);
+  assert.equal(await contentResponse.text(), "private IABT artifact");
+
+  const access = await api("/v1/files/" + uploaded.file_id + "/access", {
+    token: user.access_token
+  });
+  assert.equal(access.response.status, 200);
+  assert.ok(access.payload.file_url.includes("/content?expires="));
 });
 
 test("cross-origin requests are rejected and request bodies are bounded", async () => {
