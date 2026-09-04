@@ -19,13 +19,54 @@ const safeUser = (row, includeSecret = false) => {
   return user;
 };
 
+const timestamp = (value) => value?.toISOString?.() || value || null;
+
 const recordFromRow = (row) => ({
   ...clone(row.payload || {}),
   id: row.id,
   owner_id: row.owner_id,
-  created_date: row.created_at?.toISOString?.() || row.created_at,
-  updated_date: row.updated_at?.toISOString?.() || row.updated_at
+  created_date: timestamp(row.created_at),
+  updated_date: timestamp(row.updated_at)
 });
+
+const jobFromRow = (row) => row
+  ? {
+      id: row.id,
+      owner_id: row.owner_id,
+      job_type: row.job_type,
+      status: row.status,
+      input: clone(row.input || {}),
+      output: clone(row.output || {}),
+      approval: clone(row.approval || {}),
+      idempotency_key: row.idempotency_key,
+      credit_amount: row.credit_amount,
+      attempt_count: row.attempt_count,
+      max_attempts: row.max_attempts,
+      available_at: timestamp(row.available_at),
+      locked_at: timestamp(row.locked_at),
+      locked_by: row.locked_by,
+      last_error_code: row.last_error_code,
+      last_error_message: row.last_error_message,
+      created_date: timestamp(row.created_at),
+      updated_date: timestamp(row.updated_at),
+      completed_date: timestamp(row.completed_at)
+    }
+  : null;
+
+const objectFromRow = (row) => row
+  ? {
+      id: row.id,
+      owner_id: row.owner_id,
+      job_id: row.job_id,
+      storage_provider: row.storage_provider,
+      storage_key: row.storage_key,
+      original_name: row.original_name,
+      content_type: row.content_type,
+      size_bytes: Number(row.size_bytes),
+      sha256: row.sha256,
+      created_date: timestamp(row.created_at)
+    }
+  : null;
 
 const sanitizeRecordInput = (input = {}) => {
   const copy = clone(input);
