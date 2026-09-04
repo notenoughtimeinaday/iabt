@@ -232,11 +232,13 @@ export const standaloneClient = {
       request(`/v1/agents/conversations/${encodeURIComponent(id)}`),
     createConversation: (input) =>
       request("/v1/agents/conversations", { method: "POST", body: input }),
-    addMessage: (conversation, input) =>
-      request(
+    addMessage: async (conversation, input) => {
+      const updated = await request(
         `/v1/agents/conversations/${encodeURIComponent(conversation.id || conversation)}/messages`,
         { method: "POST", body: input },
-      ),
+      );
+      return updated?.messages?.[updated.messages.length - 1] || input;
+    },
     subscribeToConversation: (id, callback) => {
       const key = String(id);
       if (conversationSubscriptions.has(key)) {
