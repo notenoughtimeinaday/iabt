@@ -24,6 +24,13 @@ export class S3ObjectStorage {
     }));
   }
 
+  async health() {
+    await this.client.send(new this.modules.HeadBucketCommand({
+      Bucket: this.config.bucket
+    }));
+    return { ok: true, adapter: "s3" };
+  }
+
   async put({ ownerId, objectId, bytes, contentType }) {
     const key = ownerId + "/" + objectId;
     await this.client.send(new this.modules.PutObjectCommand({
