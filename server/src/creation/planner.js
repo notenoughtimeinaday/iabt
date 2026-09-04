@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export const CREATION_PRICING_VERSION = "iabt-standalone-2026-09-04.2";
+export const CREATION_PRICING_VERSION = "iabt-standalone-2026-09-04.3";
 const QUOTE_TTL_MS = 30 * 60 * 1000;
 
 const normalize = (value, max = 12000) =>
@@ -25,6 +25,7 @@ const titleFor = (requestText, intent) => {
   if (intent === "audio") return "Original Audio Production";
   if (intent === "video") return "Video Production";
   if (intent === "document") return "JERICHO Document";
+  if (intent === "image") return "Original Image";
   return text.slice(0, 90) || "IABT Creation";
 };
 
@@ -148,6 +149,42 @@ const capabilityFor = (intent, user, providers, requestText) => {
           : ["AUDIO RENDERER NOT READY: no playable audio will be claimed or produced."]
     };
   }
+  if (intent === "image") {
+    const providerCost = Number(providers?.config?.providers?.openai?.imageCostCents || 0);
+    const technical = Boolean(readiness.openai_image?.configured);
+    const ownerDemo = user.role === "admin" && technical;
+    const ready = Boolean(readiness.openai_image?.commercial_ready || ownerDemo);
+    return {
+      id: "openai-image-generation-v1",
+      provider: "openai",
+      providerReady: technical,
+      renderReady: ready,
+      creditCost: Math.max(1, Math.ceil(providerCost / 3)),
+      providerCostCents: providerCost,
+      jobType: ready ? "provider.openai.image" : "creation.document",
+      deliverables: ready
+        ? ["Downloadable verified PNG image"]
+        : [
+            "Downloadable Markdown image production brief",
+            "Microsoft Word-compatible DOCX production brief",
+            "Portable PDF production brief"
+          ],
+      steps: ready
+        ? [
+            { order: 1, title: "Image direction", deliverable: "Renderer-ready specification" },
+            { order: 2, title: "Managed image render", deliverable: "Verified private PNG" }
+          ]
+        : [
+            { order: 1, title: "Image direction", deliverable: "Composition and visual plan" },
+            { order: 2, title: "Preproduction package", deliverable: "Markdown, DOCX, and PDF brief" }
+          ],
+      warnings: ready && ownerDemo && !readiness.openai_image?.commercial_ready
+        ? ["OWNER DEMO ONLY: this image is not approved for customer production, resale, advertising, or white-label release."]
+        : ready
+          ? []
+          : ["IMAGE RENDERER NOT READY: IABT will create a production brief without claiming an image."]
+    };
+  }
   if (intent === "video") {
     const seconds = videoDurationSeconds(requestText);
     const unitCost = Number(providers?.config?.providers?.luma?.costPerFiveSecondsCents || 0);
@@ -224,7 +261,7 @@ export const createCreationPlan = async ({
   const account = await repository.getCreditAccount(user.id);
   const ownerDemo =
     user.role === "admin" &&
-    (intent === "audio" || intent === "video") &&
+    (intent === "audio" || intent === "video" || intent === "image") &&
     capability.providerReady;
 
   let plan = await repository.createRecord("CreationPlan", user, {
@@ -250,6 +287,16 @@ export const createCreationPlan = async ({
             prompt: request,
             music_length_ms: durationSeconds(request) * 1000,
             force_instrumental: !/vocal|voice|lyrics|sing/i.test(request),
+            estimated_cost_cents: capability.providerCostCents
+          }
+        : {}),
+      ...(intent === "image"
+        ? {
+            prompt: request,
+            model: providers?.config?.providers?.openai?.imageModel || "gpt-image-1.5",
+            output_format: "png",
+            quality: "medium",
+            size: "1024x1024",
             estimated_cost_cents: capability.providerCostCents
           }
         : {}),
