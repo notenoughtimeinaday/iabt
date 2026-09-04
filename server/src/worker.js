@@ -49,7 +49,6 @@ export const createJobWorker = ({
     start() {
       if (timer) return;
       timer = setInterval(tick, config.worker.pollMs);
-      timer.unref?.();
       void tick();
     },
     stop() {
