@@ -1,5 +1,3 @@
-const truthy = (value) => /^(1|true|yes|on)$/i.test(String(value || "").trim());
-
 export class ProviderCallError extends Error {
   constructor(code, message, { status = 409, retryable = false, providerRequestId = "" } = {}) {
     super(message);
