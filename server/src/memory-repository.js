@@ -445,6 +445,30 @@ export class MemoryRepository {
     return { job: clone(job), artifact: stored, artifacts: storedArtifacts };
   }
 
+  async deferJob({
+    jobId,
+    workerId,
+    inputPatch = {},
+    outputPatch = {},
+    availableAt
+  }) {
+    const job = this.jobs.get(jobId);
+    if (!job || job.status !== "running" || job.locked_by !== workerId) {
+      throw Object.assign(new Error("Job lease is no longer owned by this worker"), {
+        code: "job_lease_lost"
+      });
+    }
+    job.status = "queued";
+    job.input = { ...job.input, ...clone(inputPatch) };
+    job.output = { ...job.output, ...clone(outputPatch) };
+    job.available_at = availableAt || nowIso();
+    job.locked_at = null;
+    job.locked_by = null;
+    job.attempt_count = Math.max(0, job.attempt_count - 1);
+    job.updated_date = nowIso();
+    return clone(job);
+  }
+
   async failJob({ jobId, workerId, error, retryAt = null }) {
     const job = this.jobs.get(jobId);
     if (!job || job.status !== "running" || job.locked_by !== workerId) {
