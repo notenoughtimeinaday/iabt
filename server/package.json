@@ -1,7 +1,7 @@
 {
   "name": "@iabt/standalone-server",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -11,6 +11,8 @@
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.883.0",
+    "@aws-sdk/s3-request-presigner": "^3.883.0",
     "pg": "^8.13.1"
   }
 }
