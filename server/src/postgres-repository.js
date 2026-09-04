@@ -387,6 +387,35 @@ export class PostgresRepository {
       : { owner_id: ownerId, available_credits: 0, reserved_credits: 0, updated_date: null };
   }
 
+  async startStripeEvent({ eventId, eventType, livemode, payloadSha256 }) {
+    const claimed = await this.pool.query(
+      "INSERT INTO iabt_stripe_events (event_id, event_type, livemode, status, payload_sha256) VALUES ($1,$2,$3,'processing',$4) ON CONFLICT (event_id) DO UPDATE SET event_type = EXCLUDED.event_type, livemode = EXCLUDED.livemode, status = 'processing', payload_sha256 = EXCLUDED.payload_sha256, error_code = NULL, updated_at = now(), completed_at = NULL WHERE iabt_stripe_events.status = 'failed' OR iabt_stripe_events.updated_at < now() - interval '15 minutes' RETURNING *",
+      [eventId, eventType, Boolean(livemode), payloadSha256]
+    );
+    if (claimed.rowCount) return { claimed: true, event: claimed.rows[0] };
+    const existing = await this.pool.query(
+      "SELECT * FROM iabt_stripe_events WHERE event_id = $1 LIMIT 1",
+      [eventId]
+    );
+    return { claimed: false, event: existing.rows[0] || null };
+  }
+
+  async finishStripeEvent(eventId) {
+    const result = await this.pool.query(
+      "UPDATE iabt_stripe_events SET status = 'succeeded', error_code = NULL, updated_at = now(), completed_at = now() WHERE event_id = $1 RETURNING *",
+      [eventId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async failStripeEvent(eventId, errorCode) {
+    const result = await this.pool.query(
+      "UPDATE iabt_stripe_events SET status = 'failed', error_code = $2, updated_at = now() WHERE event_id = $1 RETURNING *",
+      [eventId, String(errorCode || "stripe_event_failed")]
+    );
+    return result.rows[0] || null;
+  }
+
   async grantCredits({ ownerId, amount, idempotencyKey, metadata = {} }) {
     const value = Math.floor(Number(amount));
     if (!Number.isInteger(value) || value <= 0) throw new Error("Credit grant must be positive");
