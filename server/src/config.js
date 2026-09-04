@@ -1,3 +1,18 @@
+export const SERVER_MANAGED_ENTITIES = Object.freeze([
+  "AccountEntitlement",
+  "AiUsage",
+  "AutomationRun",
+  "BillingEvent",
+  "ConsentGrant",
+  "CreationArtifact",
+  "CreationPlan",
+  "GenerationJob",
+  "PolicyAcceptance",
+  "ProviderSpendLedger",
+  "SystemIncident",
+  "UsageLedger"
+]);
+
 export const ALLOWED_ENTITIES = Object.freeze([
   "AccountEntitlement",
   "AiUsage",
@@ -106,6 +121,7 @@ export const loadConfig = (env = process.env) => {
         mode: env.IABT_STRIPE_MODE === "live" ? "live" : "test"
       })
     }),
-    allowedEntities: new Set(ALLOWED_ENTITIES)
+    allowedEntities: new Set(ALLOWED_ENTITIES),
+    serverManagedEntities: new Set(SERVER_MANAGED_ENTITIES)
   });
 };
