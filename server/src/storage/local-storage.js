@@ -20,6 +20,11 @@ export class LocalObjectStorage {
     await mkdir(this.rootDirectory, { recursive: true });
   }
 
+  async health() {
+    await mkdir(this.rootDirectory, { recursive: true });
+    return { ok: true, adapter: "local" };
+  }
+
   resolveKey(key) {
     const target = path.resolve(this.rootDirectory, String(key || ""));
     if (!target.startsWith(this.rootDirectory + path.sep)) {
