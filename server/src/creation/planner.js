@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-export const CREATION_PRICING_VERSION = "iabt-standalone-2026-09-04.1";
+export const CREATION_PRICING_VERSION = "iabt-standalone-2026-09-04.2";
 const QUOTE_TTL_MS = 30 * 60 * 1000;
 
 const normalize = (value, max = 12000) =>
@@ -91,19 +91,24 @@ const capabilityFor = (intent, user, providers, requestText) => {
   }
   if (intent === "document") {
     return {
-      id: "iabt-document-v1",
+      id: "iabt-document-v2",
       provider: "iabt-standalone",
       providerReady: true,
       renderReady: true,
       creditCost: 1,
       providerCostCents: 0,
       jobType: "creation.document",
-      deliverables: ["Downloadable Markdown document"],
+      deliverables: [
+        "Downloadable Markdown document",
+        "Microsoft Word-compatible DOCX",
+        "Portable PDF document"
+      ],
       steps: [
         { order: 1, title: "Structure content", deliverable: "Document outline" },
-        { order: 2, title: "Create and verify", deliverable: "Markdown document" }
+        { order: 2, title: "Create content", deliverable: "Markdown source document" },
+        { order: 3, title: "Export and verify", deliverable: "DOCX and PDF files" }
       ],
-      warnings: ["DOCX and PDF exporters will be connected in a later standalone migration milestone."]
+      warnings: []
     };
   }
   if (intent === "audio") {
