@@ -540,20 +540,112 @@ const handleFiles = async ({
   throw new HttpError(404, "route_not_found", "File route was not found");
 };
 
+const publicJob = (job) => ({
+  id: job.id,
+  user_id: job.owner_id,
+  plan_id: job.input?.plan_id || job.output?.plan_id || "",
+  conversation_id: job.input?.conversation_id || job.output?.conversation_id || "",
+  project_id: job.input?.project_id || job.output?.project_id || "",
+  intent: job.input?.intent || job.output?.intent || "",
+  mode: job.input?.intent === "audio" ? "render" : "prepare",
+  provider: job.job_type.startsWith("provider.")
+    ? job.job_type.split(".")[1]
+    : "iabt-standalone",
+  status: job.status,
+  progress:
+    job.status === "succeeded" || job.status === "failed" || job.status === "needs_setup"
+      ? 100
+      : job.status === "running"
+        ? 50
+        : 5,
+  stage:
+    job.status === "succeeded"
+      ? "Deliverables created and verified"
+      : job.status === "failed"
+        ? "Production failed; reserved credits restored"
+        : job.status === "needs_setup"
+          ? "Configuration required; reserved credits restored"
+          : job.status === "running"
+            ? "IABT is creating and verifying deliverables"
+            : "Approval recorded; queued for production",
+  usage_state:
+    job.status === "succeeded"
+      ? "captured"
+      : job.status === "failed" || job.status === "needs_setup"
+        ? "released"
+        : job.credit_amount > 0
+          ? "reserved"
+          : "none",
+  artifact_id: job.output?.artifact_id || "",
+  error_message: job.last_error_message || "",
+  quote_snapshot: {
+    pricing_version: job.approval?.pricing_version || "",
+    credits_reserved: job.credit_amount > 0
+  },
+  created_date: job.created_date,
+  completed_at: job.completed_date
+});
+
 const handleJobs = async ({ req, segments, repository }) => {
   const { user } = await authenticate(req, repository);
   if (req.method === "GET" && segments.length === 2) {
-    return {
-      status: 200,
-      payload: await repository.listJobs(user, { limit: 100 })
-    };
+    const jobs = await repository.listJobs(user, { limit: 100 });
+    return { status: 200, payload: jobs.map(publicJob) };
   }
   if (req.method === "GET" && segments[2]) {
     const job = await repository.getJob(decodeURIComponent(segments[2]), user);
     if (!job) throw new HttpError(404, "job_not_found", "Job was not found");
-    return { status: 200, payload: job };
+    return { status: 200, payload: publicJob(job) };
   }
   throw new HttpError(405, "method_not_allowed", "Method is not allowed");
+};
+
+const handleArtifacts = async ({ req, repository, storage }) => {
+  const { user } = await authenticate(req, repository);
+  if (req.method !== "GET") {
+    throw new HttpError(405, "method_not_allowed", "Method is not allowed");
+  }
+  if (!storage) {
+    throw new HttpError(501, "storage_not_configured", "Private object storage is not configured");
+  }
+  const objects = await repository.listStoredObjects(user, { limit: 250 });
+  const artifacts = [];
+  for (const object of objects) {
+    const job = object.job_id ? await repository.getJob(object.job_id, user) : null;
+    const manifest = job?.output?.artifact_manifest || [];
+    const details = manifest.find((item) => item.id === object.id) || {};
+    artifacts.push({
+      id: object.id,
+      user_id: object.owner_id,
+      job_id: object.job_id || "",
+      plan_id: job?.output?.plan_id || job?.input?.plan_id || "",
+      conversation_id: job?.output?.conversation_id || job?.input?.conversation_id || "",
+      project_id: job?.output?.project_id || job?.input?.project_id || "",
+      name: object.original_name,
+      kind: details.kind || "other",
+      mime_type: object.content_type,
+      file_uri: "iabt-file:" + object.id,
+      file_url: await storage.createReadUrl(object, { expiresInSeconds: 300 }),
+      metadata: {
+        ...(details.metadata || {}),
+        size_bytes: object.size_bytes,
+        sha256: object.sha256,
+        private: true
+      },
+      provider: publicJob(job || {
+        id: "",
+        owner_id: object.owner_id,
+        input: {},
+        output: {},
+        job_type: "artifact.upload",
+        status: "succeeded",
+        approval: {},
+        credit_amount: 0
+      }).provider,
+      created_date: object.created_date
+    });
+  }
+  return { status: 200, payload: artifacts };
 };
 
 const handleFunction = async ({
