@@ -3,6 +3,7 @@ import {
   createFallbackInteractiveApp
 } from "./deterministic-app.js";
 import { createZip } from "./zip.js";
+import { buildDocumentArtifactSet } from "./document-export.js";
 
 const safeName = (value, fallback = "iabt-deliverable") =>
   String(value || fallback)
@@ -162,14 +163,8 @@ export const buildDocumentArtifacts = ({ title, requestText, intent }) => {
     "- The file is stored privately.",
     "- The IABT credit is captured only after durable storage succeeds."
   ].join("\n");
-  return {
-    metadata: { format: "markdown", rendered: true, artifact_count: 1 },
-    artifacts: [{
-      bytes: Buffer.from(markdown, "utf8"),
-      contentType: "text/markdown; charset=utf-8",
-      filename: safeName(title) + ".md",
-      kind: "document",
-      metadata: { format: "markdown", preview_ready: true }
-    }]
-  };
+  return buildDocumentArtifactSet({
+    title: safeName(title),
+    markdown
+  });
 };
