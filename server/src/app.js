@@ -783,9 +783,9 @@ const handleFunction = async ({
           })),
           provider_readiness: providers?.readiness?.() || {},
           production_routes: {
-            app: { configured: false, reason: "creation_orchestrator_pending" },
-            website: { configured: false, reason: "creation_orchestrator_pending" },
-            document: { configured: false, reason: "document_generator_pending" },
+            app: { configured: true, reason: "deterministic_creation_and_packaging_ready" },
+            website: { configured: true, reason: "deterministic_creation_and_packaging_ready" },
+            document: { configured: true, reason: "markdown_generation_and_storage_ready" },
             audio: {
               configured: Boolean(providers?.readiness?.().elevenlabs?.configured),
               reason: providers?.readiness?.().elevenlabs?.configured
