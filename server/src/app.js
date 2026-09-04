@@ -795,6 +795,13 @@ const handleFunction = async ({
             app: { configured: true, provider: "iabt-standalone" },
             website: { configured: true, provider: "iabt-standalone" },
             document: { configured: true, provider: "iabt-standalone" },
+            image: {
+              configured: Boolean(readiness.openai_image?.configured),
+              provider: "iabt-managed-image",
+              reason: readiness.openai_image?.configured
+                ? "verified_private_png_generation_ready"
+                : "provider_configuration_required"
+            },
             audio: {
               configured: Boolean(readiness.elevenlabs?.configured),
               provider: "elevenlabs"
@@ -845,7 +852,7 @@ const handleFunction = async ({
       status: 200,
       payload: {
         data: {
-          version: "iabt-standalone-0.3.0",
+          version: "iabt-standalone-0.4.0",
           runtime: "standalone",
           base44_required: false,
           authenticated_user_id: user.id,
@@ -878,6 +885,12 @@ const handleFunction = async ({
             app: { configured: true, reason: "deterministic_creation_and_packaging_ready" },
             website: { configured: true, reason: "deterministic_creation_and_packaging_ready" },
             document: { configured: true, reason: "markdown_docx_pdf_generation_and_storage_ready" },
+            image: {
+              configured: Boolean(providers?.readiness?.().openai_image?.configured),
+              reason: providers?.readiness?.().openai_image?.configured
+                ? "verified_private_png_generation_ready"
+                : "provider_configuration_required"
+            },
             audio: {
               configured: Boolean(providers?.readiness?.().elevenlabs?.configured),
               reason: providers?.readiness?.().elevenlabs?.configured
@@ -989,7 +1002,7 @@ export const createIabtHandler = ({
         payload: {
           ok: true,
           service: "iabt-standalone",
-          version: "0.3.0",
+          version: "0.4.0",
           base44_required: false
         }
       };
