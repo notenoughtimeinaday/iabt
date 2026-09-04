@@ -60,13 +60,20 @@ Completed in the independent runtime:
 - verified Stripe checkout, customer portal, credit-pack, webhook-signature, replay-protection, and entitlement core
 - Base44 export-package validation with identity, ownership, file-hash, credential-field, and count reconciliation
 - cost-capped managed image generation with server-owned quotes and verified private PNG artifacts
+- checksum-verified automatic PostgreSQL migrations with concurrent-start locking
+- separately scalable API and background-worker processes
+- portable frontend/API/worker/PostgreSQL staging containers
+- database and private-object-storage readiness probes
+- non-mutating independent staging smoke tests
+- checksum-manifested PostgreSQL backups and guarded disposable restore validation
 
 Still required before cutover:
 
 - remaining code, design, G-code, and automation renderers
 - complete Stripe test lifecycle against the owner's Stripe test account
 - Base44 live record/file export, staged import, and post-import reconciliation
-- independent staging deployment, monitoring, backups, and 20 golden-path runs
+- deploy the prepared independent staging stack and connect monitoring
+- execute backup/restore validation and 20 consecutive golden-path runs
 
 ## Safe cutover order
 
