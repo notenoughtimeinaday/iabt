@@ -53,6 +53,12 @@ export class MemoryRepository {
     this.challenges = new Map();
     this.records = new Map();
     this.auditEvents = [];
+    this.jobs = new Map();
+    this.jobIdsByOwnerKey = new Map();
+    this.creditAccounts = new Map();
+    this.creditEntries = [];
+    this.incidents = new Map();
+    this.storedObjects = new Map();
   }
 
   async createUser({ email, passwordHash, name = "", role = "user", emailVerified = false }) {
@@ -218,5 +224,268 @@ export class MemoryRepository {
       metadata: clone(metadata),
       created_date: nowIso()
     });
+  }
+
+  creditAccount(ownerId) {
+    if (!this.creditAccounts.has(ownerId)) {
+      this.creditAccounts.set(ownerId, {
+        owner_id: ownerId,
+        available_credits: 0,
+        reserved_credits: 0,
+        updated_date: nowIso()
+      });
+    }
+    return this.creditAccounts.get(ownerId);
+  }
+
+  async getCreditAccount(ownerId) {
+    return clone(this.creditAccount(ownerId));
+  }
+
+  async grantCredits({ ownerId, amount, idempotencyKey, metadata = {} }) {
+    const existing = this.creditEntries.find(
+      (entry) =>
+        entry.owner_id === ownerId &&
+        entry.entry_type === "grant" &&
+        entry.idempotency_key === idempotencyKey
+    );
+    if (existing) return this.getCreditAccount(ownerId);
+    const value = Math.floor(Number(amount));
+    if (!Number.isInteger(value) || value <= 0) throw new Error("Credit grant must be positive");
+    const account = this.creditAccount(ownerId);
+    account.available_credits += value;
+    account.updated_date = nowIso();
+    this.creditEntries.push({
+      id: createId(),
+      owner_id: ownerId,
+      job_id: null,
+      entry_type: "grant",
+      amount: value,
+      idempotency_key: idempotencyKey,
+      metadata: clone(metadata),
+      created_date: nowIso()
+    });
+    return clone(account);
+  }
+
+  async enqueueJob({
+    ownerId,
+    jobType,
+    input = {},
+    approval = {},
+    idempotencyKey,
+    creditAmount = 0,
+    maxAttempts = 3
+  }) {
+    const ownerKey = ownerId + ":" + idempotencyKey;
+    const existingId = this.jobIdsByOwnerKey.get(ownerKey);
+    if (existingId) return clone(this.jobs.get(existingId));
+    const credits = Math.max(0, Math.floor(Number(creditAmount) || 0));
+    const account = this.creditAccount(ownerId);
+    if (credits > account.available_credits) {
+      throw Object.assign(new Error("Insufficient IABT credits"), {
+        status: 402,
+        code: "insufficient_credits"
+      });
+    }
+    const timestamp = nowIso();
+    const job = {
+      id: createId(),
+      owner_id: ownerId,
+      job_type: jobType,
+      status: "queued",
+      input: clone(input),
+      output: {},
+      approval: clone(approval),
+      idempotency_key: idempotencyKey,
+      credit_amount: credits,
+      attempt_count: 0,
+      max_attempts: Math.max(1, Math.min(10, Math.floor(maxAttempts))),
+      available_at: timestamp,
+      locked_at: null,
+      locked_by: null,
+      last_error_code: null,
+      last_error_message: null,
+      created_date: timestamp,
+      updated_date: timestamp,
+      completed_date: null
+    };
+    account.available_credits -= credits;
+    account.reserved_credits += credits;
+    account.updated_date = timestamp;
+    this.jobs.set(job.id, job);
+    this.jobIdsByOwnerKey.set(ownerKey, job.id);
+    if (credits > 0) {
+      this.creditEntries.push({
+        id: createId(),
+        owner_id: ownerId,
+        job_id: job.id,
+        entry_type: "reserve",
+        amount: credits,
+        idempotency_key: idempotencyKey,
+        metadata: {},
+        created_date: timestamp
+      });
+    }
+    return clone(job);
+  }
+
+  async claimNextJob({ workerId, leaseMs = 300000 }) {
+    const now = Date.now();
+    const candidates = [...this.jobs.values()]
+      .filter((job) =>
+        (job.status === "queued" && new Date(job.available_at).getTime() <= now) ||
+        (job.status === "running" &&
+          new Date(job.locked_at || 0).getTime() + leaseMs <= now)
+      )
+      .sort((a, b) => a.created_date.localeCompare(b.created_date));
+    const job = candidates[0];
+    if (!job) return null;
+    job.status = "running";
+    job.locked_by = workerId;
+    job.locked_at = nowIso();
+    job.attempt_count += 1;
+    job.updated_date = nowIso();
+    return clone(job);
+  }
+
+  async createStoredObject({
+    id = createId(),
+    ownerId,
+    jobId = null,
+    storageProvider,
+    storageKey,
+    originalName,
+    contentType,
+    sizeBytes,
+    sha256
+  }) {
+    const record = {
+      id,
+      owner_id: ownerId,
+      job_id: jobId,
+      storage_provider: storageProvider,
+      storage_key: storageKey,
+      original_name: originalName,
+      content_type: contentType,
+      size_bytes: sizeBytes,
+      sha256,
+      created_date: nowIso()
+    };
+    this.storedObjects.set(id, record);
+    return clone(record);
+  }
+
+  async getStoredObject(id, user) {
+    const record = this.storedObjects.get(id);
+    return this.canAccess(record, user) ? clone(record) : null;
+  }
+
+  async getStoredObjectById(id) {
+    return clone(this.storedObjects.get(id) || null);
+  }
+
+  async completeJob({ jobId, workerId, output = {}, artifact = null }) {
+    const job = this.jobs.get(jobId);
+    if (!job || job.status !== "running" || job.locked_by !== workerId) {
+      throw Object.assign(new Error("Job lease is no longer owned by this worker"), {
+        code: "job_lease_lost"
+      });
+    }
+    if (job.credit_amount > 0 && !artifact) {
+      throw Object.assign(new Error("Credits cannot be captured without a durable artifact"), {
+        code: "durable_output_required"
+      });
+    }
+    const stored = artifact ? await this.createStoredObject({ ...artifact, jobId }) : null;
+    const timestamp = nowIso();
+    job.status = "succeeded";
+    job.output = { ...clone(output), ...(stored ? { artifact_id: stored.id } : {}) };
+    job.locked_at = null;
+    job.locked_by = null;
+    job.updated_date = timestamp;
+    job.completed_date = timestamp;
+    const account = this.creditAccount(job.owner_id);
+    account.reserved_credits -= job.credit_amount;
+    account.updated_date = timestamp;
+    if (job.credit_amount > 0) {
+      this.creditEntries.push({
+        id: createId(),
+        owner_id: job.owner_id,
+        job_id: job.id,
+        entry_type: "capture",
+        amount: job.credit_amount,
+        idempotency_key: job.idempotency_key,
+        metadata: {},
+        created_date: timestamp
+      });
+    }
+    return { job: clone(job), artifact: stored };
+  }
+
+  async failJob({ jobId, workerId, error, retryAt = null }) {
+    const job = this.jobs.get(jobId);
+    if (!job || job.status !== "running" || job.locked_by !== workerId) {
+      throw Object.assign(new Error("Job lease is no longer owned by this worker"), {
+        code: "job_lease_lost"
+      });
+    }
+    const timestamp = nowIso();
+    const canRetry = Boolean(retryAt) && job.attempt_count < job.max_attempts;
+    job.last_error_code = String(error.code || "job_failed");
+    job.last_error_message = String(error.safeMessage || "IABT could not complete this job").slice(0, 500);
+    job.locked_at = null;
+    job.locked_by = null;
+    job.updated_date = timestamp;
+    if (canRetry) {
+      job.status = "queued";
+      job.available_at = retryAt;
+      return { job: clone(job), incident: null, released_credits: 0 };
+    }
+    job.status = error.needsSetup ? "needs_setup" : "failed";
+    job.completed_date = timestamp;
+    const account = this.creditAccount(job.owner_id);
+    account.reserved_credits -= job.credit_amount;
+    account.available_credits += job.credit_amount;
+    account.updated_date = timestamp;
+    if (job.credit_amount > 0) {
+      this.creditEntries.push({
+        id: createId(),
+        owner_id: job.owner_id,
+        job_id: job.id,
+        entry_type: "release",
+        amount: job.credit_amount,
+        idempotency_key: job.idempotency_key,
+        metadata: { error_code: job.last_error_code },
+        created_date: timestamp
+      });
+    }
+    const incident = {
+      id: createId(),
+      owner_id: job.owner_id,
+      job_id: job.id,
+      category: error.category || "execution",
+      error_code: job.last_error_code,
+      safe_message: job.last_error_message,
+      details: clone(error.details || {}),
+      resolved_at: null,
+      created_date: timestamp
+    };
+    this.incidents.set(incident.id, incident);
+    return { job: clone(job), incident: clone(incident), released_credits: job.credit_amount };
+  }
+
+  async getJob(id, user) {
+    const job = this.jobs.get(id);
+    return this.canAccess(job, user) ? clone(job) : null;
+  }
+
+  async listJobs(user, { limit = 50 } = {}) {
+    return clone(
+      [...this.jobs.values()]
+        .filter((job) => this.canAccess(job, user))
+        .sort((a, b) => b.created_date.localeCompare(a.created_date))
+        .slice(0, limit)
+    );
   }
 }
