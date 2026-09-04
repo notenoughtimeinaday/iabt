@@ -66,12 +66,10 @@ test("idempotent jobs reserve once and capture only after durable storage", asyn
   const first = await repository.enqueueJob(input);
   const duplicate = await repository.enqueueJob(input);
   assert.equal(duplicate.id, first.id);
-  assert.deepEqual(await repository.getCreditAccount(user.id), {
-    owner_id: user.id,
-    available_credits: 1,
-    reserved_credits: 1,
-    updated_date: (await repository.getCreditAccount(user.id)).updated_date
-  });
+  const reservedAccount = await repository.getCreditAccount(user.id);
+  assert.equal(reservedAccount.owner_id, user.id);
+  assert.equal(reservedAccount.available_credits, 1);
+  assert.equal(reservedAccount.reserved_credits, 1);
 
   const storage = await makeStorage();
   const providers = {
@@ -145,9 +143,41 @@ test("terminal configuration failures create an incident and restore credits", a
   assert.equal(failed.released_credits, 1);
   assert.equal(failed.incident.category, "configuration");
   assert.equal(failed.incident.owner_id, user.id);
+  assert.equal(failed.job.output.incident_id, failed.incident.id);
+  assert.equal(failed.job.output.recovery, "credit_release");
   const account = await repository.getCreditAccount(user.id);
   assert.equal(account.available_credits, 1);
   assert.equal(account.reserved_credits, 0);
+});
+
+test("credit capture is refused when a job has no durable artifact", async () => {
+  const repository = new MemoryRepository();
+  const user = await makeUser(repository, "capture@example.com");
+  await repository.grantCredits({
+    ownerId: user.id,
+    amount: 1,
+    idempotencyKey: "opening-balance"
+  });
+  const queued = await repository.enqueueJob({
+    ownerId: user.id,
+    jobType: "artifact.echo",
+    input: { content: "proof" },
+    idempotencyKey: "capture-job",
+    creditAmount: 1
+  });
+  const claimed = await repository.claimNextJob({ workerId: "capture-worker" });
+  assert.equal(claimed.id, queued.id);
+  await assert.rejects(
+    repository.completeJob({
+      jobId: queued.id,
+      workerId: "capture-worker",
+      output: { claimed_success: true }
+    }),
+    (error) => error.code === "durable_output_required"
+  );
+  const account = await repository.getCreditAccount(user.id);
+  assert.equal(account.available_credits, 0);
+  assert.equal(account.reserved_credits, 1);
 });
 
 test("retryable provider failures retain the reservation until the retry budget ends", async () => {
