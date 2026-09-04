@@ -59,10 +59,11 @@ Completed in the independent runtime:
 - asynchronous Luma submission, restart-safe polling, MP4 ingestion, and media-signature verification
 - verified Stripe checkout, customer portal, credit-pack, webhook-signature, replay-protection, and entitlement core
 - Base44 export-package validation with identity, ownership, file-hash, credential-field, and count reconciliation
+- cost-capped managed image generation with server-owned quotes and verified private PNG artifacts
 
 Still required before cutover:
 
-- remaining image, code, design, G-code, and automation renderers
+- remaining code, design, G-code, and automation renderers
 - complete Stripe test lifecycle against the owner's Stripe test account
 - Base44 live record/file export, staged import, and post-import reconciliation
 - independent staging deployment, monitoring, backups, and 20 golden-path runs
