@@ -1,6 +1,6 @@
 # Intelligent Application Building Tool (IABT) — JERICHO Studio
 
-The Intelligent Application Building Tool (IABT) is an autonomous creation and project-operations platform running on Base44. JERICHO Studio is the single creation front door: it preserves context, plans and quotes work, routes to authorized providers, requires explicit approval, and verifies delivery. Generated app projects are preserved as reviewable project records and deliverable artifacts. The former Visual App Builder is retired from the customer-facing product.
+The Intelligent Application Building Tool (IABT) is an autonomous creation and project-operations platform whose current public deployment runs on Base44 while a verified standalone runtime is prepared for independent hosting. JERICHO Studio is the single creation front door: it preserves context, plans and quotes work, routes to authorized providers, requires explicit approval, and verifies delivery. Generated app projects are preserved as reviewable project records and deliverable artifacts. The former Visual App Builder is retired from the customer-facing product.
 
 - Production: https://insuredspending.org
 - Base44 fallback: https://crazy-creator-flow-hub.base44.app
@@ -37,8 +37,12 @@ The Intelligent Application Building Tool (IABT) is an autonomous creation and p
 
 ## Architecture
 
-- React + Vite frontend
-- Base44 SDK and Vite plugin
+- React + Vite frontend with an IABT-owned backend adapter boundary
+- Current Base44 SDK/Vite adapter for the public deployment
+- Standalone Node API and isolated background worker
+- PostgreSQL with checksum-verified automatic migrations
+- S3-compatible private object storage
+- Portable staging containers and independent readiness checks
 - Base44 authentication
 - Owner-scoped `Project`, `AiUsage`, and `SystemIncident` entities
 - User-readable, administrator-managed `AccountEntitlement` entity
@@ -61,6 +65,14 @@ The matching algorithm applies hard eligibility filters first, then scores eligi
 Privacy is fail-closed: profiles are opt-in, there is no public contact directory, contact fields are hidden in match results, and each participant separately authorizes disclosure when accepting an introduction. Credential claims are self-reported until administrator review records a verification method. The beta does not process pooled funds, investments, employment placement fees, banking services, insurance, brokerage, or fundraising transactions.
 
 Before public beta, run an authenticated two-account test of profile creation, project needs, matching, introduction acceptance/decline/withdrawal, contact disclosure, private messaging, blocking, reporting, and administrator review. Final privacy and collaboration terms require licensed-counsel review.
+
+## Standalone staging
+
+The host-agnostic staging package is documented in
+`STANDALONE_DEPLOYMENT.md`. It includes separate frontend, API, worker, and
+PostgreSQL services, automatic checksum-verified migrations, liveness/readiness
+checks, non-mutating smoke tests, and guarded backup/restore validation. It does
+not change DNS or enable paid providers.
 
 ## Local development
 
