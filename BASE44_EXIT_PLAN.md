@@ -55,14 +55,16 @@ Completed in the independent runtime:
 - protected server-managed plan, billing, consent, artifact, and incident records
 - deterministic app and website orchestration with working preview, AppDefinition, source ZIP, and validation report
 - standalone piano-app and merchandise-storefront golden-path tests
+- standalone Markdown, DOCX, and PDF document export with durable artifact verification
+- asynchronous Luma submission, restart-safe polling, MP4 ingestion, and media-signature verification
+- verified Stripe checkout, customer portal, credit-pack, webhook-signature, replay-protection, and entitlement core
+- Base44 export-package validation with identity, ownership, file-hash, credential-field, and count reconciliation
 
 Still required before cutover:
 
-- asynchronous Luma completion polling and media ingestion
-- standalone DOCX and PDF export
 - remaining image, code, design, G-code, and automation renderers
-- Stripe webhook and entitlement migration
-- Base44 record/file export and staged import reconciliation
+- complete Stripe test lifecycle against the owner's Stripe test account
+- Base44 live record/file export, staged import, and post-import reconciliation
 - independent staging deployment, monitoring, backups, and 20 golden-path runs
 
 ## Safe cutover order
