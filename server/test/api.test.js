@@ -194,7 +194,26 @@ test("JERICHO conversations and bounded autonomy health are independently persis
     }
   );
   assert.equal(updated.response.status, 200);
-  assert.equal(updated.payload.messages.length, 1);
+  assert.equal(updated.payload.messages.length, 2);
+  assert.equal(updated.payload.messages[1].role, "assistant");
+  assert.equal(updated.payload.messages[1].metadata.intent, "app");
+
+  const plans = await api("/v1/entities/CreationPlan/filter", {
+    method: "POST",
+    token: user.access_token,
+    body: { query: { conversation_id: conversation.payload.id } }
+  });
+  assert.equal(plans.response.status, 200);
+  assert.equal(plans.payload.length, 1);
+  assert.equal(plans.payload[0].intent, "app");
+
+  const protectedWrite = await api("/v1/entities/CreationPlan", {
+    method: "POST",
+    token: user.access_token,
+    body: { status: "quoted", credit_cost: 0 }
+  });
+  assert.equal(protectedWrite.response.status, 403);
+  assert.equal(protectedWrite.payload.error, "server_managed_entity");
 
   const health = await api("/v1/functions/get-system-health", {
     method: "POST",
