@@ -66,10 +66,15 @@ Completed in the independent runtime:
 - database and private-object-storage readiness probes
 - non-mutating independent staging smoke tests
 - checksum-manifested PostgreSQL backups and guarded disposable restore validation
+- prompt-inferred runnable code scaffolds with explicit implementation limits
+- reviewable design specifications, design tokens, and accessible SVG boards
+- simulation-only G-code safety packages that never claim machine readiness
+- disabled-by-default automation runbooks with approval and idempotency gates
 
 Still required before cutover:
 
-- remaining code, design, G-code, and automation renderers
+- request-specific code synthesis and sandbox execution beyond the verified scaffold
+- authorized integration adapters for automation execution; machine-ready G-code remains CAM/operator gated
 - complete Stripe test lifecycle against the owner's Stripe test account
 - Base44 live record/file export, staged import, and post-import reconciliation
 - deploy the prepared independent staging stack and connect monitoring
