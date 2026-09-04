@@ -514,7 +514,7 @@ export class PostgresRepository {
     return objectFromRow(result.rows[0]);
   }
 
-  async completeJob({ jobId, workerId, output = {}, artifact = null }) {
+  async completeJob({ jobId, workerId, output = {}, artifact = null, artifacts = [] }) {
     return this.withTransaction(async (client) => {
       const locked = await client.query(
         "SELECT * FROM iabt_jobs WHERE id = $1 FOR UPDATE",
@@ -526,15 +526,26 @@ export class PostgresRepository {
           code: "job_lease_lost"
         });
       }
-      if (job.credit_amount > 0 && !artifact) {
+      const artifactInputs = artifacts.length ? artifacts : artifact ? [artifact] : [];
+      if (job.credit_amount > 0 && !artifactInputs.length) {
         throw Object.assign(new Error("Credits cannot be captured without a durable artifact"), {
           code: "durable_output_required"
         });
       }
-      const stored = artifact
-        ? await this.createStoredObject({ ...artifact, jobId }, client)
-        : null;
-      const finalOutput = { ...output, ...(stored ? { artifact_id: stored.id } : {}) };
+      const storedArtifacts = [];
+      for (const item of artifactInputs) {
+        storedArtifacts.push(await this.createStoredObject({ ...item, jobId }, client));
+      }
+      const stored = storedArtifacts[0] || null;
+      const finalOutput = {
+        ...output,
+        ...(stored
+          ? {
+              artifact_id: stored.id,
+              artifact_ids: storedArtifacts.map((item) => item.id)
+            }
+          : {})
+      };
       const updated = await client.query(
         "UPDATE iabt_jobs SET status = 'succeeded', output = $3::jsonb, locked_at = NULL, locked_by = NULL, updated_at = now(), completed_at = now() WHERE id = $1 AND locked_by = $2 RETURNING *",
         [jobId, workerId, JSON.stringify(finalOutput)]
@@ -549,7 +560,11 @@ export class PostgresRepository {
           [createId(), job.owner_id, job.id, job.credit_amount, job.idempotency_key]
         );
       }
-      return { job: jobFromRow(updated.rows[0]), artifact: stored };
+      return {
+        job: jobFromRow(updated.rows[0]),
+        artifact: stored,
+        artifacts: storedArtifacts
+      };
     });
   }
 
