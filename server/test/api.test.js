@@ -225,7 +225,7 @@ test("JERICHO conversations and bounded autonomy health are independently persis
   assert.equal(health.payload.data.base44_required, false);
   assert.equal(health.payload.data.operational_core.durable_job_queue, true);
   assert.equal(health.payload.data.operational_core.private_object_storage, true);
-  assert.equal(health.payload.data.production_routes.app.configured, false);
+  assert.equal(health.payload.data.production_routes.app.configured, true);
 
   const missing = await api("/v1/functions/not-migrated-yet", {
     method: "POST",
