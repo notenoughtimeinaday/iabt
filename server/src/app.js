@@ -368,7 +368,119 @@ const handleAgents = async ({ req, segments, body, repository }) => {
   throw new HttpError(404, "route_not_found", "Agent route was not found");
 };
 
-const handleFunction = async ({ req, segments, repository }) => {
+const cleanFilename = (value) =>
+  String(value || "upload.bin")
+    .replace(/[\\/\u0000-\u001f\u007f]+/g, "-")
+    .trim()
+    .slice(0, 160) || "upload.bin";
+
+const handleFiles = async ({
+  req,
+  res,
+  url,
+  segments,
+  repository,
+  config,
+  storage,
+  origin
+}) => {
+  if (!storage) {
+    throw new HttpError(501, "storage_not_configured", "Private object storage is not configured");
+  }
+
+  if (req.method === "POST" && segments.length === 2) {
+    const { user } = await authenticate(req, repository);
+    const file = await readSingleFile(req, { maxBytes: config.maxUploadBytes });
+    if (!file.bytes.length) throw new HttpError(400, "empty_file", "Uploaded file is empty");
+    const id = createId();
+    const stored = await storage.put({
+      ownerId: user.id,
+      objectId: id,
+      bytes: file.bytes,
+      contentType: file.contentType
+    });
+    const record = await repository.createStoredObject({
+      id,
+      ownerId: user.id,
+      storageProvider: stored.storage_provider,
+      storageKey: stored.storage_key,
+      originalName: cleanFilename(file.filename),
+      contentType: file.contentType,
+      sizeBytes: file.bytes.length,
+      sha256: createHash("sha256").update(file.bytes).digest("hex")
+    });
+    const fileUrl = await storage.createReadUrl(record, { expiresInSeconds: 300 });
+    await repository.appendAudit(user, "file.upload", {
+      file_id: record.id,
+      size_bytes: record.size_bytes,
+      sha256: record.sha256
+    });
+    return {
+      status: 201,
+      payload: {
+        file_id: record.id,
+        file_url: fileUrl,
+        mime_type: record.content_type,
+        size_bytes: record.size_bytes,
+        sha256: record.sha256
+      }
+    };
+  }
+
+  const id = decodeURIComponent(segments[2] || "");
+  if (req.method === "GET" && id && segments[3] === "access") {
+    const { user } = await authenticate(req, repository);
+    const record = await repository.getStoredObject(id, user);
+    if (!record) throw new HttpError(404, "file_not_found", "File was not found");
+    return {
+      status: 200,
+      payload: {
+        file_id: record.id,
+        file_url: await storage.createReadUrl(record, { expiresInSeconds: 300 }),
+        expires_in_seconds: 300
+      }
+    };
+  }
+
+  if (req.method === "GET" && id && segments[3] === "content" && storage.kind === "local") {
+    const expires = url.searchParams.get("expires");
+    const signature = url.searchParams.get("signature");
+    if (!storage.verifyDownload(id, expires, signature)) {
+      throw new HttpError(403, "invalid_file_signature", "File link is invalid or expired");
+    }
+    const record = await repository.getStoredObjectById(id);
+    if (!record) throw new HttpError(404, "file_not_found", "File was not found");
+    const bytes = await storage.read(record.storage_key);
+    res.writeHead(200, {
+      ...responseHeaders(origin),
+      "Content-Type": record.content_type,
+      "Content-Length": String(bytes.length),
+      "Content-Disposition": "inline; filename*=UTF-8''" + encodeURIComponent(record.original_name)
+    });
+    res.end(bytes);
+    return { direct: true };
+  }
+
+  throw new HttpError(404, "route_not_found", "File route was not found");
+};
+
+const handleJobs = async ({ req, segments, repository }) => {
+  const { user } = await authenticate(req, repository);
+  if (req.method === "GET" && segments.length === 2) {
+    return {
+      status: 200,
+      payload: await repository.listJobs(user, { limit: 100 })
+    };
+  }
+  if (req.method === "GET" && segments[2]) {
+    const job = await repository.getJob(decodeURIComponent(segments[2]), user);
+    if (!job) throw new HttpError(404, "job_not_found", "Job was not found");
+    return { status: 200, payload: job };
+  }
+  throw new HttpError(405, "method_not_allowed", "Method is not allowed");
+};
+
+const handleFunction = async ({ req, segments, repository, config, storage, providers }) => {
   if (req.method !== "POST") throw new HttpError(405, "method_not_allowed", "Method is not allowed");
   const { user } = await authenticate(req, repository);
   const name = decodeURIComponent(segments[2] || "");
