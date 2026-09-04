@@ -91,6 +91,14 @@ export class MemoryRepository {
     return publicUser(user);
   }
 
+  async updatePassword(id, passwordHash) {
+    const user = this.users.get(id);
+    if (!user) return null;
+    user.password_hash = passwordHash;
+    user.updated_date = nowIso();
+    return publicUser(user);
+  }
+
   async createSession({ tokenHash, userId, expiresAt }) {
     this.sessions.set(tokenHash, {
       token_hash: tokenHash,
