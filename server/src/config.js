@@ -68,6 +68,7 @@ export const loadConfig = (env = process.env) => {
     (environment === "production" ? "s3" : "local");
   const costPerMinuteCents = Number(env.IABT_ELEVENLABS_COST_PER_MINUTE_CENTS);
   const lumaCostPerFiveSecondsCents = Number(env.IABT_LUMA_COST_PER_5_SECONDS_CENTS);
+  const openaiImageCostCents = Number(env.IABT_OPENAI_IMAGE_COST_CENTS);
 
   return Object.freeze({
     environment,
@@ -98,7 +99,14 @@ export const loadConfig = (env = process.env) => {
       openai: freezeProvider({
         apiKey: env.OPENAI_API_KEY || "",
         model: env.OPENAI_MODEL || "gpt-4o-mini",
-        paidEnabled: asBoolean(env.IABT_ENABLE_PAID_AI)
+        paidEnabled: asBoolean(env.IABT_ENABLE_PAID_AI),
+        imageModel: env.OPENAI_IMAGE_MODEL || "gpt-image-1.5",
+        imagePaidEnabled: asBoolean(env.IABT_ENABLE_PAID_IMAGES),
+        imageCommercialApproved: asBoolean(env.IABT_OPENAI_IMAGE_COMMERCIAL_APPROVED),
+        imageCostCents:
+          Number.isInteger(openaiImageCostCents) && openaiImageCostCents > 0
+            ? openaiImageCostCents
+            : 0
       }),
       elevenlabs: freezeProvider({
         apiKey: env.ELEVENLABS_API_KEY || "",
