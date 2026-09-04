@@ -102,11 +102,15 @@ export class ProviderRegistry {
       p.luma.billingReady &&
       Number.isInteger(p.luma.costPerFiveSecondsCents) &&
       p.luma.costPerFiveSecondsCents > 0;
+    const stripeKeyReady =
+      (p.stripe.mode === "test" && p.stripe.secretKey.startsWith("sk_test_")) ||
+      (p.stripe.mode === "live" && p.stripe.secretKey.startsWith("sk_live_"));
+    const stripePricesReady =
+      Object.values(p.stripe.prices || {}).every((price) => String(price).startsWith("price_")) &&
+      String(p.stripe.creditPackPriceId || "").startsWith("price_");
     const stripe =
-      Boolean(p.stripe.secretKey) &&
-      Boolean(p.stripe.webhookSecret) &&
-      ((p.stripe.mode === "test" && p.stripe.secretKey.startsWith("sk_test_")) ||
-        (p.stripe.mode === "live" && p.stripe.secretKey.startsWith("sk_live_")));
+      stripeKeyReady &&
+      p.stripe.webhookSecret.startsWith("whsec_");
     return {
       openai: {
         configured: openai,
@@ -139,11 +143,14 @@ export class ProviderRegistry {
       },
       stripe: {
         configured: stripe,
+        checkout_ready: stripe && stripePricesReady,
+        prices_ready: stripePricesReady,
         mode: p.stripe.mode,
         blocker_codes: [
           ...(!p.stripe.secretKey ? ["stripe_key_missing"] : []),
           ...(!p.stripe.webhookSecret ? ["stripe_webhook_secret_missing"] : []),
-          ...(!stripe && p.stripe.secretKey ? ["stripe_key_mode_mismatch"] : [])
+          ...(!stripeKeyReady && p.stripe.secretKey ? ["stripe_key_mode_mismatch"] : []),
+          ...(!stripePricesReady ? ["stripe_price_configuration_incomplete"] : [])
         ]
       }
     };
