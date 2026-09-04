@@ -490,23 +490,45 @@ const handleFunction = async ({ req, segments, repository, config, storage, prov
       status: 200,
       payload: {
         data: {
-          version: "iabt-standalone-0.1.0",
+          version: "iabt-standalone-0.2.0",
           runtime: "standalone",
           base44_required: false,
           authenticated_user_id: user.id,
           healthy: true,
+          operational_core: {
+            durable_job_queue: true,
+            lease_recovery: true,
+            incident_persistence: true,
+            transactional_credit_lifecycle: true,
+            private_object_storage: Boolean(storage),
+            storage_provider: storage?.kind || "not_configured",
+            direct_provider_adapters: Boolean(providers)
+          },
+          provider_readiness: providers?.readiness?.() || {},
           production_routes: {
-            app: { configured: false, reason: "creation_worker_pending" },
-            website: { configured: false, reason: "creation_worker_pending" },
-            document: { configured: false, reason: "artifact_storage_pending" },
-            audio: { configured: false, reason: "provider_adapter_pending" },
-            video: { configured: false, reason: "provider_adapter_pending" }
+            app: { configured: false, reason: "creation_orchestrator_pending" },
+            website: { configured: false, reason: "creation_orchestrator_pending" },
+            document: { configured: false, reason: "document_generator_pending" },
+            audio: {
+              configured: Boolean(providers?.readiness?.().elevenlabs?.configured),
+              reason: providers?.readiness?.().elevenlabs?.configured
+                ? "approval_and_orchestration_required"
+                : "provider_configuration_required"
+            },
+            video: {
+              configured: Boolean(providers?.readiness?.().luma?.configured),
+              reason: providers?.readiness?.().luma?.configured
+                ? "approval_and_orchestration_required"
+                : "provider_configuration_required"
+            }
           },
           automatic_actions: [
             "bounded_retry",
             "incident_persistence",
             "credit_release_on_no_durable_output",
-            "request_specific_validation"
+            "request_specific_validation",
+            "expired_worker_lease_recovery",
+            "idempotent_job_submission"
           ]
         }
       }
