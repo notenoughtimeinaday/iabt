@@ -40,6 +40,9 @@ const providerTask = (job) => {
   if (job.job_type === "provider.openai.response") {
     return { provider: "openai", operation: "response", kind: "data" };
   }
+  if (job.job_type === "provider.openai.image") {
+    return { provider: "openai", operation: "generate_image", kind: "image" };
+  }
   if (job.job_type === "provider.elevenlabs.music") {
     return { provider: "elevenlabs", operation: "compose_music", kind: "audio" };
   }
