@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   Unplug,
 } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { base44 } from "@/api/iabtClient";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/AuthContext";
 
