@@ -551,13 +551,18 @@ const publicJob = (job) => ({
   provider: job.job_type.startsWith("provider.")
     ? job.job_type.split(".")[1]
     : "iabt-standalone",
-  status: job.status,
+  status:
+    job.status === "queued" && job.input?.provider_job_id
+      ? "waiting_provider"
+      : job.status,
   progress:
     job.status === "succeeded" || job.status === "failed" || job.status === "needs_setup"
       ? 100
       : job.status === "running"
         ? 50
-        : 5,
+        : job.input?.provider_job_id
+          ? 35
+          : 5,
   stage:
     job.status === "succeeded"
       ? "Deliverables created and verified"
@@ -567,7 +572,9 @@ const publicJob = (job) => ({
           ? "Configuration required; reserved credits restored"
           : job.status === "running"
             ? "IABT is creating and verifying deliverables"
-            : "Approval recorded; queued for production",
+            : job.input?.provider_job_id
+              ? "The managed renderer is still creating the video"
+              : "Approval recorded; queued for production",
   usage_state:
     job.status === "succeeded"
       ? "captured"
@@ -714,9 +721,11 @@ const handleFunction = async ({
               provider: "elevenlabs"
             },
             video: {
-              configured: false,
+              configured: Boolean(readiness.luma?.configured),
               provider: "luma",
-              reason: "asynchronous_completion_orchestrator_pending"
+              reason: readiness.luma?.configured
+                ? "asynchronous_rendering_and_private_ingestion_ready"
+                : "provider_configuration_required"
             }
           }
         }
@@ -757,7 +766,7 @@ const handleFunction = async ({
       status: 200,
       payload: {
         data: {
-          version: "iabt-standalone-0.2.0",
+          version: "iabt-standalone-0.3.0",
           runtime: "standalone",
           base44_required: false,
           authenticated_user_id: user.id,
@@ -795,7 +804,7 @@ const handleFunction = async ({
             video: {
               configured: Boolean(providers?.readiness?.().luma?.configured),
               reason: providers?.readiness?.().luma?.configured
-                ? "approval_and_orchestration_required"
+                ? "asynchronous_rendering_and_private_ingestion_ready"
                 : "provider_configuration_required"
             }
           },
