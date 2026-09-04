@@ -12,6 +12,7 @@
     "verify:exchange": "node scripts/verify-exchange.mjs",
     "verify:creation": "node scripts/verify-creation.mjs",
     "verify:standalone": "node --test server/test/*.test.js",
+    "verify:base44-export": "node scripts/verify-base44-export.mjs",
     "verify": "npm run lint && npm run typecheck && npm run verify:exchange && npm run verify:creation && npm run verify:standalone && npm run build",
     "preview": "vite preview"
   },
