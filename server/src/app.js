@@ -502,7 +502,9 @@ export const createIabtHandler = ({ repository, config }) => async (req, res) =>
   } catch (error) {
     const status = Number(error.status) || 500;
     const code = error.code || "internal_error";
-    if (status >= 500) console.error({ requestId, code, error });
+    if (status >= 500 && code === "internal_error") {
+      console.error({ requestId, code, error });
+    }
     send(
       res,
       status,
