@@ -77,14 +77,14 @@ export function getStripeReadiness() {
   const mode = getStripeMode();
   const key = String(secrets.get("STRIPE_SECRET_KEY") || "").trim();
   const webhookSecret = String(secrets.get("STRIPE_WEBHOOK_SECRET") || "").trim();
-  const expectedPrefix = mode === "live" ? "sk_live_" : "sk_test_";
+  const expectedPrefix = mode === "live" ? /^(sk|rk)_live_/ : /^(sk|rk)_test_/;
   const pricesReady = PLANS.every((plan) => Boolean(getConfiguredPriceId(plan))) && Boolean(getConfiguredAiCreditPackPriceId());
   return {
     mode,
-    key_ready: key.startsWith(expectedPrefix),
+    key_ready: expectedPrefix.test(key),
     webhook_ready: webhookSecret.startsWith("whsec_"),
     prices_ready: pricesReady,
-    ready: key.startsWith(expectedPrefix) && webhookSecret.startsWith("whsec_") && pricesReady,
+    ready: expectedPrefix.test(key) && webhookSecret.startsWith("whsec_") && pricesReady,
   };
 }
 
@@ -166,9 +166,9 @@ const STRIPE_API = "https://api.stripe.com/v1";
 function authHeaders() {
   const mode = getStripeMode();
   const key = String(secrets.get("STRIPE_SECRET_KEY") || "").trim();
-  const expectedPrefix = mode === "live" ? "sk_live_" : "sk_test_";
+  const expectedPrefix = mode === "live" ? /^(sk|rk)_live_/ : /^(sk|rk)_test_/;
   if (!key) throw new Error(`Stripe ${mode} mode is not configured.`);
-  if (!key.startsWith(expectedPrefix)) {
+  if (!expectedPrefix.test(key)) {
     throw new Error(`Stripe key does not match configured ${mode} billing mode.`);
   }
   return { Authorization: "Bearer " + key };
