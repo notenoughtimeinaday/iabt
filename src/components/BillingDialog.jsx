@@ -109,6 +109,18 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
           <span><Zap /> Change plans through Stripe</span>
         </div>
 
+        {!billingReady && billingStatus && (
+          <div className="iabt-billing-economics" role="status">
+            <div><ShieldCheck /></div>
+            <p>
+              <strong>Stripe setup is incomplete.</strong>
+              <span>
+                Test API key: {billingStatus.key_ready ? "ready" : "missing or invalid"} · Webhook secret: {billingStatus.webhook_ready ? "ready" : "missing or invalid"} · Price IDs: {billingStatus.prices_ready ? "ready" : "missing or invalid"}. Checkout stays disabled until all three are ready.
+              </span>
+            </p>
+          </div>
+        )}
+
         <div className="iabt-billing-economics">
           <div><Zap /></div>
           <p><strong>Customers buy from IABT.</strong><span>Paid subscriptions include credits that can cover eligible third-party production after an exact quote and approval. Free-plan production and paid-plan overages use purchased credits. IABT privately pays approved, replaceable suppliers and restores reserved credits when no durable result is produced.</span></p>
