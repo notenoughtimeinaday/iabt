@@ -1,10 +1,10 @@
 import { createClientFromRequest } from "npm:@base44/sdk";
-import { secrets } from "base44:runtime";
 import {
   AI_CREDIT_PACK_SIZE,
   getPlanDefaults,
   getPlanForPriceId,
   getStripeMode,
+  getStripeWebhookSecret,
   IABT_APP_ID,
   mapStripeStatus,
   stripeGet,
@@ -269,7 +269,7 @@ export default async function(req: Request): Promise<Response> {
       return Response.json({ error: "Method not allowed." }, { status: 405 });
     }
 
-    const secret = String(secrets.get("STRIPE_WEBHOOK_SECRET") || "").trim();
+    const secret = getStripeWebhookSecret();
     if (!secret.startsWith("whsec_")) {
       console.error("stripe-webhook: signing secret not configured");
       return Response.json({ error: "Webhook not configured." }, { status: 500 });
