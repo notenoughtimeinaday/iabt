@@ -30,8 +30,8 @@ import { Navigate, useLocation } from 'react-router-dom';
 // Add page imports here
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
-  const { pathname } = useLocation();
+  const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
+  const { pathname, search } = useLocation();
   const publicPaths = new Set([
     "/login",
     "/register",
@@ -59,9 +59,8 @@ const AuthenticatedApp = () => {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
-      navigateToLogin();
-      return null;
+      const returnTo = pathname + search;
+      return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />;
     }
   }
 
