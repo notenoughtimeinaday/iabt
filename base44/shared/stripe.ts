@@ -73,10 +73,34 @@ export function getStripeMode() {
   return configured === "live" ? "live" : "test";
 }
 
+export function getStripeSecretKey() {
+  const mode = getStripeMode();
+  if (mode === "test") {
+    return String(
+      secrets.get("STRIPE_TEST_SECRET_KEY") ||
+      secrets.get("STRIPE_SECRET_KEY") ||
+      "",
+    ).trim();
+  }
+  return String(secrets.get("STRIPE_SECRET_KEY") || "").trim();
+}
+
+export function getStripeWebhookSecret() {
+  const mode = getStripeMode();
+  if (mode === "test") {
+    return String(
+      secrets.get("STRIPE_TEST_WEBHOOK_SECRET") ||
+      secrets.get("STRIPE_WEBHOOK_SECRET") ||
+      "",
+    ).trim();
+  }
+  return String(secrets.get("STRIPE_WEBHOOK_SECRET") || "").trim();
+}
+
 export function getStripeReadiness() {
   const mode = getStripeMode();
-  const key = String(secrets.get("STRIPE_SECRET_KEY") || "").trim();
-  const webhookSecret = String(secrets.get("STRIPE_WEBHOOK_SECRET") || "").trim();
+  const key = getStripeSecretKey();
+  const webhookSecret = getStripeWebhookSecret();
   const expectedPrefix = mode === "live" ? /^(sk|rk)_live_/ : /^(sk|rk)_test_/;
   const pricesReady = PLANS.every((plan) => Boolean(getConfiguredPriceId(plan))) && Boolean(getConfiguredAiCreditPackPriceId());
   return {
@@ -165,7 +189,7 @@ const STRIPE_API = "https://api.stripe.com/v1";
 
 function authHeaders() {
   const mode = getStripeMode();
-  const key = String(secrets.get("STRIPE_SECRET_KEY") || "").trim();
+  const key = getStripeSecretKey();
   const expectedPrefix = mode === "live" ? /^(sk|rk)_live_/ : /^(sk|rk)_test_/;
   if (!key) throw new Error(`Stripe ${mode} mode is not configured.`);
   if (!expectedPrefix.test(key)) {
