@@ -1,0 +1,66 @@
+{
+  "name": "StripeDiagnosticProbe",
+  "type": "object",
+  "properties": {
+    "mode": {
+      "type": "string"
+    },
+    "key_source": {
+      "type": "string"
+    },
+    "key_type": {
+      "type": "string"
+    },
+    "webhook_source": {
+      "type": "string"
+    },
+    "webhook_valid": {
+      "type": "boolean"
+    },
+    "builder_price_ready": {
+      "type": "boolean"
+    },
+    "pro_price_ready": {
+      "type": "boolean"
+    },
+    "agency_price_ready": {
+      "type": "boolean"
+    },
+    "credit_price_ready": {
+      "type": "boolean"
+    },
+    "ready": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "mode",
+    "key_source",
+    "key_type",
+    "webhook_source",
+    "webhook_valid",
+    "ready"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
