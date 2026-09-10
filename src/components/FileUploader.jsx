@@ -1,9 +1,21 @@
 import React, { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { UploadCloud, Loader2 } from "lucide-react";
+import { UploadCloud, Loader2, RotateCcw, TriangleAlert } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { base44 } from "@/api/iabtClient";
 import { useAuth } from "@/lib/AuthContext";
+
+function uploadFailureMessage(error) {
+  const raw = String(error?.response?.data?.message || error?.message || "Upload failed.");
+  if (/limit of integrations|integration.*limit|integration credits|monthly.*integration/i.test(raw)) {
+    return {
+      code: "base44_integration_quota",
+      title: "IABT storage temporarily unavailable",
+      description: "The IABT owner workspace has exhausted its Base44 integration quota. This is an infrastructure limit, not your IABT plan or your connected integrations. Your file was not uploaded.",
+    };
+  }
+  return { code: "upload_failed", title: "Upload failed", description: raw };
+}
 
 function classifyKind(mimeType, name) {
   const ext = name.split(".").pop()?.toLowerCase();
@@ -27,12 +39,15 @@ export default function FileUploader({
   const inputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const [uploadIssue, setUploadIssue] = useState(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
   const handleFiles = async (files) => {
     if (!files || files.length === 0) return;
     setUploading(true);
+    setUploadIssue(null);
     try {
       const uploaded = [];
       for (const file of files) {
@@ -57,13 +72,17 @@ export default function FileUploader({
         });
         uploaded.push(created);
       }
+      setPendingFiles([]);
       toast({ title: `${files.length} file${files.length > 1 ? "s" : ""} uploaded` });
       onUploaded?.(uploaded);
+      if (inputRef.current) inputRef.current.value = "";
     } catch (err) {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+      const issue = uploadFailureMessage(err);
+      setUploadIssue(issue);
+      setPendingFiles(Array.from(files));
+      toast({ title: issue.title, description: issue.description, variant: "destructive" });
     } finally {
       setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
     }
   };
 
@@ -95,6 +114,30 @@ export default function FileUploader({
           {compact ? "Attach" : "Browse Files"}
         </Button>
       </div>
+      {uploadIssue && (
+        <div className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-left" role="alert">
+          <div className="flex items-start gap-2">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-destructive">{uploadIssue.title}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{uploadIssue.description}</p>
+            </div>
+          </div>
+          {pendingFiles.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              disabled={uploading}
+              onClick={() => handleFiles(pendingFiles)}
+            >
+              <RotateCcw className="mr-2 h-3.5 w-3.5" />
+              Retry {pendingFiles.length > 1 ? "files" : "file"}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
