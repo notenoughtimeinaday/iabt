@@ -17,7 +17,7 @@ function classifyKey(value: string) {
 }
 
 export default async function(req: Request): Promise<Response> {
-  if (req.method !== "POST") {
+  if (req.method !== "GET" && req.method !== "POST") {
     return Response.json({ error: "Method not allowed." }, { status: 405 });
   }
 
