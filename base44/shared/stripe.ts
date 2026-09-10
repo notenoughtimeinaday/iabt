@@ -99,16 +99,31 @@ export function getStripeWebhookSecret() {
 
 export function getStripeReadiness() {
   const mode = getStripeMode();
+  const testKey = String(secrets.get("STRIPE_TEST_SECRET_KEY") || "").trim();
+  const genericKey = String(secrets.get("STRIPE_SECRET_KEY") || "").trim();
   const key = getStripeSecretKey();
+  const testWebhook = String(secrets.get("STRIPE_TEST_WEBHOOK_SECRET") || "").trim();
+  const genericWebhook = String(secrets.get("STRIPE_WEBHOOK_SECRET") || "").trim();
   const webhookSecret = getStripeWebhookSecret();
   const expectedPrefix = mode === "live" ? /^(sk|rk)_live_/ : /^(sk|rk)_test_/;
-  const pricesReady = PLANS.every((plan) => Boolean(getConfiguredPriceId(plan))) && Boolean(getConfiguredAiCreditPackPriceId());
+  const priceStatus = {
+    builder: Boolean(getConfiguredPriceId("builder")),
+    pro: Boolean(getConfiguredPriceId("pro")),
+    agency: Boolean(getConfiguredPriceId("agency")),
+    credits: Boolean(getConfiguredAiCreditPackPriceId()),
+  };
+  const pricesReady = Object.values(priceStatus).every(Boolean);
+  const keyReady = expectedPrefix.test(key);
+  const webhookReady = webhookSecret.startsWith("whsec_");
   return {
     mode,
-    key_ready: expectedPrefix.test(key),
-    webhook_ready: webhookSecret.startsWith("whsec_"),
+    key_source: mode === "test" && testKey ? "STRIPE_TEST_SECRET_KEY" : genericKey ? "STRIPE_SECRET_KEY" : "none",
+    webhook_source: mode === "test" && testWebhook ? "STRIPE_TEST_WEBHOOK_SECRET" : genericWebhook ? "STRIPE_WEBHOOK_SECRET" : "none",
+    key_ready: keyReady,
+    webhook_ready: webhookReady,
+    price_status: priceStatus,
     prices_ready: pricesReady,
-    ready: expectedPrefix.test(key) && webhookSecret.startsWith("whsec_") && pricesReady,
+    ready: keyReady && webhookReady && pricesReady,
   };
 }
 
