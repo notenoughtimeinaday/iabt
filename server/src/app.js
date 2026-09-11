@@ -1084,9 +1084,10 @@ export const createIabtHandler = ({
         }
       };
     } else if (req.method === "GET" && url.pathname === "/readyz") {
-      const [database, objectStorage] = await Promise.all([
+      const [database, objectStorage, transactionalEmail] = await Promise.all([
         probeHealth(repository, "database"),
-        probeHealth(storage, storage?.kind || "missing")
+        probeHealth(storage, storage?.kind || "missing"),
+        probeHealth(emailSender, emailSender?.kind || "disabled")
       ]);
       const ready = Boolean(database.ok && objectStorage.ok);
       result = {
@@ -1097,6 +1098,7 @@ export const createIabtHandler = ({
           version: "0.6.0",
           database,
           object_storage: objectStorage,
+          transactional_email: transactionalEmail,
           migrations: repository.migrationState
             ? {
                 total: repository.migrationState.total,
