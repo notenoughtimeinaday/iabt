@@ -26,6 +26,7 @@ import ExchangeRoom from '@/pages/ExchangeRoom';
 import AdminExchange from '@/pages/AdminExchange';
 import LegalAcceptanceGate from '@/components/LegalAcceptanceGate';
 import OAuthConsent from '@/pages/OAuthConsent';
+import { platformRuntime } from '@/api/iabtClient';
 import { Navigate, useLocation } from 'react-router-dom';
 // Add page imports here
 
@@ -105,6 +106,11 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <ScrollToTop />
+          {platformRuntime.backend === 'standalone' && (
+            <div className="fixed top-2 right-2 z-[9999] rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-black shadow-lg">
+              STANDALONE STAGING
+            </div>
+          )}
           <AuthenticatedApp />
         </Router>
         <Toaster />
