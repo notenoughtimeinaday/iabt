@@ -20,6 +20,7 @@ import {
   createCustomerPortal,
   createSubscriptionCheckout
 } from "./billing/stripe-checkout.js";
+import { createTransactionalEmailSender } from "./email/resend.js";
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -98,7 +99,13 @@ const probeHealth = async (component, fallbackAdapter) => {
 const challengeHash = (config, { email, purpose, code }) =>
   hashToken(`${config.authSecret}:${purpose}:${email}:${code}`);
 
-const issueChallenge = async (repository, config, email, purpose) => {
+const issueChallenge = async (
+  repository,
+  config,
+  email,
+  purpose,
+  emailSender
+) => {
   const code = createOtp();
   await repository.saveChallenge({
     email,
@@ -106,7 +113,25 @@ const issueChallenge = async (repository, config, email, purpose) => {
     codeHash: challengeHash(config, { email, purpose, code }),
     expiresAt: new Date(Date.now() + config.challengeTtlMs).toISOString()
   });
-  return config.exposeDevelopmentOtp ? { dev_otp: code } : {};
+
+  if (config.exposeDevelopmentOtp) return { dev_otp: code };
+  if (!emailSender?.configured) {
+    throw new HttpError(
+      503,
+      "email_not_configured",
+      "Transactional email is not configured"
+    );
+  }
+  try {
+    await emailSender.sendChallenge({ to: email, code, purpose });
+  } catch (error) {
+    throw new HttpError(
+      502,
+      "email_delivery_failed",
+      error?.message || "Verification email could not be sent"
+    );
+  }
+  return {};
 };
 
 const issueSession = async (repository, config, user) => {
@@ -140,7 +165,14 @@ const requireEntity = (config, name) => {
   return name;
 };
 
-const handleAuth = async ({ req, segments, body, repository, config }) => {
+const handleAuth = async ({
+  req,
+  segments,
+  body,
+  repository,
+  config,
+  emailSender
+}) => {
   const action = segments[2];
 
   if (req.method === "POST" && action === "register") {
@@ -157,7 +189,13 @@ const handleAuth = async ({ req, segments, body, repository, config }) => {
       name: String(body.name || "").trim(),
       emailVerified: false
     });
-    const challenge = await issueChallenge(repository, config, email, "verify_email");
+    const challenge = await issueChallenge(
+      repository,
+      config,
+      email,
+      "verify_email",
+      emailSender
+    );
     return { status: 201, payload: { requires_verification: true, ...challenge, user } };
   }
 
@@ -184,7 +222,13 @@ const handleAuth = async ({ req, segments, body, repository, config }) => {
     const email = normalizeEmail(body.email);
     const user = await repository.findUserByEmail(email);
     const challenge = user
-      ? await issueChallenge(repository, config, email, "verify_email")
+      ? await issueChallenge(
+          repository,
+          config,
+          email,
+          "verify_email",
+          emailSender
+        )
       : {};
     return { status: 200, payload: { accepted: true, ...challenge } };
   }
@@ -216,7 +260,13 @@ const handleAuth = async ({ req, segments, body, repository, config }) => {
     const email = normalizeEmail(body.email);
     const user = await repository.findUserByEmail(email);
     const challenge = user
-      ? await issueChallenge(repository, config, email, "reset_password")
+      ? await issueChallenge(
+          repository,
+          config,
+          email,
+          "reset_password",
+          emailSender
+        )
       : {};
     return { status: 200, payload: { accepted: true, ...challenge } };
   }
@@ -972,7 +1022,8 @@ export const createIabtHandler = ({
   repository,
   config,
   storage = null,
-  providers = null
+  providers = null,
+  emailSender = createTransactionalEmailSender(config)
 }) => async (req, res) => {
   const requestId = createId();
   const origin = req.headers.origin || "";
@@ -1066,7 +1117,14 @@ export const createIabtHandler = ({
         }
       };
     } else if (segments[0] === "v1" && segments[1] === "auth") {
-      result = await handleAuth({ req, segments, body, repository, config });
+      result = await handleAuth({
+        req,
+        segments,
+        body,
+        repository,
+        config,
+        emailSender
+      });
     } else if (segments[0] === "v1" && segments[1] === "entities") {
       result = await handleEntity({ req, segments, body, repository, config });
     } else if (
