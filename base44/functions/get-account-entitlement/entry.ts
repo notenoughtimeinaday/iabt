@@ -25,25 +25,6 @@ export default async function(req: Request): Promise<Response> {
     const entitlement = await getOrCreateEntitlement(base44, user);
     const usage = entitlementUsageSummary(entitlement);
     const billing = getStripeReadiness();
-    try {
-      const keyType = billing.key_ready
-        ? (billing.mode === "test" ? "test_key_valid" : "live_key_valid")
-        : "invalid_or_missing";
-      await base44.asServiceRole.entities.StripeDiagnosticProbe.create({
-        mode: billing.mode,
-        key_source: String(billing.key_source || "unknown"),
-        key_type: keyType,
-        webhook_source: String(billing.webhook_source || "unknown"),
-        webhook_valid: Boolean(billing.webhook_ready),
-        builder_price_ready: Boolean(billing.price_status?.builder),
-        pro_price_ready: Boolean(billing.price_status?.pro),
-        agency_price_ready: Boolean(billing.price_status?.agency),
-        credit_price_ready: Boolean(billing.price_status?.credits),
-        ready: Boolean(billing.ready),
-      });
-    } catch (diagnosticError) {
-      console.error("stripe diagnostic probe write failed:", diagnosticError?.message || diagnosticError);
-    }
     return Response.json({
       ok: true,
       entitlement: {
