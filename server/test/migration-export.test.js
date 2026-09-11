@@ -1,8 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { validateBase44Export } from "../src/migration/base44-export.js";
+import { base44SourceIdToUuid } from "../src/migration/identity.js";
 
 const hash = "a".repeat(64);
+
+test("Base44 source IDs map deterministically to standalone UUIDs", () => {
+  assert.equal(
+    base44SourceIdToUuid("6a849bcd3e04d068553b4af8"),
+    "f4975d91-f80d-5255-972e-ab3ab59b4f46"
+  );
+  assert.match(base44SourceIdToUuid("another-record"), /^[a-f0-9-]{36}$/);
+  assert.throws(() => base44SourceIdToUuid(""), /source ID is required/);
+});
 
 test("migration package validator produces stable reconciliation counts and digests", () => {
   const report = validateBase44Export({
