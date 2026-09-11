@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/iabtClient";
+import { base44, platformRuntime } from "@/api/iabtClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,9 +37,19 @@ export default function ForgotPassword() {
       }
     >
       {sent ? (
-        <p className="text-sm text-foreground text-center">
-          If an account exists with that email, you'll receive a password reset link shortly.
-        </p>
+        <div className="space-y-3 text-center">
+          <p className="text-sm text-foreground">
+            If an account exists with that email, you'll receive password reset instructions shortly.
+          </p>
+          {platformRuntime.backend === "standalone" && (
+            <Link
+              to={`/reset-password?email=${encodeURIComponent(email)}`}
+              className="inline-flex text-sm text-primary font-medium hover:underline"
+            >
+              Enter reset code
+            </Link>
+          )}
+        </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -66,7 +76,7 @@ export default function ForgotPassword() {
                 Sending...
               </>
             ) : (
-              "Send reset link"
+              platformRuntime.backend === "standalone" ? "Send reset code" : "Send reset link"
             )}
           </Button>
         </form>
