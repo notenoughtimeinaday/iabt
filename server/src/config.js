@@ -69,6 +69,9 @@ export const loadConfig = (env = process.env) => {
   const costPerMinuteCents = Number(env.IABT_ELEVENLABS_COST_PER_MINUTE_CENTS);
   const lumaCostPerFiveSecondsCents = Number(env.IABT_LUMA_COST_PER_5_SECONDS_CENTS);
   const openaiImageCostCents = Number(env.IABT_OPENAI_IMAGE_COST_CENTS);
+  const emailProvider = String(
+    env.IABT_EMAIL_PROVIDER || (env.RESEND_API_KEY ? "resend" : "disabled")
+  ).trim().toLowerCase();
 
   return Object.freeze({
     environment,
@@ -94,6 +97,12 @@ export const loadConfig = (env = process.env) => {
       bucket: env.IABT_STORAGE_BUCKET || "",
       accessKeyId: env.IABT_STORAGE_ACCESS_KEY_ID || "",
       secretAccessKey: env.IABT_STORAGE_SECRET_ACCESS_KEY || ""
+    }),
+    email: Object.freeze({
+      provider: emailProvider,
+      apiKey: env.RESEND_API_KEY || "",
+      from: env.IABT_EMAIL_FROM || "",
+      replyTo: env.IABT_EMAIL_REPLY_TO || ""
     }),
     providers: Object.freeze({
       openai: freezeProvider({
