@@ -236,6 +236,13 @@ const handleAuth = async ({
   if (req.method === "POST" && action === "login") {
     const email = normalizeEmail(body.email);
     const stored = await repository.findUserByEmail(email, { includeSecret: true });
+    if (stored?.password_hash === "migration:reset-required") {
+      throw new HttpError(
+        403,
+        "password_reset_required",
+        "This account was migrated from Base44. Use Forgot password to create a standalone IABT password."
+      );
+    }
     const valid = stored && (await verifyPassword(body.password, stored.password_hash));
     if (!valid) throw new HttpError(401, "invalid_credentials", "Email or password is incorrect");
     if (!stored.email_verified) {
