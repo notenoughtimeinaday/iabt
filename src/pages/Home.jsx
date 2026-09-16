@@ -238,7 +238,7 @@ export default function Home() {
         last_opened_at: new Date().toISOString(),
       }));
       await base44.entities.Project.bulkCreate(records);
-      toast({ title: "Legacy projects imported", description: records.length + " project" + (records.length === 1 ? "" : "s") + " copied to Base44. Local originals were kept." });
+      toast({ title: "Legacy projects imported", description: records.length + " project" + (records.length === 1 ? "" : "s") + " copied to IABT. Local originals were kept." });
       await load();
     } catch (error) {
       toast({ title: "Legacy import failed", description: error.message, variant: "destructive" });
@@ -340,7 +340,7 @@ export default function Home() {
               <div className="iabt-project-icon"><ArchiveRestore /></div>
               <div>
                 <strong>{legacyProjects.length} legacy IABT project{legacyProjects.length === 1 ? "" : "s"} found on this computer</strong>
-                <span>Copy them into Base44 cloud storage. Your original local projects will remain untouched.</span>
+                <span>Copy them into IABT cloud storage. Your original local projects will remain untouched.</span>
               </div>
               <Button variant="outline" onClick={migrateLegacyProjects} disabled={working}>
                 {working ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Cloud className="h-4 w-4 mr-2" />}

@@ -21,9 +21,12 @@ full verification suite.
 
 ## Independence boundary
 
-All feature code imports `src/api/iabtClient.js`. That module can select the
-legacy Base44 adapter or the standalone IABT API through
-`VITE_IABT_BACKEND`. No feature page should import the Base44 SDK directly.
+All feature code imports `@/api/iabtClient`. The default entry uses only the
+standalone IABT API. Only an explicit `VITE_IABT_BACKEND=base44` build selects
+the isolated legacy client and consent page. Standalone builds require an API
+origin and reject Base44 runtime imports/injections. No feature page should
+import the Base44 SDK directly. The legacy dependencies remain installed until
+the production transition is complete.
 
 ## Required standalone services
 

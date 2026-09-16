@@ -39,6 +39,19 @@ Use dedicated staging origins, for example:
 Keep every paid provider gate set to `false` for the first boot. Adding an API
 key alone never authorizes spending.
 
+The frontend now defaults to standalone mode. Its build requires
+`VITE_IABT_API_URL`; Compose supplies it from `IABT_API_ORIGIN`. It must be an
+absolute HTTP(S) origin without credentials, a path, query, or fragment.
+This is compiled into the browser bundle, so changing it requires rebuilding
+the web image. The build rejects Base44 SDK/bootstrap imports and injected
+Base44 runtime scripts. The frontend image installs from `package-lock.json`.
+
+The temporary legacy build requires explicit `VITE_IABT_BACKEND=base44` and
+the existing Base44 app settings. Before merging this default change into a
+still-Base44-hosted production branch, configure that legacy deployment
+explicitly. An independent staging build must use `standalone` (or omit the
+selector); never use the legacy setting to work around a missing API origin.
+
 ## 2. Validate and start the portable stack
 
 From the repository root:

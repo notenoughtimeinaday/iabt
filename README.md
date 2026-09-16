@@ -80,16 +80,28 @@ not change DNS or enable paid providers.
 
 ## Local development
 
-1. Install dependencies: `npm install`
-2. Run the Base44 development environment: `npx base44 dev`
-3. Or run the frontend against the hosted backend: `npm run dev`
-
-For frontend-only development, create `.env.local`:
+The frontend defaults to the standalone IABT API. Install dependencies with
+`npm ci`, then create `.env.local`:
 
 ```
-VITE_BASE44_APP_ID=6a849bcd3e04d068553b4af7
-VITE_BASE44_APP_BASE_URL=https://crazy-creator-flow-hub.base44.app
+VITE_IABT_API_URL=http://localhost:8787
 ```
+
+Run `npm run dev` alongside the standalone server, or use the staging containers
+in `STANDALONE_DEPLOYMENT.md`. Production builds require the independent API's
+absolute HTTP(S) origin in `VITE_IABT_API_URL` at build time. Missing/invalid
+origins fail the build instead of silently selecting Base44. Rebuild the frontend
+when its API origin changes.
+
+The standalone entry never loads the Base44 SDK, platform bootstrap, analytics,
+or MCP consent page. External AI-client authorization is explicitly unavailable
+until an independent consent implementation exists.
+
+During migration only, the current Base44 deployment can still be built by
+explicitly setting `VITE_IABT_BACKEND=base44`, `VITE_BASE44_APP_ID`, and
+`VITE_BASE44_APP_BASE_URL` in that deployment's build environment. This selects
+isolated legacy entries and tooling; it is not the default. The two `@base44`
+packages remain installed solely for this temporary compatibility build.
 
 Never place an OpenAI or Stripe key in a `VITE_*` variable or frontend file.
 
@@ -101,7 +113,14 @@ Run:
 npm run verify
 ```
 
-This runs lint, JavaScript project validation, and the production Vite build. Export verification should also generate both ZIP targets and build the exported React project.
+This runs lint, JavaScript project validation, Exchange/creation checks,
+standalone server tests, frontend independence checks, and the production Vite
+build. Set `VITE_IABT_API_URL` in `.env.local` or the build environment first.
+CI uses a reserved example origin for build verification and does not deploy it.
+`npm run verify:frontend` additionally builds both frontend modes, rejects legacy
+module/script regressions, and checks invalid API settings. These checks do not
+prove live staging, email delivery, data migration, or backend feature parity.
+Export verification should also generate both ZIP targets and build the exported React project.
 
 ## Base44 setup
 

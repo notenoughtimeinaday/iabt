@@ -11,6 +11,10 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      VITE_IABT_BACKEND: standalone
+      # Build-only origin; CI does not contact or deploy this address.
+      VITE_IABT_API_URL: https://independent-api.example.test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
