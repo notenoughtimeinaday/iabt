@@ -12,16 +12,20 @@ export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+  const [requestReference, setRequestReference] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setRequestReference("");
     try {
       await base44.auth.resetPasswordRequest(email);
       setSent(true);
     } catch (err) {
       setError(err.message || "Password reset is temporarily unavailable. Please try again.");
+      const reference = String(err.data?.request_id || "");
+      if (/^[a-f0-9-]{36}$/i.test(reference)) setRequestReference(reference);
     } finally {
       setLoading(false);
     }
@@ -38,7 +42,13 @@ export default function ForgotPassword() {
         </Link>
       }
     >
-      {error && <div role="alert" className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>}
+      {error && (
+        <div role="alert" className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+          <p>{error}</p>
+          {requestReference && <p className="mt-2 break-all text-xs">Reference: {requestReference}</p>}
+          <Link to="/support" className="inline-block mt-2 underline">Contact support</Link>
+        </div>
+      )}
       {sent ? (
         <div className="space-y-3 text-center">
           <p className="text-sm text-foreground">
@@ -82,8 +92,15 @@ export default function ForgotPassword() {
               platformRuntime.backend === "standalone" ? "Send reset code" : "Send reset link"
             )}
           </Button>
+          {isStandaloneEmail(email) && platformRuntime.backend === "standalone" && (
+            <Link to={`/reset-password?email=${encodeURIComponent(email.trim())}`} className="block text-center text-sm text-primary hover:underline">
+              Already have a reset code? Enter it
+            </Link>
+          )}
         </form>
       )}
     </AuthLayout>
   );
 }
+
+const isStandaloneEmail = (value) => /^\S+@\S+\.\S+$/.test(value.trim());

@@ -95,8 +95,59 @@ test("email health reports sanitized delivery failure and recovers after confirm
   });
   assert.equal((await sender.health()).verification, "configuration_only");
   await assert.rejects(sender.sendChallenge({ to: "test@example.test", code: "123456", purpose: "verify_email" }));
-  assert.deepEqual(await sender.health(), { ok: false, adapter: "resend", reason: "email_delivery_failed" });
+  assert.deepEqual(await sender.health(), { ok: false, adapter: "resend", reason: "email_delivery_failed", last_failure: { classification: "provider_unavailable", http_status: 503 } });
   rejected = false;
   await sender.sendChallenge({ to: "test@example.test", code: "123456", purpose: "verify_email" });
   assert.deepEqual(await sender.health(), { ok: true, adapter: "resend", verification: "provider_acceptance_observed" });
+});
+
+
+test("email diagnostics classify documented provider failures without exposing private fields", async () => {
+  const cases = [
+    ["validation_error", 403, "sender_not_authorized"],
+    ["restricted_api_key", 403, "credential_restricted"],
+    ["suspended_api_key", 403, "credential_suspended"],
+    ["invalid_permission", 403, "permission_denied"],
+    ["missing_api_key", 401, "authentication_failed"],
+    ["daily_quota_exceeded", 429, "quota_exceeded"],
+    ["monthly_quota_exceeded", 429, "quota_exceeded"],
+    ["rate_limit_exceeded", 429, "rate_limited"],
+    ["invalid_idempotent_request", 409, "idempotency_conflict"],
+    ["validation_error", 400, "invalid_request"],
+    ["service_unavailable", 503, "provider_unavailable"],
+    ["private-recipient@example.test 998877 re_PRIVATE", 403, "permission_denied"]
+  ];
+  for (const [name, status, classification] of cases) {
+    const logs = [];
+    let attempts = 0;
+    const sender = createTransactionalEmailSender({ email: { provider: "resend", apiKey: "re_PRIVATE", from: "private-sender@example.test" } }, {
+      logger: (event) => logs.push(event),
+      fetchImpl: async () => {
+        attempts += 1;
+        return new Response(JSON.stringify({ name, message: "private-recipient@example.test 998877 re_PRIVATE", code: "private-provider-code" }), { status });
+      }
+    });
+    await assert.rejects(sender.sendChallenge({ to: "private-recipient@example.test", code: "998877", purpose: "reset_password" }),
+      (error) => error.code === "email_delivery_failed" && !error.message.includes("PRIVATE"));
+    assert.equal(attempts, 1);
+    const health = await sender.health();
+    assert.deepEqual(health.last_failure, { classification, http_status: status });
+    assert.deepEqual(logs, [{ event: "iabt_email_delivery_failed", provider: "resend", classification, http_status: status }]);
+    assert.doesNotMatch(JSON.stringify({ health, logs }), /private-|998877|re_PRIVATE/);
+  }
+});
+
+test("network and timeout diagnostics omit raw errors, and failing logging cannot replace the delivery error", async () => {
+  for (const [name, classification] of [["TimeoutError", "timeout"], ["TypeError", "network_error"]]) {
+    const logs = [];
+    const sender = createTransactionalEmailSender({ email: { provider: "resend", apiKey: "re_PRIVATE", from: "private@example.test" } }, {
+      logger: (event) => { logs.push(event); throw new Error("private-logger-error"); },
+      fetchImpl: async () => { throw Object.assign(new Error("private@example.test re_PRIVATE 998877"), { name }); }
+    });
+    await assert.rejects(sender.sendChallenge({ to: "private@example.test", code: "998877", purpose: "reset_password" }),
+      (error) => error.code === "email_delivery_failed" && !error.message.includes("PRIVATE") && !error.message.includes("logger"));
+    const health = await sender.health();
+    assert.deepEqual(health.last_failure, { classification, http_status: null });
+    assert.doesNotMatch(JSON.stringify({ health, logs }), /private|998877|re_PRIVATE/);
+  }
 });

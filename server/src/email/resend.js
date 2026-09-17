@@ -16,9 +16,45 @@ const copyForPurpose = (purpose) =>
     ? "Use this code to reset your IABT password."
     : "Use this code to verify your IABT account.";
 
+// Only these documented names affect diagnostics. Never log Resend's message,
+// unknown names, request/response bodies, addresses, API keys, or OTPs.
+// Source: https://resend.com/docs/api-reference/errors
+const failureClasses = new Map([
+  ["missing_api_key", "authentication_failed"],
+  ["restricted_api_key", "credential_restricted"],
+  ["suspended_api_key", "credential_suspended"],
+  ["invalid_permission", "permission_denied"],
+  ["email_above_quota", "quota_exceeded"],
+  ["daily_quota_exceeded", "quota_exceeded"],
+  ["monthly_quota_exceeded", "quota_exceeded"],
+  ["rate_limit_exceeded", "rate_limited"],
+  ["invalid_idempotency_key", "invalid_request"],
+  ["concurrent_idempotent_requests", "idempotency_conflict"],
+  ["invalid_idempotent_request", "idempotency_conflict"],
+  ["resource_locked", "provider_conflict"],
+  ["invalid_attachment", "invalid_request"],
+  ["invalid_parameter", "invalid_request"],
+  ["missing_required_field", "invalid_request"],
+  ["missing_required_parameter", "invalid_request"],
+  ["not_found", "endpoint_rejected"],
+  ["method_not_allowed", "endpoint_rejected"],
+  ["application_error", "provider_unavailable"],
+  ["service_unavailable", "provider_unavailable"]
+]);
+
+const classifyResponse = (name, status) => {
+  if (name === "validation_error") return status === 403 ? "sender_not_authorized" : "invalid_request";
+  if (failureClasses.has(name)) return failureClasses.get(name);
+  if (status === 401) return "authentication_failed";
+  if (status === 403) return "permission_denied";
+  if (status === 429) return "rate_limited";
+  if (status >= 500) return "provider_unavailable";
+  return "request_rejected";
+};
+
 export const createTransactionalEmailSender = (
   config,
-  { fetchImpl = globalThis.fetch } = {}
+  { fetchImpl = globalThis.fetch, logger = (event) => console.warn(JSON.stringify(event)) } = {}
 ) => {
   const email = config.email || {};
   const provider = String(email.provider || "disabled").toLowerCase();
@@ -26,6 +62,7 @@ export const createTransactionalEmailSender = (
     provider === "resend" && Boolean(email.apiKey) && Boolean(email.from);
   let deliveryFailed = false;
   let deliveryObserved = false;
+  let lastFailure = null;
 
   return Object.freeze({
     kind: provider,
@@ -33,7 +70,7 @@ export const createTransactionalEmailSender = (
     async health() {
       if (!configured) return { ok: false, adapter: provider || "disabled", reason: "not_configured" };
       return deliveryFailed
-        ? { ok: false, adapter: "resend", reason: "email_delivery_failed" }
+        ? { ok: false, adapter: "resend", reason: "email_delivery_failed", last_failure: { ...lastFailure } }
         : { ok: true, adapter: "resend", verification: deliveryObserved ? "provider_acceptance_observed" : "configuration_only" };
     },
     async sendChallenge({ to, code, purpose, idempotencyKey }) {
@@ -43,6 +80,7 @@ export const createTransactionalEmailSender = (
         throw error;
       }
 
+      let failure = null;
       try {
         const subject = subjectForPurpose(purpose);
         const intro = copyForPurpose(purpose);
@@ -66,22 +104,35 @@ export const createTransactionalEmailSender = (
         });
 
         if (!response.ok) {
-          const error = new Error(`Email provider rejected the message (${response.status})`);
-          error.code = "email_delivery_failed";
-          error.status = response.status;
-          throw error;
+          const payload = await response.json().catch(() => null);
+          failure = { classification: classifyResponse(payload?.name, response.status), http_status: response.status };
+          throw new Error("Email provider rejected the message");
         }
 
         const result = await response.json().catch(() => null);
         if (!result?.id) {
-          throw Object.assign(new Error("Email provider did not confirm acceptance"), { code: "email_delivery_failed" });
+          failure = { classification: "invalid_provider_response", http_status: response.status };
+          throw new Error("Email provider did not confirm acceptance");
         }
         deliveryFailed = false;
         deliveryObserved = true;
+        lastFailure = null;
         return result;
       } catch (error) {
         deliveryFailed = true;
-        throw error;
+        lastFailure = failure || {
+          classification: ["AbortError", "TimeoutError"].includes(error?.name) ? "timeout" : "network_error",
+          http_status: null
+        };
+        try {
+          logger({ event: "iabt_email_delivery_failed", provider: "resend", ...lastFailure });
+        } catch {
+          // Diagnostics must not change the delivery result or expose the original error.
+        }
+        throw Object.assign(new Error("Email provider could not accept the message"), {
+          code: "email_delivery_failed",
+          ...(lastFailure.http_status ? { status: lastFailure.http_status } : {})
+        });
       }
     }
   });

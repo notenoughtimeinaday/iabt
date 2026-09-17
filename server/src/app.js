@@ -126,7 +126,7 @@ const issueChallenge = async (repository, config, email, purpose, emailSender) =
       await emailSender.sendChallenge({ to: email, code, purpose, idempotencyKey: codeHash });
     } catch {
       // Provider responses may contain configuration details. Keep them out of public errors.
-      throw new HttpError(502, "email_delivery_failed", "The email could not be sent. Please try again or request a new code from the login page.");
+      throw new HttpError(502, "email_delivery_failed", "IABT could not send the email. Please try again later. If this continues, contact support with the request reference.");
     }
   }
   // A delivery failure must not replace a code that the user has already received.
