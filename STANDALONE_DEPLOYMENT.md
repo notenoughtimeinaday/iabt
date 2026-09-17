@@ -6,6 +6,32 @@ submit paid provider work.
 
 ## Runtime layout
 
+### Existing Render target
+
+The independent frontend is `https://iabt-staging-web.onrender.com`; its API is
+`https://iabt-api-insured-spending.onrender.com`. Both deploy the GitHub `main`
+branch automatically. The API uses Neon PostgreSQL, private S3-compatible
+storage, Resend, and an embedded worker (`IABT_JOB_WORKER_ENABLED=true`).
+
+The current API service is on Render's free plan. Idle suspension can delay
+requests and pause background processing; this is not an always-on production
+worker. Moving to an always-on API/worker requires a separately approved
+hosting plan. Preserve the current paid-provider gates during release checks.
+
+Build the web service with `VITE_IABT_BACKEND=standalone`, the API origin above,
+and `VITE_IABT_ROUTING=hash` when no SPA rewrite is configured. Hash links such
+as `/#/login` and `/#/studio` stay on the static host's root document. Browser
+routing instead requires a Render rewrite from `/*` to `/index.html`.
+
+For this Render target, run smoke checks with `IABT_STAGING_ROUTING=hash` and
+`IABT_STAGING_TIMEOUT_MS=60000`. Hash-mode smoke checks verify the declared
+application shell; verify interactive routes and refreshes in a browser too.
+Readiness checks do not prove inbox delivery, supplier balance, or completion
+of a live creation job. See `JERICHO_OPERATIONS.md` for diagnostic boundaries
+and `BASE44_IMPORT.md` for the remaining data import requirements.
+
+### Portable stack
+
 - `web`: static React/Vite frontend
 - `api`: authentication, entities, planning, approvals, billing, downloads,
   health, and Stripe webhooks
@@ -87,7 +113,7 @@ Never edit an applied migration. Add a new numbered migration.
 ## 4. Health and smoke checks
 
 - `GET /healthz`: process liveness
-- `GET /readyz`: database, private object storage, and migration readiness
+- `GET /readyz`: database, private object storage, email configuration/observed delivery, and migration readiness
 - `GET /v1/public-settings`: confirms the standalone public contract
 
 Run the non-mutating remote check:

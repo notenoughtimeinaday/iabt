@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/lib/AuthContext";
 import { base44, platformRuntime } from "@/api/iabtClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,8 @@ import GoogleIcon from "@/components/GoogleIcon";
 import { safeReturnTo } from "@/lib/authReturnTo";
 
 export default function Login() {
+  const navigate = useNavigate();
+  const { checkUserAuth } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -28,7 +31,8 @@ export default function Login() {
     setLoading(true);
     try {
       await base44.auth.loginViaEmailPassword(email, password);
-      window.location.href = returnTo;
+      await checkUserAuth();
+      navigate(returnTo, { replace: true });
     } catch (err) {
       setError(err.message || "Invalid email or password");
     } finally {
@@ -51,7 +55,7 @@ export default function Login() {
     try {
       await base44.auth.resendOtp(email.trim());
       setShowOtp(true);
-      setVerificationMessage(`We sent a verification code to ${email.trim()}.`);
+      setVerificationMessage(`If ${email.trim()} needs verification, a code is on its way. Already verified? Return to sign in.`);
     } catch (err) {
       setError(err.message || "Could not send a verification code");
     } finally {
@@ -67,7 +71,8 @@ export default function Login() {
       if (result?.access_token) {
         base44.auth.setToken(result.access_token);
       }
-      window.location.href = returnTo;
+      await checkUserAuth();
+      navigate(returnTo, { replace: true });
     } catch (err) {
       setError(err.message || "Invalid verification code");
     } finally {
@@ -126,6 +131,9 @@ export default function Login() {
           className="w-full mt-4 text-sm text-primary font-medium hover:underline disabled:opacity-60"
         >
           Send a new code
+        </button>
+        <button type="button" onClick={() => { setShowOtp(false); setError(""); }} disabled={loading} className="w-full mt-4 text-sm text-muted-foreground hover:underline">
+          Back to sign in
         </button>
       </AuthLayout>
     );

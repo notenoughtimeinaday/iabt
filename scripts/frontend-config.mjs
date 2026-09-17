@@ -29,8 +29,15 @@ export const createFrontendConfig = async ({ root, env }) => {
     throw new Error(`Unsupported VITE_IABT_BACKEND: ${backend}`);
   }
 
+  const routing = String(env.VITE_IABT_ROUTING || "browser").trim().toLowerCase();
+  if (!["browser", "hash"].includes(routing) || (backend === "base44" && routing !== "browser")) {
+    throw new Error("VITE_IABT_ROUTING must be browser, or hash for the standalone frontend");
+  }
   const aliases = [];
-  const plugins = [react()];
+  const plugins = [react(), {
+    name: "iabt-routing-marker",
+    transformIndexHtml: () => [{ tag: "meta", attrs: { name: "iabt-routing", content: routing }, injectTo: "head" }],
+  }];
   let apiUrl = "";
   if (backend === "standalone") {
     try {
@@ -75,6 +82,7 @@ export const createFrontendConfig = async ({ root, env }) => {
     resolve: { alias: aliases },
     define: {
       "import.meta.env.VITE_IABT_BACKEND": JSON.stringify(backend),
+      "import.meta.env.VITE_IABT_ROUTING": JSON.stringify(routing),
       "import.meta.env.VITE_IABT_API_URL": JSON.stringify(apiUrl),
     },
   };

@@ -11,17 +11,19 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
     try {
       await base44.auth.resetPasswordRequest(email);
-    } catch {
-      // Always show success regardless
+      setSent(true);
+    } catch (err) {
+      setError(err.message || "Password reset is temporarily unavailable. Please try again.");
     } finally {
       setLoading(false);
-      setSent(true);
     }
   };
 
@@ -29,13 +31,14 @@ export default function ForgotPassword() {
     <AuthLayout
       icon={Mail}
       title="Reset password"
-      subtitle="We'll send you a link to reset it"
+      subtitle={platformRuntime.backend === "standalone" ? "We'll email you a reset code" : "We'll send you a link to reset it"}
       footer={
         <Link to="/login" className="text-primary font-medium hover:underline">
           <ArrowLeft className="w-3 h-3 inline mr-1" />Back to log in
         </Link>
       }
     >
+      {error && <div role="alert" className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>}
       {sent ? (
         <div className="space-y-3 text-center">
           <p className="text-sm text-foreground">

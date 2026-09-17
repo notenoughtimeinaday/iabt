@@ -11,15 +11,36 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: iabt_test
+          POSTGRES_PASSWORD: iabt_test
+          POSTGRES_DB: iabt_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U iabt_test -d iabt_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       VITE_IABT_BACKEND: standalone
       # Build-only origin; CI does not contact or deploy this address.
       VITE_IABT_API_URL: https://independent-api.example.test
+      # Disposable local service only. Never connect CI regression tests to production.
+      IABT_AUTH_TEST_DATABASE_URL: postgresql://iabt_test:iabt_test@127.0.0.1:5432/iabt_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
       - run: npm ci
+      - run: npm ci --prefix server
       - run: npm run verify

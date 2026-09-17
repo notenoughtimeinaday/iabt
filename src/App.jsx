@@ -1,7 +1,8 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Route, Routes } from 'react-router-dom';
+import { routingMode } from '@/lib/routing';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -28,11 +29,11 @@ import LegalAcceptanceGate from '@/components/LegalAcceptanceGate';
 import OAuthConsent from '@/pages/OAuthConsent';
 import { platformRuntime } from '@/api/iabtClient';
 import { Navigate, useLocation } from 'react-router-dom';
-// Add page imports here
+const Router = routingMode === "hash" ? HashRouter : BrowserRouter;
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
-  const { pathname, search } = useLocation();
+  const { pathname, search, hash } = useLocation();
   const publicPaths = new Set([
     "/login",
     "/register",
@@ -60,7 +61,7 @@ const AuthenticatedApp = () => {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      const returnTo = pathname + search;
+      const returnTo = pathname + search + hash;
       return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />;
     }
   }
@@ -78,7 +79,7 @@ const AuthenticatedApp = () => {
       <Route path="/acceptable-use" element={<Legal />} />
       <Route path="/support" element={<Support />} />
       <Route path="/oauth/consent" element={<OAuthConsent />} />
-      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to={`/login?returnTo=${encodeURIComponent(pathname + search + hash)}`} replace />} />}>
         <Route element={<LegalAcceptanceGate />}>
           <Route path="/" element={<Home />} />
           <Route path="/studio" element={<Studio />} />

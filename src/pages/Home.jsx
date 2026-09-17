@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getAppLocation } from "@/lib/routing";
 import { base44 } from "@/api/iabtClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,7 +80,7 @@ export default function Home() {
   }, [user?.id]);
 
   useEffect(() => {
-    const url = new URL(window.location.href);
+    const url = getAppLocation();
     const billing = url.searchParams.get("billing");
     if (!billing) return;
     if (billing === "success") {
@@ -91,7 +92,7 @@ export default function Home() {
     }
     url.searchParams.delete("billing");
     url.searchParams.delete("session_id");
-    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    navigate(url.pathname + url.search + url.hash, { replace: true });
     load();
     if (billing === "success" || billing === "credits_success") {
       [1500, 4000, 9000].forEach((delay) => {

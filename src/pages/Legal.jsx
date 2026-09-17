@@ -15,8 +15,9 @@ function Section({ id, title, children }) {
 }
 
 export default function Legal() {
-  const { pathname } = useLocation();
-  const initial = pathname.includes("privacy") ? "privacy" : pathname.includes("acceptable") ? "acceptable-use" : pathname.includes("terms") ? "terms" : "overview";
+  const { pathname, hash } = useLocation();
+  const section = ["overview", "privacy", "terms", "acceptable-use", "exchange", "credits", "ai"].includes(hash.slice(1)) ? hash.slice(1) : "";
+  const initial = section || (pathname.includes("privacy") ? "privacy" : pathname.includes("acceptable") ? "acceptable-use" : pathname.includes("terms") ? "terms" : "overview");
 
   useEffect(() => {
     window.requestAnimationFrame(() => {
@@ -32,13 +33,13 @@ export default function Legal() {
       </header>
       <main className="iabt-legal-shell">
         <aside className="iabt-legal-nav" aria-label="Legal documents">
-          <a className={initial === "overview" ? "is-active" : ""} href="#overview"><ShieldCheck /> Overview</a>
-          <a className={initial === "privacy" ? "is-active" : ""} href="#privacy"><Database /> Privacy</a>
-          <a className={initial === "terms" ? "is-active" : ""} href="#terms"><Scale /> Terms</a>
-          <a className={initial === "acceptable-use" ? "is-active" : ""} href="#acceptable-use"><AlertTriangle /> Acceptable use</a>
-          <a href="#exchange"><UsersRound /> IABT Exchange</a>
-          <a href="#credits"><WalletCards /> Credits & refunds</a>
-          <a href="#ai"><Bot /> AI disclosure</a>
+          <Link className={initial === "overview" ? "is-active" : ""} to={{ pathname, hash: "#overview" }}><ShieldCheck /> Overview</Link>
+          <Link className={initial === "privacy" ? "is-active" : ""} to={{ pathname, hash: "#privacy" }}><Database /> Privacy</Link>
+          <Link className={initial === "terms" ? "is-active" : ""} to={{ pathname, hash: "#terms" }}><Scale /> Terms</Link>
+          <Link className={initial === "acceptable-use" ? "is-active" : ""} to={{ pathname, hash: "#acceptable-use" }}><AlertTriangle /> Acceptable use</Link>
+          <Link to={{ pathname, hash: "#exchange" }}><UsersRound /> IABT Exchange</Link>
+          <Link to={{ pathname, hash: "#credits" }}><WalletCards /> Credits & refunds</Link>
+          <Link to={{ pathname, hash: "#ai" }}><Bot /> AI disclosure</Link>
         </aside>
 
         <article className="iabt-legal-document">

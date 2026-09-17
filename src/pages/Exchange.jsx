@@ -265,7 +265,7 @@ export default function Exchange() {
       });
       const next = payload(response);
       if (!next?.ok) throw new Error(next?.error || "Capability analysis failed.");
-      setAnalysis(next.analysis);
+      setAnalysis({ ...next.analysis, analysis_method: next.analysis_method, limitation: next.limitation });
       setNeedForm((current) => ({
         ...current,
         public_summary: current.public_summary || next.analysis.suggested_public_summary || "",
@@ -277,7 +277,7 @@ export default function Exchange() {
         relationship_requested: [...new Set(next.analysis.missing_capabilities.map((item) => item.relationship).filter(Boolean))],
         compensation_model: next.analysis.suggested_compensation.length ? next.analysis.suggested_compensation : current.compensation_model,
       }));
-      toast({ title: "Capability gap mapped", description: "Review and edit JERICHO's suggestions before activating matching." });
+      toast({ title: next.analysis_method === "local_requirements_checklist" ? "Requirements checklist prepared" : "Capability gap mapped", description: "Review these suggestions and confirm which capabilities your team needs before activating matching." });
     } catch (error) {
       toast({ title: "Analysis failed", description: errorMessage(error), variant: "destructive" });
     } finally {
@@ -486,7 +486,7 @@ export default function Exchange() {
                   <ToggleGroup label="Compensation model" values={COMPENSATION} selected={needForm.compensation_model} onChange={(value) => setNeedForm({ ...needForm, compensation_model: value })} />
                   <div className="exchange-form-actions"><Button type="button" variant="outline" onClick={analyzeNeed} disabled={working === "analyze"}>{working === "analyze" ? <Loader2 className="animate-spin" /> : <Sparkles />} Analyze gaps with JERICHO</Button><Button type="submit" disabled={working === "need"}>{working === "need" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />} Save need</Button></div>
                 </form>
-                {analysis && <section className="exchange-panel exchange-analysis"><div className="exchange-panel-title"><div><h3>JERICHO capability map</h3><p>Advisory suggestions only. Edit before activating.</p></div><span className="exchange-status is-draft">{readable(analysis.project_stage)}</span></div><div className="exchange-gap-list">{analysis.missing_capabilities.map((item, index) => <article key={index}><b>{readable(item.priority)}</b><strong>{item.capability}</strong><p>{item.reason}</p><small>{readable(item.relationship)}{item.credential_or_jurisdiction ? " · " + item.credential_or_jurisdiction : ""}</small></article>)}</div>{analysis.questions.length > 0 && <div className="exchange-questions"><strong>Questions to resolve</strong><ul>{analysis.questions.map((question) => <li key={question}>{question}</li>)}</ul></div>}</section>}
+                {analysis && <section className="exchange-panel exchange-analysis"><div className="exchange-panel-title"><div><h3>{analysis.analysis_method === "local_requirements_checklist" ? "Project requirements checklist" : "JERICHO capability map"}</h3><p>{analysis.limitation || "Advisory suggestions only. Edit before activating."}</p></div><span className="exchange-status is-draft">{analysis.project_stage ? readable(analysis.project_stage) : "Confirm project stage"}</span></div><div className="exchange-gap-list">{analysis.missing_capabilities.map((item, index) => <article key={index}><b>{readable(item.priority)}</b><strong>{item.capability}</strong><p>{item.reason}</p><small>{readable(item.relationship)}{item.credential_or_jurisdiction ? " · " + item.credential_or_jurisdiction : ""}</small></article>)}</div>{analysis.questions.length > 0 && <div className="exchange-questions"><strong>Questions to resolve</strong><ul>{analysis.questions.map((question) => <li key={question}>{question}</li>)}</ul></div>}</section>}
                 <section className="exchange-panel"><div className="exchange-panel-title"><div><h3>Your project needs</h3><p>Only active needs can run matching.</p></div></div>{(data?.needs || []).length ? <div className="exchange-card-list">{data.needs.map((need) => <article key={need.id} className="exchange-need-card"><div><span className={"exchange-status is-" + need.status}>{readable(need.status)}</span><h3>{need.title}</h3><p>{need.public_summary}</p><div className="exchange-tags">{need.required_capabilities.map((item) => <span key={item}>{item}</span>)}</div></div><div className="exchange-card-actions"><Button variant="outline" onClick={() => editNeed(need)}>Edit</Button><Button onClick={() => findMatches(need)} disabled={need.status !== "active" || working === "match:" + need.id}>{working === "match:" + need.id ? <Loader2 className="animate-spin" /> : <Search />} Find matches</Button></div></article>)}</div> : <Empty icon={BriefcaseBusiness} title="No project needs yet">Create one above or let JERICHO map the capabilities your project is missing.</Empty>}</section>
               </>
             )}

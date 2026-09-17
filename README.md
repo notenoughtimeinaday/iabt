@@ -72,6 +72,18 @@ Before public beta, run an authenticated two-account test of profile creation, p
 
 ## Standalone staging
 
+Independent access: [IABT staging](https://iabt-staging-web.onrender.com/).
+The standalone runtime includes account recovery, Exchange workflows, private
+files, and JERICHO's account-scoped operational diagnostics. See
+`JERICHO_OPERATIONS.md` for implemented support behavior and
+`BASE44_IMPORT.md` for import limits. Retained Base44 code is a temporary
+legacy deployment path; the independent browser bundle does not load it.
+
+The existing Render API uses a free service with an embedded worker, so cold
+starts and idle suspension remain staging limitations. `STANDALONE_DEPLOYMENT.md`
+records the exact deployment settings and checks. Full data cutover and
+Base44 retirement remain separate acceptance steps.
+
 The host-agnostic staging package is documented in
 `STANDALONE_DEPLOYMENT.md`. It includes separate frontend, API, worker, and
 PostgreSQL services, automatic checksum-verified migrations, liveness/readiness

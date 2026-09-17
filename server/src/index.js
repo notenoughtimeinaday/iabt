@@ -23,16 +23,22 @@ server.listen(config.port, () => {
 });
 
 let shuttingDown = false;
-const shutdown = (signal) => {
+const shutdown = async (signal) => {
   if (shuttingDown) return;
   shuttingDown = true;
-  worker.stop();
-  server.close(async () => {
+  try {
+    await Promise.all([
+      worker.stop(),
+      new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+    ]);
     await repository.close?.();
     console.log(JSON.stringify({ event: "iabt_api_stopped", signal }));
     process.exit(0);
-  });
+  } catch {
+    console.error(JSON.stringify({ event: "iabt_api_shutdown_failed", signal }));
+    process.exit(1);
+  }
 };
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));

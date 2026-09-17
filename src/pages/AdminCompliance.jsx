@@ -63,6 +63,9 @@ export default function AdminCompliance() {
   const agreements = data?.commercial?.agreements || [];
   const spend = data?.commercial?.spend || {};
   const readiness = data?.readiness || {};
+  const committedSpend = (value) => spend.accounting_complete === false || value == null
+    ? "Not tracked"
+    : money(value);
 
   return (
     <div className="iabt-control-page">
@@ -74,8 +77,8 @@ export default function AdminCompliance() {
       <main className="iabt-control-main">
         <section className="iabt-control-grid">
           <article><CircleDollarSign /><span>Target production margin</span><strong>{Math.round(Number(policy.target_margin_bps || 0) / 100)}%</strong><small>{Math.round(Number(policy.minimum_margin_bps || 0) / 100)}% hard floor</small></article>
-          <article><Gauge /><span>Daily supplier ceiling</span><strong>{money(policy.daily_spend_limit_cents)}</strong><small>{money(spend.daily_committed_cents)} committed today</small></article>
-          <article><Gauge /><span>Monthly supplier ceiling</span><strong>{money(policy.monthly_spend_limit_cents)}</strong><small>{money(spend.monthly_committed_cents)} committed in {spend.month_key}</small></article>
+          <article><Gauge /><span>Daily supplier ceiling</span><strong>{money(policy.daily_spend_limit_cents)}</strong><small>Committed today: {committedSpend(spend.daily_committed_cents)}</small></article>
+          <article><Gauge /><span>Monthly supplier ceiling</span><strong>{money(policy.monthly_spend_limit_cents)}</strong><small>Committed in {spend.month_key}: {committedSpend(spend.monthly_committed_cents)}</small></article>
           <article><ShieldCheck /><span>Approved agreements</span><strong>{readiness.approved_provider_agreements || 0}</strong><small>{readiness.pending_provider_agreements || 0} awaiting review</small></article>
         </section>
 
@@ -86,6 +89,7 @@ export default function AdminCompliance() {
             <div><Status ready={readiness.policy_acceptance_gate_built}>Policy acceptance gate</Status><span>{data?.acceptance?.recorded_count || 0} acceptance records for policy {data?.acceptance?.policy_version}.</span></div>
             <div><Status ready={readiness.stripe_live_ready}>Stripe live readiness</Status><span>Mode: {data?.billing?.mode || "test"} · configuration {data?.billing?.ready ? "complete" : "incomplete"}.</span></div>
             <div><Status ready={readiness.paid_media_commercial_gate_approved}>Paid-media commercial approval</Status><span>The production secret remains disabled until a matching supplier agreement is approved.</span></div>
+            {spend.accounting_complete === false && <div><Status ready={false}>Supplier spend tracking</Status><span>Not tracked. Existing spending records may be incomplete; their totals do not establish your actual spending.</span></div>}
           </div>
         </section>
 

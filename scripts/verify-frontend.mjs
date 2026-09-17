@@ -12,6 +12,8 @@ const buildOptions = { configFile: false, envFile: false, logLevel: "error", bui
 test("standalone is the default and invalid API origins fail before building", async () => {
   const config = await standaloneConfig();
   assert.equal(config.define["import.meta.env.VITE_IABT_BACKEND"], '"standalone"');
+  assert.equal(config.define["import.meta.env.VITE_IABT_ROUTING"], '"browser"');
+  await assert.rejects(createFrontendConfig({ root, env: { VITE_IABT_API_URL: apiUrl, VITE_IABT_ROUTING: "typo" } }), /VITE_IABT_ROUTING/);
   for (const value of [undefined, "", "/api", "not-a-url", "ftp://example.test", "https://user:secret@example.test", "https://example.test/v1", "https://example.test?key=secret", "https://example.test/#token", "https://old.base44.app"]) {
     await assert.rejects(createFrontendConfig({ root, env: { VITE_IABT_API_URL: value } }), /VITE_IABT_API_URL must be/);
   }

@@ -19,7 +19,7 @@ const safeFilename = (value, fallback) => {
   return cleaned || fallback;
 };
 
-const failureContract = (error) => {
+const failureContract = (error, { willRetry = false } = {}) => {
   const code = String(error?.code || "job_failed");
   const configuration =
     code.includes("not_configured") ||
@@ -32,7 +32,11 @@ const failureContract = (error) => {
     category: configuration ? "configuration" : "execution",
     needsSetup: configuration,
     safeMessage:
-      configuration
+      code === "provider_outcome_unknown"
+        ? "A previous worker stopped before the provider result was recorded. IABT did not resubmit the paid request. Reserved IABT credits were restored; the provider outcome needs administrator reconciliation."
+        : willRetry
+        ? "This attempt did not produce a verified durable output. The job is queued within its approved retry budget; reserved IABT credits remain held."
+        : configuration
         ? "IABT detected a provider or configuration requirement that needs administrator setup."
         : "IABT could not verify a durable output for this job. Reserved credits were restored.",
     details: {
@@ -213,12 +217,18 @@ const lumaStep = async (job, providers, pollDelayMs) => {
 
 const syncPlanStatus = async (repository, job, status) => {
   if (!job.input?.plan_id) return;
-  const user = await repository.getUser(job.owner_id);
-  if (!user) return;
-  await repository.updateRecord("CreationPlan", job.input.plan_id, user, {
-    status,
-    execution_job_id: job.id
-  });
+  try {
+    const user = await repository.getUser(job.owner_id);
+    if (!user) return;
+    await repository.updateRecord("CreationPlan", job.input.plan_id, user, {
+      status,
+      execution_job_id: job.id
+    });
+  } catch {
+    // Job/artifact/credit finalization is authoritative. A failed projection
+    // update must never turn a committed success into another job attempt.
+    console.error({ code: "creation_plan_status_sync_failed", job_id: job.id, plan_id: job.input.plan_id, status });
+  }
 };
 
 export const runClaimedJob = async ({
@@ -227,13 +237,24 @@ export const runClaimedJob = async ({
   repository,
   storage,
   providers,
+  assertLease = async () => {},
   pollDelayMs = 5000
 }) => {
   try {
+    if (job.attempts_exhausted) {
+      throw Object.assign(new Error("Job retry budget exhausted"), { code: "job_attempts_exhausted" });
+    }
+    if (job.lease_recovered && job.job_type.startsWith("provider.") && !job.input?.provider_job_id) {
+      // A prior worker may have submitted the paid request before it crashed.
+      // Never issue a second charge when the provider outcome is unknown.
+      throw Object.assign(new Error("Provider submission needs reconciliation"), { code: "provider_outcome_unknown" });
+    }
+    await assertLease();
     let result;
     if (job.job_type === "provider.luma.video") {
       const step = await lumaStep(job, providers, pollDelayMs);
       if (step.deferred) {
+        await assertLease();
         const deferred = await repository.deferJob({
           jobId: job.id,
           workerId,
@@ -252,6 +273,7 @@ export const runClaimedJob = async ({
     } else {
       result = await resultFor(job, providers);
     }
+    await assertLease();
     if (!Array.isArray(result?.artifacts) || !result.artifacts.length) {
       throw Object.assign(new Error("The job did not produce a durable artifact"), {
         code: "durable_output_required"
@@ -261,6 +283,7 @@ export const runClaimedJob = async ({
     const storedArtifacts = [];
     const manifest = [];
     for (const item of result.artifacts) {
+      await assertLease();
       if (!Buffer.isBuffer(item.bytes) || !item.bytes.length) {
         throw Object.assign(new Error("A generated artifact was empty"), {
           code: "durable_output_required"
@@ -295,6 +318,7 @@ export const runClaimedJob = async ({
       });
     }
 
+    await assertLease();
     const completed = await repository.completeJob({
       jobId: job.id,
       workerId,
@@ -312,6 +336,7 @@ export const runClaimedJob = async ({
     await syncPlanStatus(repository, job, "completed");
     return completed;
   } catch (error) {
+    if (error?.code === "job_lease_lost") throw error;
     const retryAt =
       error?.retryable && job.attempt_count < job.max_attempts
         ? new Date(Date.now() + Math.min(60000, 1000 * 2 ** job.attempt_count)).toISOString()
@@ -319,7 +344,7 @@ export const runClaimedJob = async ({
     const failed = await repository.failJob({
       jobId: job.id,
       workerId,
-      error: failureContract(error),
+      error: failureContract(error, { willRetry: Boolean(retryAt) }),
       retryAt
     });
     if (failed.job.status === "failed" || failed.job.status === "needs_setup") {
