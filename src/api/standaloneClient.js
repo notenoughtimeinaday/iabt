@@ -1,17 +1,18 @@
+import { appHref, safeAppPath } from "../lib/routing.js";
+
 const trimSlash = (value) => String(value || "").replace(/\/+$/, "");
 const apiUrl = trimSlash(import.meta.env.VITE_IABT_API_URL);
 
-const storage =
-  typeof window === "undefined"
-    ? null
-    : window.localStorage;
+const storage = (() => {
+  try { return typeof window === "undefined" ? null : window.localStorage; }
+  catch { return null; }
+})();
 
-let accessToken =
-  (typeof window === "undefined"
-    ? null
-    : new URLSearchParams(window.location.search).get("access_token")) ||
-  storage?.getItem("iabt_access_token") ||
-  null;
+// Standalone has no OAuth token callback. URL tokens must never select a user's session.
+let accessToken = (() => {
+  try { return storage?.getItem("iabt_access_token") || null; }
+  catch { return null; }
+})();
 
 const requireApiUrl = () => {
   if (!apiUrl) {
@@ -31,26 +32,48 @@ const request = async (path, options = {}) => {
     headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(`${apiUrl}${path}`, {
-    method: options.method || "GET",
-    headers,
-    body:
-      options.body instanceof FormData || typeof options.body === "string"
-        ? options.body
-        : options.body
-          ? JSON.stringify(options.body)
-          : undefined,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.body instanceof FormData ? 120000 : 30000);
+  const requestToken = accessToken;
+  try {
+    const response = await fetch(`${apiUrl}${path}`, {
+      method: options.method || "GET",
+      headers,
+      signal: controller.signal,
+      body:
+        options.body instanceof FormData || typeof options.body === "string"
+          ? options.body
+          : options.body
+            ? JSON.stringify(options.body)
+            : undefined,
+    });
 
-  const text = await response.text();
-  const payload = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    const error = new Error(payload?.message || `IABT API request failed (${response.status})`);
-    error.status = response.status;
-    error.data = payload;
+    const text = await response.text();
+    let payload = null;
+    try { payload = text ? JSON.parse(text) : null; }
+    catch {
+      // A gateway may return an HTML error page. Never expose that page as an API error.
+      if (response.ok) throw Object.assign(new Error("IABT returned an unexpected response. Please try again."), { code: "invalid_response" });
+    }
+    if (!response.ok) {
+      const error = new Error(typeof payload?.message === "string" ? payload.message : `IABT API request failed (${response.status}). Please try again.`);
+      error.status = response.status;
+      error.data = payload;
+      if (response.status === 401 && options.auth !== false && accessToken === requestToken) setToken(null);
+      throw error;
+    }
+    return payload;
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw Object.assign(new Error("The request timed out. Check its status before trying again."), { code: "request_timeout" });
+    }
+    if (error instanceof TypeError) {
+      throw Object.assign(new Error("Could not reach IABT. Check your connection and try again."), { code: "network_unavailable" });
+    }
     throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  return payload;
 };
 
 const specialCollection = async (name) => {
@@ -138,8 +161,12 @@ const entities = new Proxy(
 const setToken = (token) => {
   accessToken = token || null;
   if (!storage) return;
-  if (accessToken) storage.setItem("iabt_access_token", accessToken);
-  else storage.removeItem("iabt_access_token");
+  try {
+    if (accessToken) storage.setItem("iabt_access_token", accessToken);
+    else storage.removeItem("iabt_access_token");
+  } catch {
+    // Private browsing/storage restrictions still allow a session in this tab.
+  }
 };
 
 const oauthRedirect = (provider, returnTo) => {
@@ -186,14 +213,14 @@ export const standaloneClient = {
         if (accessToken) await request("/v1/auth/logout", { method: "POST" });
       } finally {
         setToken(null);
-        if (returnTo && typeof window !== "undefined") window.location.assign(returnTo);
+        if (returnTo && typeof window !== "undefined") window.location.assign(appHref(returnTo));
       }
     },
     redirectToLogin: (returnTo) => {
       if (typeof window === "undefined") return;
       const url = new URL("/login", window.location.origin);
-      if (returnTo) url.searchParams.set("returnTo", returnTo);
-      window.location.assign(url.toString());
+      if (returnTo) url.searchParams.set("returnTo", safeAppPath(returnTo));
+      window.location.assign(appHref(url.pathname + url.search));
     },
     setToken,
   },

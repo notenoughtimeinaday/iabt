@@ -51,6 +51,7 @@ export class MemoryRepository {
     this.userIdsByEmail = new Map();
     this.sessions = new Map();
     this.challenges = new Map();
+    this.authRateLimits = new Map();
     this.records = new Map();
     this.auditEvents = [];
     this.jobs = new Map();
@@ -110,13 +111,16 @@ export class MemoryRepository {
     return publicUser(user);
   }
 
-  async createSession({ tokenHash, userId, expiresAt }) {
+  async createSession({ tokenHash, userId, expiresAt, expectedPasswordHash }) {
+    const user = this.users.get(userId);
+    if (!user?.email_verified || (expectedPasswordHash && user.password_hash !== expectedPasswordHash)) return false;
     this.sessions.set(tokenHash, {
       token_hash: tokenHash,
       user_id: userId,
       expires_at: expiresAt,
       created_date: nowIso()
     });
+    return true;
   }
 
   async getSession(tokenHash) {
@@ -133,24 +137,70 @@ export class MemoryRepository {
     this.sessions.delete(tokenHash);
   }
 
+  async consumeAuthRateLimit({ keyHash, maxAttempts, windowMs }) {
+    const now = Date.now();
+    for (const [key, value] of this.authRateLimits) {
+      if (value.expiresAt <= now) this.authRateLimits.delete(key);
+    }
+    const entry = this.authRateLimits.get(keyHash) || { attempts: 0, expiresAt: now + windowMs };
+    entry.attempts = Math.min(entry.attempts + 1, maxAttempts + 1);
+    this.authRateLimits.set(keyHash, entry);
+    return entry.attempts <= maxAttempts;
+  }
+
   async saveChallenge({ email, purpose, codeHash, expiresAt }) {
     this.challenges.set(`${purpose}:${email}`, {
       email,
       purpose,
       code_hash: codeHash,
-      expires_at: expiresAt
+      expires_at: expiresAt,
+      attempts: 0
     });
   }
 
-  async consumeChallenge({ email, purpose, codeHash }) {
+  takeChallenge({ email, purpose, codeHash }) {
     const key = `${purpose}:${email}`;
     const challenge = this.challenges.get(key);
     if (!challenge) return false;
+    if (new Date(challenge.expires_at).getTime() <= Date.now() || challenge.attempts >= 5) {
+      this.challenges.delete(key);
+      return false;
+    }
+    if (challenge.code_hash !== codeHash) {
+      challenge.attempts += 1;
+      return false;
+    }
     this.challenges.delete(key);
-    return (
-      challenge.code_hash === codeHash &&
-      new Date(challenge.expires_at).getTime() > Date.now()
-    );
+    return true;
+  }
+
+  async consumeChallenge(input) {
+    return this.takeChallenge(input);
+  }
+
+  async completeAuthChallenge({ email, purpose, codeHash, passwordHash, session }) {
+    const user = this.users.get(this.userIdsByEmail.get(email));
+    if (!user || (purpose === "verify_email" && user.email_verified)) return null;
+    if (!["verify_email", "reset_password"].includes(purpose)) return null;
+    if (purpose === "reset_password" && !passwordHash) return null;
+    if (!this.takeChallenge({ email, purpose, codeHash })) return null;
+    user.email_verified = true;
+    user.updated_date = nowIso();
+    if (purpose === "reset_password") {
+      user.password_hash = passwordHash;
+      for (const [key, value] of this.sessions) {
+        if (value.user_id === user.id) this.sessions.delete(key);
+      }
+      this.challenges.delete(`verify_email:${email}`);
+    } else if (session) {
+      this.sessions.set(session.tokenHash, {
+        token_hash: session.tokenHash,
+        user_id: user.id,
+        expires_at: session.expiresAt,
+        created_date: nowIso()
+      });
+    }
+    return publicUser(user);
   }
 
   canAccess(record, user) {
@@ -386,12 +436,21 @@ export class MemoryRepository {
       .sort((a, b) => a.created_date.localeCompare(b.created_date));
     const job = candidates[0];
     if (!job) return null;
+    const leaseRecovered = job.status === "running";
+    const attemptsExhausted = job.attempt_count >= job.max_attempts;
     job.status = "running";
     job.locked_by = workerId;
     job.locked_at = nowIso();
-    job.attempt_count += 1;
+    if (!attemptsExhausted) job.attempt_count += 1;
     job.updated_date = nowIso();
-    return clone(job);
+    return { ...clone(job), lease_recovered: leaseRecovered, attempts_exhausted: attemptsExhausted };
+  }
+
+  async renewJobLease({ jobId, workerId }) {
+    const job = this.jobs.get(jobId);
+    if (!job || job.status !== "running" || job.locked_by !== workerId) return false;
+    job.locked_at = nowIso();
+    return true;
   }
 
   async createStoredObject({
@@ -592,5 +651,37 @@ export class MemoryRepository {
         .sort((a, b) => b.created_date.localeCompare(a.created_date))
         .slice(0, limit)
     );
+  }
+
+  // Exchange workflows change several records together. Serialize workflows
+  // and publish only their record changes after every required write succeeds.
+  async withRecordTransaction(callback) {
+    const previous = this.recordTransactionTail || Promise.resolve();
+    let release;
+    this.recordTransactionTail = new Promise((resolve) => { release = resolve; });
+    await previous;
+    const original = clone(this.records);
+    const transaction = Object.create(this);
+    transaction.records = clone(original);
+    transaction.auditEvents = [];
+    try {
+      const result = await callback(transaction);
+      for (const [entity, rows] of transaction.records) {
+        const before = original.get(entity) || new Map();
+        const target = this.entityMap(entity);
+        for (const [id, row] of rows) {
+          if (JSON.stringify(before.get(id)) !== JSON.stringify(row)) target.set(id, clone(row));
+        }
+        for (const id of before.keys()) if (!rows.has(id)) target.delete(id);
+      }
+      this.auditEvents.push(...transaction.auditEvents);
+      return result;
+    } finally {
+      release();
+    }
+  }
+
+  async listRecordsExact(entityName, user, options = {}) {
+    return this.listRecords(entityName, user, options);
   }
 }

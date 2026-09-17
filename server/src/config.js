@@ -102,7 +102,8 @@ export const loadConfig = (env = process.env) => {
       provider: emailProvider,
       apiKey: env.RESEND_API_KEY || "",
       from: env.IABT_EMAIL_FROM || "",
-      replyTo: env.IABT_EMAIL_REPLY_TO || ""
+      replyTo: env.IABT_EMAIL_REPLY_TO || "",
+      timeoutMs: Math.min(asPositiveInteger(env.IABT_EMAIL_TIMEOUT_MS, 10000), 30000)
     }),
     providers: Object.freeze({
       openai: freezeProvider({

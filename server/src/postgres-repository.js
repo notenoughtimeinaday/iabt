@@ -43,6 +43,8 @@ const jobFromRow = (row) => row
       credit_amount: row.credit_amount,
       attempt_count: row.attempt_count,
       max_attempts: row.max_attempts,
+      lease_recovered: Boolean(row.lease_recovered),
+      attempts_exhausted: Boolean(row.attempts_exhausted),
       available_at: timestamp(row.available_at),
       locked_at: timestamp(row.locked_at),
       locked_by: row.locked_by,
@@ -105,6 +107,26 @@ const sortRecords = (records, sort = "-created_date") => {
   });
 };
 
+const takeAuthChallenge = async (client, { email, purpose, codeHash }) => {
+  const result = await client.query(
+    `SELECT code_hash, expires_at, attempts FROM iabt_auth_challenges
+     WHERE email = $1 AND purpose = $2 FOR UPDATE`,
+    [email, purpose]
+  );
+  const challenge = result.rows[0];
+  if (!challenge) return false;
+  if (new Date(challenge.expires_at).getTime() <= Date.now() || challenge.attempts >= 5) {
+    await client.query("DELETE FROM iabt_auth_challenges WHERE email = $1 AND purpose = $2", [email, purpose]);
+    return false;
+  }
+  if (challenge.code_hash !== codeHash) {
+    await client.query("UPDATE iabt_auth_challenges SET attempts = attempts + 1 WHERE email = $1 AND purpose = $2", [email, purpose]);
+    return false;
+  }
+  await client.query("DELETE FROM iabt_auth_challenges WHERE email = $1 AND purpose = $2", [email, purpose]);
+  return true;
+};
+
 export class PostgresRepository {
   constructor({ connectionString, pool } = {}) {
     this.pool =
@@ -119,6 +141,59 @@ export class PostgresRepository {
             ? { rejectUnauthorized: true }
             : undefined
       });
+  }
+
+  // All Exchange consent/block workflows share a database transaction lock.
+  // Unlike a process-local mutex this also serializes multiple API instances.
+  // The callback must only use records/users/audit methods on its repository;
+  // it must not perform network calls or start another transaction.
+  async withRecordTransaction(callback) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL lock_timeout = '5s'");
+      await client.query("SET LOCAL statement_timeout = '10s'");
+      await client.query("SELECT pg_advisory_xact_lock(1782451011)");
+      const transaction = new PostgresRepository({ pool: client });
+      const result = await callback(transaction);
+      await client.query("COMMIT");
+      return result;
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  // Security decisions must filter before limiting results. In particular an
+  // old active block cannot disappear behind newer unrelated records.
+  async listRecordsExact(entityName, user, { query = {}, sort = "-created_date", limit = 50 } = {}) {
+    const payload = {};
+    const params = [entityName];
+    const clauses = ["entity_name = $1"];
+    if (user.role !== "admin") clauses.push(`owner_id = $${params.push(user.id)}`);
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== null && !["string", "number", "boolean"].includes(typeof value)) {
+        throw new Error("Exact record queries require scalar values");
+      }
+      if (key === "id" || key === "owner_id") clauses.push(`${key} = $${params.push(value)}`);
+      else payload[key] = value;
+    }
+    if (Object.keys(payload).length) clauses.push(`payload @> $${params.push(JSON.stringify(payload))}::jsonb`);
+    const descending = String(sort).startsWith("-");
+    const field = String(sort).replace(/^-/, "");
+    const column = { id: "id", owner_id: "owner_id", created_date: "created_at", updated_date: "updated_at" }[field];
+    const order = column || `payload ->> $${params.push(field)}`;
+    const bound = Math.max(1, Math.min(5000, Math.floor(Number(limit) || 50)));
+    const result = await this.pool.query(
+      `SELECT entity_name, id, owner_id, payload, created_at, updated_at
+       FROM iabt_entity_records WHERE ${clauses.join(" AND ")}
+       ORDER BY ${order} ${descending ? "DESC" : "ASC"} NULLS LAST, id ASC
+       LIMIT $${params.push(bound)}`,
+      params
+    );
+    return result.rows.map(recordFromRow);
   }
 
   async ready() {
@@ -186,15 +261,29 @@ export class PostgresRepository {
     return safeUser(result.rows[0]);
   }
 
-  async createSession({ tokenHash, userId, expiresAt }) {
-    await this.pool.query(
-      `INSERT INTO iabt_auth_sessions
-        (token_hash, user_id, expires_at)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (token_hash) DO UPDATE
-       SET user_id = EXCLUDED.user_id, expires_at = EXCLUDED.expires_at`,
-      [tokenHash, userId, expiresAt]
-    );
+  async createSession({ tokenHash, userId, expiresAt, expectedPasswordHash }) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query("SELECT email_verified, password_hash FROM iabt_users WHERE id = $1 FOR UPDATE", [userId]);
+      const user = result.rows[0];
+      if (!user?.email_verified || (expectedPasswordHash && user.password_hash !== expectedPasswordHash)) {
+        await client.query("COMMIT");
+        return false;
+      }
+      await client.query(
+        `INSERT INTO iabt_auth_sessions (token_hash, user_id, expires_at)
+         VALUES ($1, $2, $3)`,
+        [tokenHash, userId, expiresAt]
+      );
+      await client.query("COMMIT");
+      return true;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async getSession(tokenHash) {
@@ -215,6 +304,22 @@ export class PostgresRepository {
     );
   }
 
+  async consumeAuthRateLimit({ keyHash, maxAttempts, windowMs }) {
+    await this.pool.query("DELETE FROM iabt_auth_rate_limits WHERE expires_at <= now()");
+    const result = await this.pool.query(
+      `INSERT INTO iabt_auth_rate_limits (key_hash, attempts, expires_at)
+       VALUES ($1, 1, now() + ($2::bigint * interval '1 millisecond'))
+       ON CONFLICT (key_hash) DO UPDATE
+       SET attempts = CASE WHEN iabt_auth_rate_limits.expires_at <= now() THEN 1
+                           ELSE LEAST(iabt_auth_rate_limits.attempts + 1, $3 + 1) END,
+           expires_at = CASE WHEN iabt_auth_rate_limits.expires_at <= now() THEN EXCLUDED.expires_at
+                             ELSE iabt_auth_rate_limits.expires_at END
+       RETURNING attempts`,
+      [keyHash, windowMs, maxAttempts]
+    );
+    return result.rows[0].attempts <= maxAttempts;
+  }
+
   async saveChallenge({ email, purpose, codeHash, expiresAt }) {
     await this.pool.query(
       `INSERT INTO iabt_auth_challenges
@@ -223,26 +328,57 @@ export class PostgresRepository {
        ON CONFLICT (email, purpose) DO UPDATE
        SET code_hash = EXCLUDED.code_hash,
            expires_at = EXCLUDED.expires_at,
+           attempts = 0,
            created_at = now()`,
       [email, purpose, codeHash, expiresAt]
     );
   }
 
-  async consumeChallenge({ email, purpose, codeHash }) {
+  async consumeChallenge(input) {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      const result = await client.query(
-        `DELETE FROM iabt_auth_challenges
-         WHERE email = $1
-           AND purpose = $2
-           AND code_hash = $3
-           AND expires_at > now()
-         RETURNING email`,
-        [email, purpose, codeHash]
-      );
+      const valid = await takeAuthChallenge(client, input);
       await client.query("COMMIT");
-      return result.rowCount === 1;
+      return valid;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async completeAuthChallenge({ email, purpose, codeHash, passwordHash, session }) {
+    if (!["verify_email", "reset_password"].includes(purpose)) return null;
+    if (purpose === "reset_password" && !passwordHash) return null;
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      // Lock the user before any challenge/session rows to serialize reset with login.
+      const result = await client.query("SELECT * FROM iabt_users WHERE email = $1 FOR UPDATE", [email]);
+      const user = result.rows[0];
+      if (!user || (purpose === "verify_email" && user.email_verified) ||
+          !(await takeAuthChallenge(client, { email, purpose, codeHash }))) {
+        await client.query("COMMIT");
+        return null;
+      }
+      const updated = await client.query(
+        `UPDATE iabt_users SET email_verified = true,
+         password_hash = COALESCE($2, password_hash), updated_at = now() WHERE id = $1 RETURNING *`,
+        [user.id, purpose === "reset_password" ? passwordHash : null]
+      );
+      if (purpose === "reset_password") {
+        await client.query("DELETE FROM iabt_auth_sessions WHERE user_id = $1", [user.id]);
+        await client.query("DELETE FROM iabt_auth_challenges WHERE email = $1", [email]);
+      } else if (session) {
+        await client.query(
+          "INSERT INTO iabt_auth_sessions (token_hash, user_id, expires_at) VALUES ($1, $2, $3)",
+          [session.tokenHash, user.id, session.expiresAt]
+        );
+      }
+      await client.query("COMMIT");
+      return safeUser(updated.rows[0]);
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
@@ -509,10 +645,18 @@ export class PostgresRepository {
 
   async claimNextJob({ workerId, leaseMs = 300000 }) {
     const result = await this.pool.query(
-      "WITH candidate AS (SELECT id FROM iabt_jobs WHERE (status = 'queued' AND available_at <= now()) OR (status = 'running' AND locked_at <= now() - ($2::bigint * interval '1 millisecond')) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE iabt_jobs job SET status = 'running', locked_by = $1, locked_at = now(), attempt_count = job.attempt_count + 1, updated_at = now() FROM candidate WHERE job.id = candidate.id RETURNING job.*",
+      "WITH candidate AS (SELECT id, status = 'running' AS lease_recovered, attempt_count >= max_attempts AS attempts_exhausted FROM iabt_jobs WHERE (status = 'queued' AND available_at <= now()) OR (status = 'running' AND locked_at <= now() - ($2::bigint * interval '1 millisecond')) ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1) UPDATE iabt_jobs job SET status = 'running', locked_by = $1, locked_at = now(), attempt_count = CASE WHEN candidate.attempts_exhausted THEN job.attempt_count ELSE job.attempt_count + 1 END, updated_at = now() FROM candidate WHERE job.id = candidate.id RETURNING job.*, candidate.lease_recovered, candidate.attempts_exhausted",
       [workerId, leaseMs]
     );
     return jobFromRow(result.rows[0]);
+  }
+
+  async renewJobLease({ jobId, workerId }) {
+    const result = await this.pool.query(
+      "UPDATE iabt_jobs SET locked_at = now() WHERE id = $1 AND status = 'running' AND locked_by = $2 RETURNING id",
+      [jobId, workerId]
+    );
+    return result.rowCount === 1;
   }
 
   async createStoredObject({

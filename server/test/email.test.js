@@ -84,6 +84,19 @@ test("Resend delivery failures are surfaced", async () => {
       code: "123456",
       purpose: "reset_password"
     }),
-    /domain is not verified/
+    (error) => error.code === "email_delivery_failed" && error.status === 403 && !error.message.includes("domain")
   );
+});
+
+test("email health reports sanitized delivery failure and recovers after confirmed acceptance", async () => {
+  let rejected = true;
+  const sender = createTransactionalEmailSender({ email: { provider: "resend", apiKey: "test-key", from: "test@example.test" } }, {
+    fetchImpl: async () => new Response(JSON.stringify(rejected ? { message: "private-provider-error" } : { id: "accepted-test" }), { status: rejected ? 503 : 200 })
+  });
+  assert.equal((await sender.health()).verification, "configuration_only");
+  await assert.rejects(sender.sendChallenge({ to: "test@example.test", code: "123456", purpose: "verify_email" }));
+  assert.deepEqual(await sender.health(), { ok: false, adapter: "resend", reason: "email_delivery_failed" });
+  rejected = false;
+  await sender.sendChallenge({ to: "test@example.test", code: "123456", purpose: "verify_email" });
+  assert.deepEqual(await sender.health(), { ok: true, adapter: "resend", verification: "provider_acceptance_observed" });
 });

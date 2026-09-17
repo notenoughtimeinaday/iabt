@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { base44, platformRuntime } from "@/api/iabtClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Lock, Loader2, AlertTriangle } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 
 export default function ResetPassword() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const resetToken = searchParams.get("token");
   const standaloneEmail = searchParams.get("email") || "";
@@ -34,7 +35,7 @@ export default function ResetPassword() {
           ? { email, resetToken: code, newPassword }
           : { resetToken, newPassword },
       );
-      window.location.href = "/login";
+      navigate("/login", { replace: true });
     } catch (err) {
       setError(err.message || "Failed to reset password");
     } finally {
@@ -93,6 +94,8 @@ export default function ResetPassword() {
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
+                maxLength={6}
+                pattern="[0-9]{6}"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="Enter the code from your email"
@@ -103,12 +106,15 @@ export default function ResetPassword() {
         )}
         <div className="space-y-2">
           <Label htmlFor="password">New Password</Label>
+          {isStandalone && <p className="text-xs text-muted-foreground">Use at least 10 characters, including letters and numbers.</p>}
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input
               id="password"
               type="password"
               autoComplete="new-password"
+              minLength={isStandalone ? 10 : undefined}
+              maxLength={1024}
               autoFocus
               placeholder="••••••••"
               value={newPassword}

@@ -1,31 +1,14 @@
-import { base44 as base44Client, getBase44PublicSettings } from "./base44Client";
 import { standaloneClient, getStandalonePublicSettings } from "./standaloneClient";
 
-const configuredBackend = String(import.meta.env.VITE_IABT_BACKEND || "base44")
-  .trim()
-  .toLowerCase();
-
-if (!["base44", "standalone"].includes(configuredBackend)) {
-  throw new Error(`Unsupported VITE_IABT_BACKEND: ${configuredBackend}`);
-}
-
+// No legacy imports: Vite selects a separate entry for explicit Base44 builds.
 export const platformRuntime = Object.freeze({
-  backend: configuredBackend,
+  backend: "standalone",
   portable: true,
-  apiUrl:
-    configuredBackend === "standalone"
-      ? String(import.meta.env.VITE_IABT_API_URL || "")
-      : "",
+  apiUrl: import.meta.env.VITE_IABT_API_URL,
 });
 
-export const iabtClient =
-  configuredBackend === "standalone" ? standaloneClient : base44Client;
+export const iabtClient = standaloneClient;
+export const getPublicSettings = getStandalonePublicSettings;
 
-// Temporary compatibility name. Feature code imports this IABT-owned boundary;
-// the Base44 adapter can be removed after the standalone API migration.
+// Compatibility export for existing feature code; this is the IABT API client.
 export const base44 = iabtClient;
-
-export const getPublicSettings =
-  configuredBackend === "standalone"
-    ? getStandalonePublicSettings
-    : getBase44PublicSettings;

@@ -6,6 +6,7 @@ import {
   hashPassword,
   hashToken,
   normalizeEmail,
+  validatePassword,
   verifyPassword
 } from "./security.js";
 import { readSingleFile } from "./multipart.js";
@@ -21,6 +22,17 @@ import {
   createSubscriptionCheckout
 } from "./billing/stripe-checkout.js";
 import { createTransactionalEmailSender } from "./email/resend.js";
+import { recordPolicyAcceptance } from "./operations/policy-acceptance.js";
+import { SUPPORTED_AGENT_NAMES, respondToSupportRequest, buildJerichoKnowledge } from "./operations/jericho-support.js";
+import { handleExchangeFunction } from "./functions/exchange.js";
+import { handleIntegrationFunction } from "./functions/integrations.js";
+
+const WORKFLOW_ENTITIES = new Set([
+  "AgentConversation", "CollaborationProfile", "ProjectNeed", "MatchRecord",
+  "IntroductionRequest", "CollaborationRoom", "RoomMessage", "CredentialClaim",
+  "ExchangeBlock", "ExchangeSafetyReport", "ExchangeAuditEvent",
+  "IntegrationConnection", "ConnectionAdapter", "CommercialPolicy", "ProviderAgreement"
+]);
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -99,50 +111,64 @@ const probeHealth = async (component, fallbackAdapter) => {
 const challengeHash = (config, { email, purpose, code }) =>
   hashToken(`${config.authSecret}:${purpose}:${email}:${code}`);
 
-const issueChallenge = async (
-  repository,
-  config,
-  email,
-  purpose,
-  emailSender
-) => {
+const requireEmailDelivery = (config, emailSender) => {
+  if (!config.exposeDevelopmentOtp && !emailSender?.configured) {
+    throw new HttpError(503, "email_not_configured", "Account email is temporarily unavailable. Please try again later.");
+  }
+};
+
+const issueChallenge = async (repository, config, email, purpose, emailSender) => {
+  requireEmailDelivery(config, emailSender);
   const code = createOtp();
+  const codeHash = challengeHash(config, { email, purpose, code });
+  if (!config.exposeDevelopmentOtp) {
+    try {
+      await emailSender.sendChallenge({ to: email, code, purpose, idempotencyKey: codeHash });
+    } catch {
+      // Provider responses may contain configuration details. Keep them out of public errors.
+      throw new HttpError(502, "email_delivery_failed", "The email could not be sent. Please try again or request a new code from the login page.");
+    }
+  }
+  // A delivery failure must not replace a code that the user has already received.
   await repository.saveChallenge({
     email,
     purpose,
-    codeHash: challengeHash(config, { email, purpose, code }),
+    codeHash,
     expiresAt: new Date(Date.now() + config.challengeTtlMs).toISOString()
   });
-
-  if (config.exposeDevelopmentOtp) return { dev_otp: code };
-  if (!emailSender?.configured) {
-    throw new HttpError(
-      503,
-      "email_not_configured",
-      "Transactional email is not configured"
-    );
-  }
-  try {
-    await emailSender.sendChallenge({ to: email, code, purpose });
-  } catch (error) {
-    throw new HttpError(
-      502,
-      "email_delivery_failed",
-      error?.message || "Verification email could not be sent"
-    );
-  }
-  return {};
+  return config.exposeDevelopmentOtp ? { dev_otp: code } : {};
 };
 
-const issueSession = async (repository, config, user) => {
+const issueSession = async (repository, config, user, expectedPasswordHash) => {
   const token = createOpaqueToken();
   const expiresAt = new Date(Date.now() + config.sessionTtlMs).toISOString();
-  await repository.createSession({
+  const created = await repository.createSession({
     tokenHash: hashToken(token),
     userId: user.id,
-    expiresAt
+    expiresAt,
+    expectedPasswordHash
   });
+  if (!created) throw new HttpError(401, "invalid_credentials", "Account credentials changed. Please sign in again.");
   return { access_token: token, expires_at: expiresAt, user };
+};
+
+const limitAuthRequest = async (req, action, email, repository, config) => {
+  const deliveryAction = ["register", "resend-otp", "reset-request"].includes(action);
+  const operation = deliveryAction ? "email" : action;
+  // Socket addresses cannot be forged via an arbitrary X-Forwarded-For header.
+  // Account limits remain effective when a deployment uses a shared reverse proxy.
+  const limits = [
+    { key: `ip:${req.socket.remoteAddress || "unknown"}`, max: 120 },
+    { key: `account:${operation}:${email}`, max: deliveryAction ? 5 : 10 }
+  ];
+  for (const limit of limits) {
+    const allowed = await repository.consumeAuthRateLimit({
+      keyHash: hashToken(`${config.authSecret}:${limit.key}`),
+      maxAttempts: limit.max,
+      windowMs: 15 * 60 * 1000
+    });
+    if (!allowed) throw new HttpError(429, "auth_rate_limited", "Too many attempts. Please wait 15 minutes before trying again.");
+  }
 };
 
 const authenticate = async (req, repository) => {
@@ -174,21 +200,36 @@ const handleAuth = async ({
   emailSender
 }) => {
   const action = segments[2];
+  if (req.method === "POST" && ["register", "login", "verify-otp", "resend-otp", "reset-request", "reset"].includes(action)) {
+    await limitAuthRequest(req, action, normalizeEmail(body.email), repository, config);
+  }
 
   if (req.method === "POST" && action === "register") {
     const email = normalizeEmail(body.email);
     if (!/^\S+@\S+\.\S+$/.test(email)) {
       throw new HttpError(400, "invalid_email", "A valid email address is required");
     }
-    const existing = await repository.findUserByEmail(email);
-    if (existing) throw new HttpError(409, "email_exists", "An account already exists");
-    const passwordHash = await hashPassword(body.password);
-    const user = await repository.createUser({
-      email,
-      passwordHash,
-      name: String(body.name || "").trim(),
-      emailVerified: false
-    });
+    requireEmailDelivery(config, emailSender);
+    const existing = await repository.findUserByEmail(email, { includeSecret: true });
+    let user;
+    if (existing) {
+      // Retry an interrupted signup only with the original password. Never replace it
+      // based on an unverified registration or create a session for a verified account.
+      if (existing.email_verified || !(await verifyPassword(body.password, existing.password_hash))) {
+        throw new HttpError(409, "email_exists", "An account already exists. Sign in, request a verification code, or reset your password.");
+      }
+      const { password_hash: _passwordHash, ...safeUser } = existing;
+      user = safeUser;
+    } else {
+      const passwordHash = await hashPassword(body.password);
+      user = await repository.createUser({
+        email,
+        passwordHash,
+        name: String(body.name || "").trim(),
+        emailVerified: false
+      });
+      if (!user) throw new HttpError(409, "email_exists", "An account already exists. Please sign in or request a verification code.");
+    }
     const challenge = await issueChallenge(
       repository,
       config,
@@ -202,26 +243,23 @@ const handleAuth = async ({
   if (req.method === "POST" && action === "verify-otp") {
     const email = normalizeEmail(body.email);
     const code = String(body.otpCode || body.code || "").trim();
-    const valid = await repository.consumeChallenge({
+    const token = createOpaqueToken();
+    const expiresAt = new Date(Date.now() + config.sessionTtlMs).toISOString();
+    const user = await repository.completeAuthChallenge({
       email,
       purpose: "verify_email",
-      codeHash: challengeHash(config, {
-        email,
-        purpose: "verify_email",
-        code
-      })
+      codeHash: challengeHash(config, { email, purpose: "verify_email", code }),
+      session: { tokenHash: hashToken(token), expiresAt }
     });
-    if (!valid) throw new HttpError(400, "invalid_otp", "Verification code is invalid or expired");
-    const stored = await repository.findUserByEmail(email);
-    if (!stored) throw new HttpError(400, "invalid_otp", "Verification code is invalid or expired");
-    const user = await repository.markUserVerified(stored.id);
-    return { status: 200, payload: await issueSession(repository, config, user) };
+    if (!user) throw new HttpError(400, "invalid_otp", "Verification code is invalid or expired. Request a new code or sign in if already verified.");
+    return { status: 200, payload: { access_token: token, expires_at: expiresAt, user } };
   }
 
   if (req.method === "POST" && action === "resend-otp") {
+    requireEmailDelivery(config, emailSender);
     const email = normalizeEmail(body.email);
     const user = await repository.findUserByEmail(email);
-    const challenge = user
+    const challenge = user && !user.email_verified
       ? await issueChallenge(
           repository,
           config,
@@ -249,7 +287,7 @@ const handleAuth = async ({
       throw new HttpError(403, "email_unverified", "Verify the email address before signing in");
     }
     const { password_hash: _passwordHash, ...user } = stored;
-    return { status: 200, payload: await issueSession(repository, config, user) };
+    return { status: 200, payload: await issueSession(repository, config, user, stored.password_hash) };
   }
 
   if (req.method === "GET" && action === "me") {
@@ -264,6 +302,7 @@ const handleAuth = async ({
   }
 
   if (req.method === "POST" && action === "reset-request") {
+    requireEmailDelivery(config, emailSender);
     const email = normalizeEmail(body.email);
     const user = await repository.findUserByEmail(email);
     const challenge = user
@@ -281,19 +320,16 @@ const handleAuth = async ({
   if (req.method === "POST" && action === "reset") {
     const email = normalizeEmail(body.email);
     const code = String(body.resetToken || body.code || "").trim();
-    const valid = await repository.consumeChallenge({
+    // A correctable password typo must not burn the user's one-time reset code.
+    validatePassword(body.newPassword);
+    const passwordHash = await hashPassword(body.newPassword);
+    const user = await repository.completeAuthChallenge({
       email,
       purpose: "reset_password",
-      codeHash: challengeHash(config, {
-        email,
-        purpose: "reset_password",
-        code
-      })
+      codeHash: challengeHash(config, { email, purpose: "reset_password", code }),
+      passwordHash
     });
-    if (!valid) throw new HttpError(400, "invalid_reset", "Reset code is invalid or expired");
-    const user = await repository.findUserByEmail(email);
-    if (!user) throw new HttpError(400, "invalid_reset", "Reset code is invalid or expired");
-    await repository.updatePassword(user.id, await hashPassword(body.newPassword));
+    if (!user) throw new HttpError(400, "invalid_reset", "Reset code is invalid or expired. Request a new code.");
     return { status: 200, payload: { ok: true } };
   }
 
@@ -307,7 +343,10 @@ const handleEntity = async ({ req, segments, body, repository, config }) => {
   const readOperation =
     req.method === "GET" ||
     (req.method === "POST" && (operation === "list" || operation === "filter"));
-  if (config.serverManagedEntities.has(entityName) && !readOperation) {
+  if (WORKFLOW_ENTITIES.has(entityName) && readOperation) {
+    throw new HttpError(403, "workflow_read_required", "Use this feature's authorized workflow to read these records");
+  }
+  if ((config.serverManagedEntities.has(entityName) || WORKFLOW_ENTITIES.has(entityName)) && !readOperation) {
     throw new HttpError(
       403,
       "server_managed_entity",
@@ -409,15 +448,17 @@ const handleAgents = async ({
   body,
   repository,
   config,
-  providers
+  providers,
+  storage
 }) => {
   const { user } = await authenticate(req, repository);
   const conversationId = segments[3];
+  const actor = { ...user, role: "user" };
 
   if (segments.length === 3 && req.method === "GET") {
     return {
       status: 200,
-      payload: await repository.listRecords("AgentConversation", user, {
+      payload: await repository.listRecords("AgentConversation", actor, {
         sort: "-updated_date",
         limit: 250
       })
@@ -425,8 +466,11 @@ const handleAgents = async ({
   }
 
   if (segments.length === 3 && req.method === "POST") {
-    const record = await repository.createRecord("AgentConversation", user, {
-      ...asObject(body),
+    const agentName = String(body.agent_name || "iabt_creator");
+    if (!SUPPORTED_AGENT_NAMES.includes(agentName)) throw new HttpError(400, "unsupported_agent", "This agent is not available");
+    const record = await repository.createRecord("AgentConversation", actor, {
+      agent_name: agentName,
+      metadata: { project_id: String(body.metadata?.project_id || ""), title: String(body.metadata?.title || "").slice(0, 200) },
       messages: [],
       status: "active"
     });
@@ -438,10 +482,11 @@ const handleAgents = async ({
   }
 
   if (conversationId === "list" && req.method === "POST") {
-    const query = body.agent_name ? { agent_name: body.agent_name } : {};
+    const agentName = body.agent_name || body.q?.agent_name;
+    const query = agentName ? { agent_name: agentName } : {};
     return {
       status: 200,
-      payload: await repository.listRecords("AgentConversation", user, {
+      payload: await repository.listRecords("AgentConversation", actor, {
         query,
         sort: "-updated_date",
         limit: 250
@@ -450,22 +495,25 @@ const handleAgents = async ({
   }
 
   if (conversationId && segments.length === 4 && req.method === "GET") {
-    const record = await repository.getRecord("AgentConversation", conversationId, user);
+    const record = await repository.getRecord("AgentConversation", conversationId, actor);
     if (!record) throw new HttpError(404, "conversation_not_found", "Conversation was not found");
     return { status: 200, payload: record };
   }
 
   if (conversationId && segments[4] === "messages" && req.method === "POST") {
-    const record = await repository.getRecord("AgentConversation", conversationId, user);
+    if (body.role && body.role !== "user") throw new HttpError(400, "invalid_message_role", "Only user messages can be submitted");
+    if (typeof body.content !== "string" || !body.content.trim() || body.content.length > 20000) throw new HttpError(400, "invalid_message", "Enter a message of at most 20,000 characters");
+    return repository.withRecordTransaction(async (repository) => {
+    const record = await repository.getRecord("AgentConversation", conversationId, actor);
     if (!record) throw new HttpError(404, "conversation_not_found", "Conversation was not found");
     const message = {
       id: createId(),
-      role: String(body.role || "user"),
+      role: "user",
       content: String(body.content || ""),
       created_date: new Date().toISOString()
     };
     let messages = [...(record.messages || []), message];
-    let updated = await repository.updateRecord("AgentConversation", conversationId, user, {
+    let updated = await repository.updateRecord("AgentConversation", conversationId, actor, {
       messages
     });
     await repository.appendAudit(user, "conversation.message", {
@@ -475,6 +523,13 @@ const handleAgents = async ({
 
     if (message.role === "user" && message.content.trim().length >= 3) {
       try {
+        const support = await respondToSupportRequest({ repository, user, providers, storage, config, requestText: message.content, agentName: record.agent_name });
+        if (support) {
+          updated = await repository.updateRecord("AgentConversation", conversationId, actor, {
+            messages: [...messages, { ...support, id: createId(), role: "assistant", created_date: new Date().toISOString() }]
+          });
+          return { status: 200, payload: updated };
+        }
         const planned = await createCreationPlan({
           repository,
           config,
@@ -504,7 +559,7 @@ const handleAgents = async ({
           metadata: { plan_id: plan.id, intent: plan.intent }
         };
         messages = [...messages, assistant];
-        updated = await repository.updateRecord("AgentConversation", conversationId, user, {
+        updated = await repository.updateRecord("AgentConversation", conversationId, actor, {
           messages
         });
         await repository.appendAudit(user, "creation.plan_created", {
@@ -521,12 +576,13 @@ const handleAgents = async ({
             String(error.message || "Please revise the request.").slice(0, 500),
           created_date: new Date().toISOString()
         };
-        updated = await repository.updateRecord("AgentConversation", conversationId, user, {
+        updated = await repository.updateRecord("AgentConversation", conversationId, actor, {
           messages: [...messages, assistant]
         });
       }
     }
     return { status: 200, payload: updated };
+    });
   }
 
   throw new HttpError(404, "route_not_found", "Agent route was not found");
@@ -767,6 +823,15 @@ const handleFunction = async ({
   const { user } = await authenticate(req, repository);
   const name = decodeURIComponent(segments[2] || "");
 
+  if (name === "accept-policies") {
+    const record = await repository.withRecordTransaction((transaction) => recordPolicyAcceptance({ repository: transaction, user, input: body }));
+    return { status: 200, payload: { data: record } };
+  }
+  for (const handler of [handleExchangeFunction, handleIntegrationFunction]) {
+    const result = await handler({ name, body, user, repository, config, providers });
+    if (result) return result;
+  }
+
   if (name === "plan-creation") {
     const planned = await createCreationPlan({
       repository,
@@ -923,16 +988,18 @@ const handleFunction = async ({
   }
 
   if (name === "get-system-health") {
-    const incidents = await repository.listIncidents(user, { limit: 20 });
+    const knowledge = await buildJerichoKnowledge({ repository, user, providers, storage, config });
+    const incidents = await repository.listIncidents({ ...user, role: "user" }, { limit: 20 });
     return {
       status: 200,
       payload: {
         data: {
-          version: "iabt-standalone-0.4.0",
+          version: "iabt-standalone-0.7.0",
           runtime: "standalone",
           base44_required: false,
           authenticated_user_id: user.id,
-          healthy: true,
+          health_status: "not_live_probed",
+          runtime_knowledge: knowledge,
           operational_core: {
             durable_job_queue: true,
             lease_recovery: true,
@@ -1079,7 +1146,7 @@ export const createIabtHandler = ({
         payload: {
           ok: true,
           service: "iabt-standalone",
-          version: "0.6.0",
+          version: "0.7.0",
           base44_required: false
         }
       };
@@ -1089,16 +1156,18 @@ export const createIabtHandler = ({
         probeHealth(storage, storage?.kind || "missing"),
         probeHealth(emailSender, emailSender?.kind || "disabled")
       ]);
-      const ready = Boolean(database.ok && objectStorage.ok);
+      const emailReady = config.exposeDevelopmentOtp || transactionalEmail.ok;
+      const ready = Boolean(database.ok && objectStorage.ok && emailReady);
       result = {
         status: ready ? 200 : 503,
         payload: {
           ok: ready,
           service: "iabt-standalone",
-          version: "0.6.0",
+          version: "0.7.0",
           database,
           object_storage: objectStorage,
           transactional_email: transactionalEmail,
+          account_access: { ok: Boolean(emailReady), verification_mode: config.exposeDevelopmentOtp ? "development_otp" : "email" },
           migrations: repository.migrationState
             ? {
                 total: repository.migrationState.total,
@@ -1147,7 +1216,8 @@ export const createIabtHandler = ({
         body,
         repository,
         config,
-        providers
+        providers,
+        storage
       });
     } else if (segments[0] === "v1" && segments[1] === "functions") {
       result = await handleFunction({
@@ -1192,17 +1262,21 @@ export const createIabtHandler = ({
     if (result?.direct) return;
     send(res, result.status, result.payload, origin);
   } catch (error) {
-    const status = Number(error.status) || 500;
-    const code = error.code || "internal_error";
-    if (status >= 500 && code === "internal_error") {
-      console.error({ requestId, code, error });
+    const declaredStatus = Number(error.status);
+    const expected = Number.isInteger(declaredStatus) && declaredStatus >= 400 && declaredStatus <= 599;
+    const status = expected ? declaredStatus : 500;
+    const code = expected ? error.code || "request_failed" : "internal_error";
+    if (!expected) {
+      // Driver errors can contain connection details, SQL, or submitted values.
+      // Preserve a correlation ID without exposing those values in API/logs.
+      console.error({ requestId, code });
     }
     send(
       res,
       status,
       {
         error: code,
-        message: status >= 500 && code === "internal_error"
+        message: !expected
           ? "The server could not complete the request"
           : error.message,
         request_id: requestId

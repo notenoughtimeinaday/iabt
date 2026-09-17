@@ -21,9 +21,12 @@ full verification suite.
 
 ## Independence boundary
 
-All feature code imports `src/api/iabtClient.js`. That module can select the
-legacy Base44 adapter or the standalone IABT API through
-`VITE_IABT_BACKEND`. No feature page should import the Base44 SDK directly.
+All feature code imports `@/api/iabtClient`. The default entry uses only the
+standalone IABT API. Only an explicit `VITE_IABT_BACKEND=base44` build selects
+the isolated legacy client and consent page. Standalone builds require an API
+origin and reject Base44 runtime imports/injections. No feature page should
+import the Base44 SDK directly. The legacy dependencies remain installed until
+the production transition is complete.
 
 ## Required standalone services
 
@@ -70,6 +73,12 @@ Completed in the independent runtime:
 - reviewable design specifications, design tokens, and accessible SVG boards
 - simulation-only G-code safety packages that never claim machine readiness
 - disabled-by-default automation runbooks with approval and idempotency gates
+- email-backed account recovery, single-use OTP limits, durable authentication rate limits, and reset-time session revocation
+- authenticated standalone Exchange matching, mutual introductions, private rooms, blocking, credentials, and safety review
+- integration discovery and preferences that distinguish configured providers from actual customer authorization
+- server-owned policy acceptance and account-scoped JERICHO operational diagnostics
+- worker lease heartbeats, graceful draining, and fail-closed recovery for ambiguous paid submissions
+- reviewed import planning with file hashes and rollback/idempotency contracts (not a live persistence importer)
 
 Still required before cutover:
 
@@ -77,7 +86,8 @@ Still required before cutover:
 - authorized integration adapters for automation execution; machine-ready G-code remains CAM/operator gated
 - complete Stripe test lifecycle against the owner's Stripe test account
 - Base44 live record/file export, staged import, and post-import reconciliation
-- deploy the prepared independent staging stack and connect monitoring
+- customer integration authorization and aggregate commercial spending enforcement
+- always-on worker hosting, live monitoring/alerting, and controlled inbox delivery verification
 - execute backup/restore validation and 20 consecutive golden-path runs
 
 ## Safe cutover order

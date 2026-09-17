@@ -14,6 +14,12 @@ export const normalizeEmail = (value) => String(value || "").trim().toLowerCase(
 
 export const validatePassword = (password) => {
   const value = String(password || "");
+  if (typeof password !== "string" || value.length > 1024) {
+    throw Object.assign(new Error("Password must be text with at most 1024 characters"), {
+      status: 400,
+      code: "invalid_password"
+    });
+  }
   if (value.length < 10) {
     throw Object.assign(new Error("Password must contain at least 10 characters"), {
       status: 400,
@@ -37,6 +43,7 @@ export const hashPassword = async (password) => {
 };
 
 export const verifyPassword = async (password, encoded) => {
+  if (typeof password !== "string" || password.length > 1024) return false;
   const [algorithm, saltValue, hashValue] = String(encoded || "").split(":");
   if (algorithm !== "scrypt" || !saltValue || !hashValue) return false;
   const salt = Buffer.from(saltValue, "base64url");

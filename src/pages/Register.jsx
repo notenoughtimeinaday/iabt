@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/lib/AuthContext";
 import { base44, platformRuntime } from "@/api/iabtClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,8 @@ import { toast } from "@/components/ui/use-toast";
 import { safeReturnTo } from "@/lib/authReturnTo";
 
 export default function Register() {
+  const navigate = useNavigate();
+  const { checkUserAuth } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -46,7 +49,8 @@ export default function Register() {
       if (result?.access_token) {
         base44.auth.setToken(result.access_token);
       }
-      window.location.href = safeReturnTo();
+      await checkUserAuth();
+      navigate(safeReturnTo(), { replace: true });
     } catch (err) {
       setError(err.message || "Invalid verification code");
     } finally {
@@ -56,6 +60,7 @@ export default function Register() {
 
   const handleResend = async () => {
     setError("");
+    setLoading(true);
     try {
       await base44.auth.resendOtp(email);
       toast({
@@ -64,6 +69,8 @@ export default function Register() {
       });
     } catch (err) {
       setError(err.message || "Failed to resend code");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -117,7 +124,7 @@ export default function Register() {
         </Button>
         <p className="text-center text-sm text-muted-foreground mt-4">
           Didn't receive the code?{" "}
-          <button onClick={handleResend} className="text-primary font-medium hover:underline">
+          <button type="button" onClick={handleResend} disabled={loading} className="text-primary font-medium hover:underline disabled:opacity-50">
             Resend
           </button>
         </p>
@@ -190,12 +197,15 @@ export default function Register() {
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
+          {platformRuntime.backend === "standalone" && <p className="text-xs text-muted-foreground">Use at least 10 characters, including letters and numbers.</p>}
           <div className="relative">
             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
             <Input
               id="password"
               type="password"
               autoComplete="new-password"
+              minLength={platformRuntime.backend === "standalone" ? 10 : undefined}
+              maxLength={1024}
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -212,6 +222,8 @@ export default function Register() {
               id="confirm"
               type="password"
               autoComplete="new-password"
+              minLength={platformRuntime.backend === "standalone" ? 10 : undefined}
+              maxLength={1024}
               placeholder="••••••••"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}

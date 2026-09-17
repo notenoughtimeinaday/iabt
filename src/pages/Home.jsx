@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getAppLocation } from "@/lib/routing";
 import { base44 } from "@/api/iabtClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -79,7 +80,7 @@ export default function Home() {
   }, [user?.id]);
 
   useEffect(() => {
-    const url = new URL(window.location.href);
+    const url = getAppLocation();
     const billing = url.searchParams.get("billing");
     if (!billing) return;
     if (billing === "success") {
@@ -91,7 +92,7 @@ export default function Home() {
     }
     url.searchParams.delete("billing");
     url.searchParams.delete("session_id");
-    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    navigate(url.pathname + url.search + url.hash, { replace: true });
     load();
     if (billing === "success" || billing === "credits_success") {
       [1500, 4000, 9000].forEach((delay) => {
@@ -238,7 +239,7 @@ export default function Home() {
         last_opened_at: new Date().toISOString(),
       }));
       await base44.entities.Project.bulkCreate(records);
-      toast({ title: "Legacy projects imported", description: records.length + " project" + (records.length === 1 ? "" : "s") + " copied to Base44. Local originals were kept." });
+      toast({ title: "Legacy projects imported", description: records.length + " project" + (records.length === 1 ? "" : "s") + " copied to IABT. Local originals were kept." });
       await load();
     } catch (error) {
       toast({ title: "Legacy import failed", description: error.message, variant: "destructive" });
@@ -340,7 +341,7 @@ export default function Home() {
               <div className="iabt-project-icon"><ArchiveRestore /></div>
               <div>
                 <strong>{legacyProjects.length} legacy IABT project{legacyProjects.length === 1 ? "" : "s"} found on this computer</strong>
-                <span>Copy them into Base44 cloud storage. Your original local projects will remain untouched.</span>
+                <span>Copy them into IABT cloud storage. Your original local projects will remain untouched.</span>
               </div>
               <Button variant="outline" onClick={migrateLegacyProjects} disabled={working}>
                 {working ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Cloud className="h-4 w-4 mr-2" />}

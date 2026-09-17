@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
-import { base44 } from "@/api/iabtClient";
+import { base44, platformRuntime } from "@/api/iabtClient";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/AuthContext";
-import { IABT_POLICY_VERSION } from "@/lib/legal";
+import { IABT_ACCEPTANCE_TEXT, IABT_POLICY_VERSION } from "@/lib/legal";
 
 export default function LegalAcceptanceGate() {
   const { user } = useAuth();
@@ -23,7 +23,7 @@ export default function LegalAcceptanceGate() {
           1,
         );
         if (!active) return;
-        setState(records?.[0]?.terms_accepted && records?.[0]?.acceptable_use_accepted ? "accepted" : "required");
+        setState(records?.[0]?.terms_accepted && records?.[0]?.privacy_acknowledged && records?.[0]?.acceptable_use_accepted ? "accepted" : "required");
       } catch (loadError) {
         if (!active) return;
         setError(loadError.message || "Could not verify policy acceptance.");
@@ -39,17 +39,24 @@ export default function LegalAcceptanceGate() {
     setState("saving");
     setError("");
     try {
-      await base44.entities.PolicyAcceptance.create({
-        user_id: user.id,
-        user_email: user.email,
+      const consent = {
         policy_version: IABT_POLICY_VERSION,
         terms_accepted: true,
         privacy_acknowledged: true,
         acceptable_use_accepted: true,
-        acceptance_text: "I agree to the IABT Terms of Use and Acceptable Use Policy and acknowledge the Privacy Notice, AI-generated content disclosures, and IABT Exchange mutual-consent and credential-verification terms.",
-        accepted_at: new Date().toISOString(),
-        source: "in_app",
-      });
+      };
+      if (platformRuntime.backend === "standalone") {
+        await base44.functions.invoke("accept-policies", consent);
+      } else {
+        await base44.entities.PolicyAcceptance.create({
+          ...consent,
+          user_id: user.id,
+          user_email: user.email,
+          acceptance_text: IABT_ACCEPTANCE_TEXT,
+          accepted_at: new Date().toISOString(),
+          source: "in_app",
+        });
+      }
       setState("accepted");
     } catch (saveError) {
       setError(saveError.message || "Could not record policy acceptance.");
