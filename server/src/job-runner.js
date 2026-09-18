@@ -10,6 +10,8 @@ import {
   buildGcodeSimulationArtifacts
 } from "./creation/specialized-artifacts.js";
 import { createId } from "./security.js";
+import { readTextSources } from "./files/text-sources.js";
+import { buildSourceReviewArtifacts } from "./creation/source-review.js";
 
 const safeFilename = (value, fallback) => {
   const cleaned = String(value || "")
@@ -251,7 +253,18 @@ export const runClaimedJob = async ({
     }
     await assertLease();
     let result;
-    if (job.job_type === "provider.luma.video") {
+    if (job.input?.file_references?.length) {
+      if (job.job_type !== "creation.document" || job.input.intent !== "document") {
+        throw Object.assign(new Error("Attached sources require the source-review document workflow"), { code: "source_intent_unsupported" });
+      }
+      const user = await repository.getUser(job.owner_id);
+      const sources = await readTextSources({
+        repository, storage, user,
+        fileIds: job.input.file_references.map((reference) => reference.file_id),
+        expectedReferences: job.input.file_references
+      });
+      result = buildSourceReviewArtifacts({ requestText: job.input.request_text, sources });
+    } else if (job.job_type === "provider.luma.video") {
       const step = await lumaStep(job, providers, pollDelayMs);
       if (step.deferred) {
         await assertLease();
