@@ -26,6 +26,7 @@ import { recordPolicyAcceptance } from "./operations/policy-acceptance.js";
 import { SUPPORTED_AGENT_NAMES, respondToSupportRequest, buildJerichoKnowledge } from "./operations/jericho-support.js";
 import { handleExchangeFunction } from "./functions/exchange.js";
 import { handleIntegrationFunction } from "./functions/integrations.js";
+import { fileIdsFromRequest } from "./files/text-sources.js";
 
 const WORKFLOW_ENTITIES = new Set([
   "AgentConversation", "CollaborationProfile", "ProjectNeed", "MatchRecord",
@@ -337,8 +338,9 @@ const handleAuth = async ({
 };
 
 const handleEntity = async ({ req, segments, body, repository, config }) => {
-  const { user } = await authenticate(req, repository);
+  let { user } = await authenticate(req, repository);
   const entityName = requireEntity(config, decodeURIComponent(segments[2] || ""));
+  if (["Asset", "CreationPlan"].includes(entityName)) user = { ...user, role: "user" };
   const operation = segments[3];
   const readOperation =
     req.method === "GET" ||
@@ -503,6 +505,16 @@ const handleAgents = async ({
   if (conversationId && segments[4] === "messages" && req.method === "POST") {
     if (body.role && body.role !== "user") throw new HttpError(400, "invalid_message_role", "Only user messages can be submitted");
     if (typeof body.content !== "string" || !body.content.trim() || body.content.length > 20000) throw new HttpError(400, "invalid_message", "Enter a message of at most 20,000 characters");
+    const fileIds = fileIdsFromRequest(body);
+    // Validate every attachment before recording a message or quoting a job.
+    // S3 reads must happen outside the shared record transaction lock.
+    const sourceConversation = fileIds.length ? await repository.getRecord("AgentConversation", conversationId, actor) : null;
+    if (fileIds.length && !sourceConversation) throw new HttpError(404, "conversation_not_found", "Conversation was not found");
+    const attachedPlan = fileIds.length ? await createCreationPlan({
+      repository, config, providers, storage, user,
+      requestText: body.content, conversationId,
+      projectId: String(sourceConversation.metadata?.project_id || ""), fileIds
+    }) : null;
     return repository.withRecordTransaction(async (repository) => {
     const record = await repository.getRecord("AgentConversation", conversationId, actor);
     if (!record) throw new HttpError(404, "conversation_not_found", "Conversation was not found");
@@ -510,6 +522,7 @@ const handleAgents = async ({
       id: createId(),
       role: "user",
       content: String(body.content || ""),
+      ...(attachedPlan ? { file_ids: fileIds, file_references: attachedPlan.plan.file_references } : {}),
       created_date: new Date().toISOString()
     };
     let messages = [...(record.messages || []), message];
@@ -523,17 +536,18 @@ const handleAgents = async ({
 
     if (message.role === "user" && message.content.trim().length >= 3) {
       try {
-        const support = await respondToSupportRequest({ repository, user, providers, storage, config, requestText: message.content, agentName: record.agent_name });
+        const support = !attachedPlan && await respondToSupportRequest({ repository, user, providers, storage, config, requestText: message.content, agentName: record.agent_name });
         if (support) {
           updated = await repository.updateRecord("AgentConversation", conversationId, actor, {
             messages: [...messages, { ...support, id: createId(), role: "assistant", created_date: new Date().toISOString() }]
           });
           return { status: 200, payload: updated };
         }
-        const planned = await createCreationPlan({
+        const planned = attachedPlan || await createCreationPlan({
           repository,
           config,
           providers,
+          storage,
           user,
           requestText: message.content,
           conversationId,
@@ -650,7 +664,7 @@ const handleFiles = async ({
   const id = decodeURIComponent(segments[2] || "");
   if (req.method === "GET" && id && segments[3] === "access") {
     const { user } = await authenticate(req, repository);
-    const record = await repository.getStoredObject(id, user);
+    const record = await repository.getStoredObject(id, { ...user, role: "user" });
     if (!record) throw new HttpError(404, "file_not_found", "File was not found");
     return {
       status: 200,
@@ -675,7 +689,7 @@ const handleFiles = async ({
       ...responseHeaders(origin),
       "Content-Type": record.content_type,
       "Content-Length": String(bytes.length),
-      "Content-Disposition": "inline; filename*=UTF-8''" + encodeURIComponent(record.original_name)
+      "Content-Disposition": "attachment; filename*=UTF-8''" + encodeURIComponent(record.original_name)
     });
     res.end(bytes);
     return { direct: true };
@@ -749,7 +763,8 @@ const publicJob = (job) => ({
 });
 
 const handleJobs = async ({ req, segments, repository }) => {
-  const { user } = await authenticate(req, repository);
+  const authenticated = await authenticate(req, repository);
+  const user = { ...authenticated.user, role: "user" };
   if (req.method === "GET" && segments.length === 2) {
     const jobs = await repository.listJobs(user, { limit: 100 });
     return { status: 200, payload: jobs.map(publicJob) };
@@ -763,7 +778,8 @@ const handleJobs = async ({ req, segments, repository }) => {
 };
 
 const handleArtifacts = async ({ req, repository, storage }) => {
-  const { user } = await authenticate(req, repository);
+  const authenticated = await authenticate(req, repository);
+  const user = { ...authenticated.user, role: "user" };
   if (req.method !== "GET") {
     throw new HttpError(405, "method_not_allowed", "Method is not allowed");
   }
@@ -837,10 +853,12 @@ const handleFunction = async ({
       repository,
       config,
       providers,
+      storage,
       user,
       requestText: body.request_text || body.request || body.prompt,
       conversationId: String(body.conversation_id || body.context?.conversation_id || ""),
-      projectId: String(body.project_id || "")
+      projectId: String(body.project_id || ""),
+      fileIds: fileIdsFromRequest(body)
     });
     return { status: 200, payload: planned };
   }
@@ -848,7 +866,7 @@ const handleFunction = async ({
   if (name === "execute-creation") {
     return {
       status: 200,
-      payload: await executeCreationPlan({ repository, config, user, body })
+      payload: await executeCreationPlan({ repository, config, storage, user, body })
     };
   }
 
@@ -965,7 +983,7 @@ const handleFunction = async ({
       throw new HttpError(501, "storage_not_configured", "Private object storage is not configured");
     }
     const artifactId = String(body.artifact_id || "");
-    const record = await repository.getStoredObject(artifactId, user);
+    const record = await repository.getStoredObject(artifactId, { ...user, role: "user" });
     if (!record) throw new HttpError(404, "artifact_not_found", "Artifact was not found");
     return {
       status: 200,
@@ -982,7 +1000,7 @@ const handleFunction = async ({
 
   if (name === "refresh-generation-job" || name === "get-creation-status") {
     const jobId = String(body.job_id || "");
-    const job = await repository.getJob(jobId, user);
+    const job = await repository.getJob(jobId, { ...user, role: "user" });
     if (!job) throw new HttpError(404, "job_not_found", "Job was not found");
     return { status: 200, payload: { data: { job: publicJob(job) } } };
   }
