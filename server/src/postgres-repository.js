@@ -251,14 +251,14 @@ export class PostgresRepository {
   }
 
   async updatePassword(id, passwordHash) {
-    const result = await this.pool.query(
-      `UPDATE iabt_users
-       SET password_hash = $2, updated_at = now()
-       WHERE id = $1
-       RETURNING *`,
-      [id, passwordHash]
-    );
-    return safeUser(result.rows[0]);
+    return this.withTransaction(async (client) => {
+      const result = await client.query(
+        "UPDATE iabt_users SET password_hash = $2, email_verified = true, updated_at = now() WHERE id = $1 RETURNING *",
+        [id, passwordHash]
+      );
+      await client.query("DELETE FROM iabt_auth_sessions WHERE user_id = $1", [id]);
+      return safeUser(result.rows[0]);
+    });
   }
 
   async createSession({ tokenHash, userId, expiresAt, expectedPasswordHash }) {
@@ -421,16 +421,19 @@ export class PostgresRepository {
     return result.rows[0] ? recordFromRow(result.rows[0]) : null;
   }
 
-  async createRecord(entityName, user, input) {
-    const id = createId();
+  async createRecord(entityName, user, input, { id = createId() } = {}) {
     const result = await this.pool.query(
       `INSERT INTO iabt_entity_records
         (entity_name, id, owner_id, payload)
        VALUES ($1, $2, $3, $4::jsonb)
+       ON CONFLICT (entity_name, id) DO NOTHING
        RETURNING entity_name, id, owner_id, payload, created_at, updated_at`,
       [entityName, id, user.id, JSON.stringify(sanitizeRecordInput(input))]
     );
-    return recordFromRow(result.rows[0]);
+    if (result.rows[0]) return recordFromRow(result.rows[0]);
+    const existing = await this.getRecord(entityName, id, { ...user, role: "user" });
+    if (!existing) throw Object.assign(new Error("Record identity conflict"), { code: "record_conflict", status: 409 });
+    return existing;
   }
 
   async updateRecord(entityName, id, user, input) {
@@ -595,6 +598,7 @@ export class PostgresRepository {
     maxAttempts = 3
   }) {
     return this.withTransaction(async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`job:${ownerId}:${idempotencyKey}`]);
       const existing = await client.query(
         "SELECT * FROM iabt_jobs WHERE owner_id = $1 AND idempotency_key = $2 LIMIT 1",
         [ownerId, idempotencyKey]
@@ -617,7 +621,7 @@ export class PostgresRepository {
       }
       const id = createId();
       const inserted = await client.query(
-        "INSERT INTO iabt_jobs (id, owner_id, job_type, input, approval, idempotency_key, credit_amount, max_attempts) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8) RETURNING *",
+        "INSERT INTO iabt_jobs (id, owner_id, job_type, status, input, approval, idempotency_key, credit_amount, max_attempts) VALUES ($1, $2, $3, 'queued', $4::jsonb, $5::jsonb, $6, $7, $8) RETURNING *",
         [
           id,
           ownerId,
@@ -657,6 +661,15 @@ export class PostgresRepository {
       [jobId, workerId]
     );
     return result.rowCount === 1;
+  }
+
+  async checkpointJob({ jobId, workerId, outputPatch = {} }) {
+    const result = await this.pool.query(
+      "UPDATE iabt_jobs SET output = output || $3::jsonb, updated_at = now() WHERE id = $1 AND status = 'running' AND locked_by = $2 RETURNING *",
+      [jobId, workerId, JSON.stringify(outputPatch)]
+    );
+    if (!result.rows[0]) throw Object.assign(new Error("Job lease is no longer owned by this worker"), { code: "job_lease_lost" });
+    return jobFromRow(result.rows[0]);
   }
 
   async createStoredObject({
@@ -730,6 +743,7 @@ export class PostgresRepository {
       }
       const stored = storedArtifacts[0] || null;
       const finalOutput = {
+        ...job.output,
         ...output,
         ...(stored
           ? {
@@ -860,6 +874,7 @@ export class PostgresRepository {
         [
           job.id,
           JSON.stringify({
+            ...job.output,
             incident_id: incident.id,
             recovery: "credit_release",
             released_credits: job.credit_amount

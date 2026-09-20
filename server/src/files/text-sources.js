@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { extname } from "node:path";
+import { classifyFailure } from "../autonomy/recovery.js";
 
 // Storage accepts opaque uploads, but source review is deliberately narrower.
 // These fixed ceilings also apply at approval and worker execution.
@@ -78,7 +79,20 @@ export const readTextSources = async ({ repository, storage, user, fileIds, expe
       bytes = await storage.read(record.storage_key, { maxBytes: SOURCE_LIMITS.fileBytes });
     } catch (error) {
       if (error.code === "source_too_large") throw error;
-      fail(409, "source_unavailable", "An attached file could not be read from private storage. Upload it again or try later.");
+      const status = Number(error?.$metadata?.httpStatusCode || error?.statusCode || error?.status);
+      const unavailablePermanently = [401, 403, 404].includes(status) ||
+        ["ENOENT", "EACCES", "EPERM", "NoSuchKey", "NoSuchBucket", "AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch"].includes(error?.code || error?.name);
+      // Preserve only the retry classification, never a provider body, path,
+      // signed URL or credentials in the safe public error. Known missing or
+      // denied sources still fail immediately; temporary transport/service
+      // failures retain the original job and its bounded retry reservation.
+      const retryable = !unavailablePermanently && (classifyFailure(error).retryable ||
+        error?.$retryable?.throttling === true || status === 429 || (status >= 500 && status <= 599));
+      throw Object.assign(new Error(retryable
+        ? "An attached file is temporarily unavailable in private storage. Try again after the service recovers."
+        : "An attached file could not be read from private storage. Upload it again or try later."), {
+        status: retryable ? 503 : 409, code: "source_unavailable", retryable
+      });
     }
     if (!Buffer.isBuffer(bytes) || bytes.length !== Number(record.size_bytes) ||
         createHash("sha256").update(bytes).digest("hex") !== record.sha256) {

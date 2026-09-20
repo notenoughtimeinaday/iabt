@@ -89,6 +89,15 @@ export const loadConfig = (env = process.env) => {
       pollMs: asPositiveInteger(env.IABT_JOB_POLL_MS, 1500),
       leaseMs: asPositiveInteger(env.IABT_JOB_LEASE_MS, 5 * 60 * 1000)
     }),
+    orchestration: Object.freeze({
+      enabled: asBoolean(env.IABT_ENABLE_ORCHESTRATION),
+      budgetAccepted: asBoolean(env.IABT_ORCHESTRATION_BUDGET_ACCEPTED),
+      responseCostCents: asPositiveInteger(env.IABT_OPENAI_RESPONSE_COST_CENTS, 0),
+      budgetCents: asPositiveInteger(env.IABT_ORCHESTRATION_BUDGET_CENTS, 0),
+      maxTurns: Math.min(asPositiveInteger(env.IABT_ORCHESTRATION_MAX_TURNS, 8), 8),
+      maxPolls: Math.min(asPositiveInteger(env.IABT_ORCHESTRATION_MAX_POLLS, 120), 120),
+      maxOutputTokens: Math.min(asPositiveInteger(env.IABT_ORCHESTRATION_MAX_OUTPUT_TOKENS, 6000), 6000)
+    }),
     storage: Object.freeze({
       provider: storageProvider,
       localDirectory: env.IABT_LOCAL_STORAGE_DIR || ".iabt-storage",

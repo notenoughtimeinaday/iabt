@@ -107,6 +107,10 @@ export class MemoryRepository {
     const user = this.users.get(id);
     if (!user) return null;
     user.password_hash = passwordHash;
+    user.email_verified = true;
+    for (const [key, session] of this.sessions) {
+      if (session.user_id === id) this.sessions.delete(key);
+    }
     user.updated_date = nowIso();
     return publicUser(user);
   }
@@ -224,11 +228,16 @@ export class MemoryRepository {
     return this.canAccess(record, user) ? clone(record) : null;
   }
 
-  async createRecord(entityName, user, input) {
+  async createRecord(entityName, user, input, { id = createId() } = {}) {
+    const existing = this.entityMap(entityName).get(id);
+    if (existing) {
+      if (existing.owner_id !== user.id) throw Object.assign(new Error("Record identity conflict"), { code: "record_conflict", status: 409 });
+      return clone(existing);
+    }
     const timestamp = nowIso();
     const record = {
       ...sanitizeRecordInput(input),
-      id: createId(),
+      id,
       owner_id: user.id,
       created_date: timestamp,
       updated_date: timestamp
@@ -453,6 +462,16 @@ export class MemoryRepository {
     return true;
   }
 
+  async checkpointJob({ jobId, workerId, outputPatch = {} }) {
+    const job = this.jobs.get(jobId);
+    if (!job || job.status !== "running" || job.locked_by !== workerId) {
+      throw Object.assign(new Error("Job lease is no longer owned by this worker"), { code: "job_lease_lost" });
+    }
+    job.output = { ...job.output, ...clone(outputPatch) };
+    job.updated_date = nowIso();
+    return clone(job);
+  }
+
   async createStoredObject({
     id = createId(),
     ownerId,
@@ -519,6 +538,7 @@ export class MemoryRepository {
     const timestamp = nowIso();
     job.status = "succeeded";
     job.output = {
+      ...clone(job.output),
       ...clone(output),
       ...(stored
         ? {
@@ -623,6 +643,7 @@ export class MemoryRepository {
     };
     this.incidents.set(incident.id, incident);
     job.output = {
+      ...clone(job.output),
       incident_id: incident.id,
       recovery: "credit_release",
       released_credits: job.credit_amount

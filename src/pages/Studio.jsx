@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import FileUploader from "@/components/FileUploader";
+import JerichoLearningPanel from "@/components/JerichoLearningPanel";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -55,10 +56,10 @@ const MODE_OPTIONS = [
   { id: "video", label: "Video", icon: Video, description: "MP4 rendering when active · preproduction otherwise" },
   { id: "audio", label: "Audio", icon: Music2, description: "Playable MP3 when active · preproduction otherwise" },
   { id: "document", label: "Document", icon: FileText, description: "Detailed, useful written deliverables" },
-  { id: "code", label: "Code", icon: Code2, description: "Implementation-ready source and technical plans" },
+  { id: "code", label: "Code", icon: Code2, description: "Source packages with testing still required" },
   { id: "design", label: "Design", icon: Palette, description: "Professional visual systems and specifications" },
-  { id: "gcode", label: "G-code", icon: Box, description: "Machine-ready planning with safety checks" },
-  { id: "automation", label: "Automation", icon: Workflow, description: "Repeatable workflows and integrations" },
+  { id: "gcode", label: "G-code", icon: Box, description: "Simulation plans and machine setup checklists" },
+  { id: "automation", label: "Automation", icon: Workflow, description: "Runbooks for review before activation" },
 ];
 
 const AUTO_STARTERS = [
@@ -262,6 +263,7 @@ export default function Studio() {
   const artifactAccessRef = useRef({});
   const attachmentTracker = useRef(createAttachmentTracker());
   const switchingConversationRef = useRef(false);
+  const submissionRef = useRef(null);
   const [prompt, setPrompt] = useState(() => setupProvider
     ? "Help me connect " + readable(setupProvider) + " to my IABT projects. Use the safest authorization method, keep credentials out of prompts and generated code, explain who pays provider costs, and verify the connection before using it."
     : "");
@@ -281,9 +283,10 @@ export default function Studio() {
   const [artifactAccessUrls, setArtifactAccessUrls] = useState({});
   const [capabilities, setCapabilities] = useState([]);
   const [connectionFabric, setConnectionFabric] = useState(null);
-  const [autonomyProfile, setAutonomyProfile] = useState(null);
+  const [_autonomyProfile, setAutonomyProfile] = useState(null);
   const [entitlement, setEntitlement] = useState(null);
   const [monthlyUsed, setMonthlyUsed] = useState(0);
+  const [standaloneCredits, setStandaloneCredits] = useState(null);
   const [loading, setLoading] = useState(true);
   const [conversationBusy, setConversationBusy] = useState(false);
   const [sending, setSending] = useState(false);
@@ -316,7 +319,7 @@ export default function Studio() {
   const executionMode = activePlan?.provider_ready && activePlan?.render_ready ? "render" : "prepare";
   const monthlyLimit = Number(entitlement?.ai_monthly_limit || 0);
   const bonusCredits = Number(entitlement?.bonus_ai_credits || 0);
-  const remainingCredits = Math.max(0, monthlyLimit - monthlyUsed) + bonusCredits;
+  const remainingCredits = standaloneCredits ?? (Math.max(0, monthlyLimit - monthlyUsed) + bonusCredits);
   const assetScopeId = assetScopeFor(conversation?.id, targetProjectId);
   const attachedAssets = platformRuntime.backend === "standalone" ? assets : assets.slice(0, ATTACHED_ASSET_LIMIT);
 
@@ -377,8 +380,9 @@ export default function Studio() {
       setJobs(jobRows || []);
       setArtifacts(artifactRows || []);
       const entitlementPayload = entitlementResponse?.data || entitlementResponse;
-      if (entitlementPayload?.entitlement) {
-        setEntitlement(entitlementPayload.entitlement);
+      if (platformRuntime.backend === "standalone" && Number.isFinite(entitlementPayload?.credits_remaining)) setStandaloneCredits(entitlementPayload.credits_remaining);
+      if (entitlementPayload) {
+        setEntitlement(entitlementPayload.entitlement || entitlementPayload);
         setMonthlyUsed(Number(entitlementPayload?.usage?.monthly_used || 0));
       }
       void resolvePrivateArtifacts(artifactRows || []);
@@ -490,7 +494,8 @@ export default function Studio() {
         setAutonomyProfile(autonomyPayload || null);
 
         const entitlementPayload = entitlementResponse?.data || entitlementResponse;
-        setEntitlement(entitlementPayload?.entitlement || null);
+        if (platformRuntime.backend === "standalone" && Number.isFinite(entitlementPayload?.credits_remaining)) setStandaloneCredits(entitlementPayload.credits_remaining);
+        setEntitlement(entitlementPayload?.entitlement || entitlementPayload || null);
         setMonthlyUsed(Number(entitlementPayload?.usage?.monthly_used || 0));
 
         if (conversationRows?.[0]?.id) {
@@ -601,40 +606,35 @@ export default function Studio() {
       const uploadedAssets = scopedAssets
         .slice(0, ATTACHED_ASSET_LIMIT)
         .map(assetForContext);
-      const autonomyPolicy = autonomyProfile?.policy || {};
       if (platformRuntime.backend === "standalone" && uploadedAssets.some((asset) => !asset.file_id)) {
         throw new Error("An older attachment has no permanent file reference. Remove it from this conversation and upload it again before requesting a file report.");
       }
-      const advancementContext = {
-        enabled: softwareAdvancementEnabled,
-        mode: autonomyPolicy.mode || "bounded_autonomous",
-        scope: targetProjectId ? "existing_project_revision" : "current_creation",
-        allowed_action_classes: autonomyPolicy.allowed_action_classes || ["read", "plan", "internal_reversible_write", "test", "create_artifact"],
-        always_confirm_action_classes: autonomyPolicy.always_confirm_action_classes || ["external_representation", "financial", "destructive", "access_change", "sensitive_transmission", "machine_control"],
-        max_runtime_minutes: Number(autonomyPolicy.max_runtime_minutes || 30),
-        approval_boundary: "JERICHO may advance safe internal software work, but external, financial, destructive, access-changing, sensitive-data, and machine-control actions still require explicit approval.",
-      };
+      const submissionKey = JSON.stringify([target.id, request, uploadedAssets.map((asset) => asset.file_id), softwareAdvancementEnabled]);
+      if (submissionRef.current?.key !== submissionKey) submissionRef.current = { key: submissionKey, id: crypto.randomUUID() };
 
       const sent = await base44.agents.addMessage(target, {
         role: "user",
         content: request,
-        ...(platformRuntime.backend === "standalone" ? { file_ids: uploadedAssets.map((asset) => asset.file_id) } : {}),
+        ...(platformRuntime.backend === "standalone" ? {
+          file_ids: uploadedAssets.map((asset) => asset.file_id),
+          submission_id: submissionRef.current.id,
+          quote_only: !softwareAdvancementEnabled,
+        } : {}),
         custom_context: [{
           type: "iabt_creation_request",
-          message: "Infer the correct output type and required integrations from the user's objective. Use this exact conversation_id when calling plan-creation: " + target.id + "." + (targetProjectId ? " This is an existing app revision: pass this exact top-level project_id to inspect-project and plan-creation: " + targetProjectId + ", and keep selected_mode as app for the revision." : " Do not invent or pass selected_mode; let the server infer intent from the full request.") + (uploadedAssets.length ? " Include the uploaded file IDs and asset_scope_id in plan-creation context so JERICHO can use those files as references." : "") + " Plan and quote first. Never execute without explicit approval.",
+          message: "Infer the requested output and preserve its conversation, project and attached file references. The server owns execution policy, tool authorization, spending limits and approval requirements.",
           data: {
             routing_mode: "automatic",
             conversation_id: target.id,
             asset_scope_id: scopeId,
             uploaded_asset_ids: uploadedAssets.map((asset) => asset.id).filter(Boolean),
             uploaded_assets: uploadedAssets,
-            software_advancement: advancementContext,
             ...(targetProjectId ? { project_id: targetProjectId, selected_mode: "app" } : {}),
-            approval_required: true,
             surface: "creator_studio",
           },
         }],
       });
+      submissionRef.current = null;
       setMessages((current) => [...current.filter((item) => item.id !== sent.id), sent]);
       setPrompt("");
       setPlans([]);
@@ -783,7 +783,7 @@ export default function Studio() {
             <Gauge />
             <span>
               <strong>{remainingCredits} credits available</strong>
-              <small>{readable(entitlement?.plan || "free")} plan · usage shown before approval</small>
+              <small>{readable(entitlement?.plan || "free")} plan · IABT credits fund private creation</small>
             </span>
           </div>
           <Link to="/deliverables"><Download /> Deliverable library</Link>
@@ -842,25 +842,22 @@ export default function Studio() {
             >
               <div className="creator-welcome-orb"><img src="/iabt-mark.svg" alt="" /></div>
               <p className="creator-kicker">Intelligent Application Building Tool · JERICHO Studio</p>
-              <h1>Tell JERICHO the objective. It figures out how to get there.</h1>
+              <h1>Tell JERICHO what you want to create.</h1>
               <p className="creator-welcome-copy">
-                Describe the result—not the file type. JERICHO infers the output, identifies only the integrations
-                it needs, shows the cost and missing authorization, then verifies the finished deliverable.
+                Describe your deliverable and attach supported files. Eligible private work can run automatically
+                using IABT credits, with no external provider charge. Paid services and consequential actions need your approval.
               </p>
               <div className="creator-fabric-strip">
                 <Network />
                 <div>
-                  <strong>Provider-neutral connection fabric</strong>
+                  <strong>Available tools and connection options</strong>
                   <span>
                     {connectionFabric?.adapters?.length
-                      ? connectionFabric.adapters.length + " registered adapter paths · readiness verified before use"
-                      : "Models · media · business systems · enterprise gateways · custom tools"}
+                      ? connectionFabric.adapters.length + " registered options · availability depends on setup"
+                      : "Check integrations for available providers and setup"}
                   </span>
                   <small>
-                    {readable(autonomyProfile?.autonomy?.mode || "bounded_autonomous")}
-                    {" · "}
-                    {autonomyProfile?.autonomy?.proven_runbook_count || 0} proven runbooks
-                    {" · "}API-first, isolated computer fallback
+                    Creation uses the tools available in Studio. Connection settings do not establish a working integration.
                   </small>
                 </div>
               </div>
@@ -870,7 +867,7 @@ export default function Studio() {
                 <div>
                   <strong>Automatic output and tool selection</strong>
                   <p>Describe the outcome in plain language. JERICHO identifies whether it needs an app, website, document, media file, code, automation, or a combination.</p>
-                  <small>{capabilities.length || "Multiple"} verified output paths · integrations requested only when the objective needs them</small>
+                  <small>{capabilities.length || "Available"} creation options · review each plan’s availability and limits</small>
                 </div>
                 <Link to="/integrations"><PlugZap /> Integrations</Link>
               </div>
@@ -989,8 +986,8 @@ export default function Studio() {
                 onChange={(event) => setSoftwareAdvancementEnabled(event.target.checked)}
               />
               <span><ShieldCheck /></span>
-              <strong>Bounded software advancement</strong>
-              <small>JERICHO may plan, repair, test, and update safe internal project work; protected actions still stop for approval.</small>
+              <strong>Automatically create safe private work</strong>
+              <small>Reserve existing IABT credits for reversible work with no external provider cost. Spending and consequential actions require approval. Turn off for a quote first.</small>
             </label>
 
             <textarea
@@ -1006,10 +1003,10 @@ export default function Studio() {
               maxLength={12000}
             />
             <div className="creator-composer-foot">
-              <span><Check /> Files, bounded autonomy, cost, and verification are included before approval.</span>
+              <span><Check /> Private creation uses IABT credits. External costs require your approval.</span>
               <Button type="submit" disabled={!prompt.trim() || sending || conversationBusy || Boolean(attachmentTracker.current.planningError())}>
                 {sending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                Plan objective
+                {softwareAdvancementEnabled ? "Create outcome" : "Plan objective"}
               </Button>
             </div>
           </form>
@@ -1028,7 +1025,7 @@ export default function Studio() {
           <div className="creator-plan-empty">
             <div><Braces /></div>
             <strong>Your plan will appear here</strong>
-            <p>JERICHO will show production readiness, IABT credits, and the exact customer total before asking for approval.</p>
+            <p>JERICHO starts eligible private work automatically and shows a quote when your approval is required.</p>
           </div>
         ) : (
           <motion.section
@@ -1052,7 +1049,7 @@ export default function Studio() {
               </div>
               <div>
                 <span className={activePlan.render_ready ? "is-ready" : "is-prepare"}>{activePlan.render_ready ? <Play /> : <FileText />}</span>
-                <p><strong>{activePlan.render_ready ? "Final renderer configured" : "Preparation package available"}</strong><small>{activePlan.render_ready ? "Balance and provider capacity are confirmed when the approved job is submitted" : "Produces detailed, usable production assets"}</small></p>
+                <p><strong>{activePlan.render_ready ? "Output route configured" : "Preparation package available"}</strong><small>{activePlan.render_ready ? "Configured tools still need successful execution and file checks" : "Produces planning documents for review"}</small></p>
               </div>
             </div>
 
@@ -1078,7 +1075,7 @@ export default function Studio() {
 
             <div className="creator-quote creator-quote-compact">
               <div className="creator-quote-title">
-                <span><CircleDollarSign /> Approval summary</span>
+                <span><CircleDollarSign /> {activePlan.autonomy_policy?.automatic && activePlan.status !== "quoted" ? "Execution summary" : "Approval summary"}</span>
               </div>
               <dl>
                 <div className="is-total"><dt>IABT cost</dt><dd>{Number(activePlan.credit_cost || 0)} credits</dd></div>
@@ -1086,9 +1083,9 @@ export default function Studio() {
                 <div><dt>Charge rule</dt><dd>Capture after verified delivery</dd></div>
               </dl>
               <p>{activePlan.consent_summary || "No billing action occurs until you explicitly approve."}</p>
-              <small className={quoteExpired ? "is-expired" : ""}>
+              {activePlan.status === "quoted" && <small className={quoteExpired ? "is-expired" : ""}>
                 {quoteExpired ? "This quote has expired. Ask JERICHO to refresh it." : "Valid until " + formatDate(activePlan.quote_expires_at)}
-              </small>
+              </small>}
             </div>
 
             <details className="creator-plan-details">
@@ -1177,6 +1174,8 @@ export default function Studio() {
           </section>
         )}
 
+        {platformRuntime.backend === "standalone" && <JerichoLearningPanel />}
+
         {artifacts.length > 0 && (
           <section className="creator-artifacts">
             <div className="creator-section-title"><span>Deliverables</span><small>{artifacts.length} ready</small></div>
@@ -1198,7 +1197,7 @@ export default function Studio() {
                   <div className="creator-artifact-info">
                     <span className="creator-artifact-kind">{readable(artifact.kind)}</span>
                     <strong>{artifact.name}</strong>
-                    <small>{artifact.mime_type || "IABT deliverable"} · IABT verified delivery</small>
+                    <small>{artifact.mime_type || "IABT deliverable"} · Private saved file</small>
                     {artifact.metadata?.rendered === false && (
                       <p className="creator-artifact-limitation">
                         This is a {artifact.metadata?.requested_kind || "media"} preproduction document. No playable media file was rendered.

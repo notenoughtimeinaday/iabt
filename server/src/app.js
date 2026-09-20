@@ -12,6 +12,7 @@ import {
 import { readSingleFile } from "./multipart.js";
 import {
   createCreationPlan,
+  creationRequestDisposition,
   executeCreationPlan
 } from "./creation/planner.js";
 import { processStripeWebhook } from "./billing/stripe-webhook.js";
@@ -27,12 +28,15 @@ import { SUPPORTED_AGENT_NAMES, respondToSupportRequest, buildJerichoKnowledge }
 import { handleExchangeFunction } from "./functions/exchange.js";
 import { handleIntegrationFunction } from "./functions/integrations.js";
 import { fileIdsFromRequest } from "./files/text-sources.js";
+import { capabilityRegistry } from "./autonomy/capabilities.js";
+import { loadLearningContext, recordUserCorrection, resolveUserCorrection, withdrawLesson, proposeImprovement, listImprovementProposals } from "./learning/service.js";
 
 const WORKFLOW_ENTITIES = new Set([
   "AgentConversation", "CollaborationProfile", "ProjectNeed", "MatchRecord",
   "IntroductionRequest", "CollaborationRoom", "RoomMessage", "CredentialClaim",
   "ExchangeBlock", "ExchangeSafetyReport", "ExchangeAuditEvent",
-  "IntegrationConnection", "ConnectionAdapter", "CommercialPolicy", "ProviderAgreement"
+  "IntegrationConnection", "ConnectionAdapter", "CommercialPolicy", "ProviderAgreement",
+  "JerichoLesson", "JerichoImprovementProposal"
 ]);
 
 class HttpError extends Error {
@@ -182,6 +186,7 @@ const authenticate = async (req, repository) => {
   if (!session) throw new HttpError(401, "invalid_session", "Session is invalid or expired");
   const user = await repository.getUser(session.user_id);
   if (!user) throw new HttpError(401, "invalid_session", "Session user no longer exists");
+  if (!user.email_verified) throw new HttpError(403, "email_verification_required", "Verify your email before continuing");
   return { user, token };
 };
 
@@ -231,6 +236,9 @@ const handleAuth = async ({
       });
       if (!user) throw new HttpError(409, "email_exists", "An account already exists. Please sign in or request a verification code.");
     }
+    // Existing migrated accounts use recovery, so this allowance applies only
+    // to fresh signups/retries authenticated with their original password.
+    await repository.grantCredits({ ownerId: user.id, amount: 10, idempotencyKey: "signup:free:v1", metadata: { source: "initial_free_allowance" } });
     const challenge = await issueChallenge(
       repository,
       config,
@@ -506,22 +514,43 @@ const handleAgents = async ({
     if (body.role && body.role !== "user") throw new HttpError(400, "invalid_message_role", "Only user messages can be submitted");
     if (typeof body.content !== "string" || !body.content.trim() || body.content.length > 20000) throw new HttpError(400, "invalid_message", "Enter a message of at most 20,000 characters");
     const fileIds = fileIdsFromRequest(body);
+    const submissionId = String(body.submission_id || "");
+    if (submissionId.length > 200) throw new HttpError(400, "invalid_submission_id", "Submission identifier is too long");
+    const submissionFingerprint = createHash("sha256").update(JSON.stringify({ content: body.content, file_ids: [...fileIds].sort(), quote_only: body.quote_only === true })).digest("hex");
+    const replay = (record) => {
+      const previous = submissionId && record.messages?.find((message) => message.role === "user" && message.submission_id === submissionId);
+      if (!previous) return null;
+      if (previous.submission_fingerprint !== submissionFingerprint) throw new HttpError(409, "submission_conflict", "This submission identifier was already used for a different message");
+      return { status: 200, payload: record };
+    };
     // Validate every attachment before recording a message or quoting a job.
     // S3 reads must happen outside the shared record transaction lock.
-    const sourceConversation = fileIds.length ? await repository.getRecord("AgentConversation", conversationId, actor) : null;
-    if (fileIds.length && !sourceConversation) throw new HttpError(404, "conversation_not_found", "Conversation was not found");
-    const attachedPlan = fileIds.length ? await createCreationPlan({
+    const sourceConversation = await repository.getRecord("AgentConversation", conversationId, actor);
+    if (!sourceConversation) throw new HttpError(404, "conversation_not_found", "Conversation was not found");
+    const previousResponse = replay(sourceConversation);
+    if (previousResponse) return previousResponse;
+    const support = !fileIds.length && await respondToSupportRequest({ repository, user, providers, storage, config, requestText: body.content, agentName: sourceConversation.agent_name });
+    const disposition = creationRequestDisposition(body.content);
+    const conversationalResponse = support || (!disposition.create ? { content: disposition.response, metadata: { execution: "not_requested" } } : null);
+    // Planning, storage reads and job enqueue run outside the conversation lock.
+    // The PostgreSQL record adapter intentionally cannot start nested transactions.
+    const attachedPlan = !conversationalResponse ? await createCreationPlan({
       repository, config, providers, storage, user,
       requestText: body.content, conversationId,
-      projectId: String(sourceConversation.metadata?.project_id || ""), fileIds
+      projectId: String(sourceConversation.metadata?.project_id || ""), fileIds,
+      automatic: body.quote_only !== true,
+      submissionId
     }) : null;
     return repository.withRecordTransaction(async (repository) => {
     const record = await repository.getRecord("AgentConversation", conversationId, actor);
     if (!record) throw new HttpError(404, "conversation_not_found", "Conversation was not found");
+    const concurrentResponse = replay(record);
+    if (concurrentResponse) return concurrentResponse;
     const message = {
       id: createId(),
       role: "user",
       content: String(body.content || ""),
+      ...(submissionId ? { submission_id: submissionId, submission_fingerprint: submissionFingerprint } : {}),
       ...(attachedPlan ? { file_ids: fileIds, file_references: attachedPlan.plan.file_references } : {}),
       created_date: new Date().toISOString()
     };
@@ -536,23 +565,13 @@ const handleAgents = async ({
 
     if (message.role === "user" && message.content.trim().length >= 3) {
       try {
-        const support = !attachedPlan && await respondToSupportRequest({ repository, user, providers, storage, config, requestText: message.content, agentName: record.agent_name });
-        if (support) {
+        if (conversationalResponse) {
           updated = await repository.updateRecord("AgentConversation", conversationId, actor, {
-            messages: [...messages, { ...support, id: createId(), role: "assistant", created_date: new Date().toISOString() }]
+            messages: [...messages, { ...conversationalResponse, id: createId(), role: "assistant", created_date: new Date().toISOString() }]
           });
           return { status: 200, payload: updated };
         }
-        const planned = attachedPlan || await createCreationPlan({
-          repository,
-          config,
-          providers,
-          storage,
-          user,
-          requestText: message.content,
-          conversationId,
-          projectId: String(record.metadata?.project_id || "")
-        });
+        const planned = attachedPlan;
         const plan = planned.plan;
         const assistant = {
           id: createId(),
@@ -568,9 +587,9 @@ const handleAgents = async ({
             plan.credit_cost +
             " IABT credit" +
             (plan.credit_cost === 1 ? "" : "s") +
-            ". Review the approval panel before production.",
+            (planned.job ? ". Execution status: " + planned.job.status + ". Track the job below for its saved result and verification evidence." : ". Review the approval panel before execution."),
           created_date: new Date().toISOString(),
-          metadata: { plan_id: plan.id, intent: plan.intent }
+          metadata: { plan_id: plan.id, intent: plan.intent, ...(planned.job ? { job_id: planned.job.id, automatic_execution: true } : {}) }
         };
         messages = [...messages, assistant];
         updated = await repository.updateRecord("AgentConversation", conversationId, actor, {
@@ -700,6 +719,7 @@ const handleFiles = async ({
 
 const publicJob = (job) => ({
   id: job.id,
+  job_type: job.job_type,
   user_id: job.owner_id,
   plan_id: job.input?.plan_id || job.output?.plan_id || "",
   conversation_id: job.input?.conversation_id || job.output?.conversation_id || "",
@@ -723,7 +743,11 @@ const publicJob = (job) => ({
           : 5,
   stage:
     job.status === "succeeded"
-      ? "Deliverables created and verified"
+      ? job.output?.provider_metadata?.delivery_mode === "template_fallback"
+        ? "Template fallback saved; review its limitations"
+        : job.output?.provider_metadata?.orchestration?.incomplete
+          ? "Partial deliverables saved; objective remains incomplete"
+          : "Deliverables created and storage verified"
       : job.status === "failed"
         ? "Production failed; reserved credits restored"
         : job.status === "needs_setup"
@@ -742,6 +766,15 @@ const publicJob = (job) => ({
           ? "reserved"
           : "none",
   artifact_id: job.output?.artifact_id || "",
+  limitations: Array.isArray(job.output?.provider_metadata?.limitations) ? job.output.provider_metadata.limitations.map(String).slice(0, 12) : [],
+  execution: job.output?.orchestration ? {
+    phase: job.output.orchestration.phase,
+    model_turns: job.output.orchestration.turn,
+    inspected_file_count: (job.output.orchestration.inspected_file_ids || []).length,
+    // Arguments, source content, provider responses and encoded files stay private.
+    graph: (job.output.orchestration.execution_graph?.nodes || []).map(({ id, tool, depends_on, status }) => ({ id, tool, depends_on, status })),
+    recovery_count: (job.output.orchestration.failures || []).length
+  } : null,
   error_message: job.last_error_message || "",
   diagnosis: {
     error_code: job.last_error_code || "",
@@ -838,6 +871,20 @@ const handleFunction = async ({
   if (req.method !== "POST") throw new HttpError(405, "method_not_allowed", "Method is not allowed");
   const { user } = await authenticate(req, repository);
   const name = decodeURIComponent(segments[2] || "");
+
+  if (name === "get-capability-registry") {
+    return { status: 200, payload: { data: await capabilityRegistry({ repository, config, providers, storage }) } };
+  }
+  if (name === "get-jericho-learning") {
+    return { status: 200, payload: { data: { ...(await loadLearningContext({ repository, user })), proposals: await listImprovementProposals({ repository, user }) } } };
+  }
+  const learningFunctions = {
+    "record-jericho-correction": () => recordUserCorrection({ repository, user, jobId: body.job_id, category: body.category, requestId: body.request_id }),
+    "resolve-jericho-correction": () => resolveUserCorrection({ repository, user, lessonId: body.lesson_id, jobId: body.job_id, accepted: body.accepted === true }),
+    "withdraw-jericho-lesson": () => withdrawLesson({ repository, user, lessonId: body.lesson_id }),
+    "propose-jericho-improvement": () => proposeImprovement({ repository, user, lessonId: body.lesson_id })
+  };
+  if (Object.hasOwn(learningFunctions, name)) return { status: 200, payload: { data: await learningFunctions[name]() } };
 
   if (name === "accept-policies") {
     const record = await repository.withRecordTransaction((transaction) => recordPolicyAcceptance({ repository: transaction, user, input: body }));

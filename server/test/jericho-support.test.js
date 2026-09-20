@@ -14,6 +14,11 @@ const context = ({ jobs = [], incidents = [], readiness = {} } = {}) => ({
     execute: () => { throw new Error("Diagnostics cannot execute providers"); }
   },
   repository: {
+    listRecordsExact: async (_entity, account) => {
+      assert.equal(account.id, user.id);
+      assert.equal(account.role, "user");
+      return [];
+    },
     listJobs: async (account, options) => {
       assert.equal(account.role, "user");
       assert.equal(account.id, user.id);

@@ -51,6 +51,7 @@ export const createJobWorker = ({
         repository,
         storage,
         providers,
+        config,
         assertLease: renew,
         pollDelayMs: config.environment === "test"
           ? 0

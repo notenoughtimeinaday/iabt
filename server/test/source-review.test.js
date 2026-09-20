@@ -14,7 +14,7 @@ import { LocalObjectStorage } from "../src/storage/local-storage.js";
 import { S3ObjectStorage } from "../src/storage/s3-storage.js";
 import { createJobWorker } from "../src/worker.js";
 import { createOpaqueToken, hashToken } from "../src/security.js";
-import { SOURCE_LIMITS } from "../src/files/text-sources.js";
+import { SOURCE_LIMITS, readTextSources } from "../src/files/text-sources.js";
 
 const request = "Create a report from the attached files listing their verification markers and requirements.";
 const fixture = async (t) => {
@@ -90,7 +90,7 @@ test("HTTP upload -> saved conversation -> approved worker -> private MD/DOCX/PD
     return read(...args);
   };
   const sent = await f.api(`/v1/agents/conversations/${chat.id}/messages`, { token: alice.token, body: {
-    role: "user", content: request, file_ids: [upload.payload.file_id],
+    role: "user", content: request, file_ids: [upload.payload.file_id], quote_only: true,
     custom_context: [{ text: "FORGED FILE CONTENT MUST NOT APPEAR" }]
   } });
   assert.equal(sent.status, 200);
@@ -307,4 +307,66 @@ test("S3 source reading bounds actual streamed bytes even when ContentLength is 
   assert.equal((await storage.read("owner/object", { maxBytes: 6 })).toString(), "ok");
   storage.client.send = async () => ({ Body: Readable.from([Buffer.from("ignored")]), ContentLength: 100 });
   await assert.rejects(storage.read("owner/object", { maxBytes: 6 }), (error) => error.code === "source_too_large");
+});
+
+test("transient source-storage failures preserve bounded worker retry and capture credits only once after recovery", async (t) => {
+  const f = await fixture(t);
+  const owner = await f.account("source-retry");
+  const upload = await f.upload(owner.token, "SOURCE-RECOVERS-WITHOUT-DUPLICATE-WORK");
+  const plan = (await f.plan(owner.token, [upload.payload.file_id])).payload.plan;
+  const approved = await f.approve(owner.token, plan);
+  assert.equal(approved.status, 200);
+  const read = f.storage.read.bind(f.storage);
+  let failOnce = true;
+  f.storage.read = (...args) => {
+    if (failOnce) {
+      failOnce = false;
+      throw Object.assign(new Error("SECRET provider URL must not escape"), { code: "ECONNRESET" });
+    }
+    return read(...args);
+  };
+  const retry = await f.worker.runOnce();
+  assert.equal(retry.job.status, "queued");
+  assert.equal(retry.job.id, approved.payload.job.id);
+  assert.equal(retry.job.last_error_code, "source_unavailable");
+  assert.equal(retry.released_credits, 0);
+  assert.equal((await f.repository.getCreditAccount(owner.user.id)).reserved_credits, 1);
+  assert.equal(JSON.stringify(retry).includes("SECRET"), false);
+  f.repository.jobs.get(retry.job.id).available_at = new Date(0).toISOString();
+  const completed = await f.worker.runOnce();
+  assert.equal(completed.job.id, retry.job.id);
+  assert.equal(completed.job.status, "succeeded");
+  assert.equal(completed.job.attempt_count, 2);
+  assert.equal(completed.job.output.verified, true);
+  assert.equal(f.repository.creditEntries.filter((entry) => entry.entry_type === "reserve").length, 1);
+  assert.equal(f.repository.creditEntries.filter((entry) => entry.entry_type === "capture").length, 1);
+  assert.equal((await f.repository.getCreditAccount(owner.user.id)).available_credits, 9);
+  assert.equal((await f.repository.getCreditAccount(owner.user.id)).reserved_credits, 0);
+  assert.equal(f.providerCalls(), 0);
+});
+
+test("source read classification retries transport, timeout, throttling and service faults but not missing or denied files", async () => {
+  const user = { id: randomUUID() };
+  const fileId = randomUUID();
+  const record = { id: fileId, owner_id: user.id, storage_provider: "s3", original_name: "source.txt", storage_key: "PRIVATE-KEY", size_bytes: 1, sha256: createHash("sha256").update("a").digest("hex") };
+  const repository = { getStoredObject: async () => record };
+  for (const [fields, expected] of [
+    [{ code: "ECONNRESET" }, true], [{ name: "AbortError" }, true],
+    [{ name: "SlowDown", $metadata: { httpStatusCode: 503 } }, true],
+    [{ name: "Throttling", $retryable: { throttling: true } }, true],
+    [{ $metadata: { httpStatusCode: 429 } }, true],
+    [{ code: "ENOENT" }, false], [{ name: "NoSuchKey", retryable: true }, false],
+    [{ name: "AccessDenied", $metadata: { httpStatusCode: 403 } }, false],
+    [{ $metadata: { httpStatusCode: 404 } }, false], [{ code: "unknown_failure" }, false]
+  ]) {
+    const storage = { kind: "s3", read: async () => { throw Object.assign(new Error("SECRET storage error"), fields); } };
+    await assert.rejects(readTextSources({ repository, storage, user, fileIds: [fileId] }), (error) => {
+      assert.equal(error.code, "source_unavailable");
+      assert.equal(error.retryable, expected);
+      assert.equal(error.status, expected ? 503 : 409);
+      assert.equal(error.message.includes("SECRET"), false);
+      assert.equal(JSON.stringify(error).includes("PRIVATE-KEY"), false);
+      return true;
+    });
+  }
 });
