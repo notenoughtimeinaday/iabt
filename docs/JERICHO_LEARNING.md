@@ -1,5 +1,11 @@
 # Jericho learning and teamwork
 
+The v2 curriculum also teaches [durable scheduled maintenance](JERICHO_MAINTENANCE.md):
+the application can backfill missed outcome lessons, reconcile terminal plan
+state and check eligible artifacts after the chat closes. Its durable schedule
+does not grant authority to modify source or deploy. Staging and payment
+acceptance remain separate evidence requirements.
+
 Jericho now has an evidence retrieval loop: reviewed software updates teach a
 versioned curriculum; finished jobs contribute account-specific observations;
 users record structured corrections; verified delivery and explicit acceptance

@@ -8,7 +8,7 @@ const customerId = (entitlement) =>
 
 const currentEntitlement = async (repository, user) =>
   (
-    await repository.listRecords("AccountEntitlement", user, {
+    await repository.listRecordsExact("AccountEntitlement", { ...user, role: "user" }, {
       query: { user_id: user.id },
       sort: "-updated_date",
       limit: 1
@@ -70,7 +70,6 @@ export const createSubscriptionCheckout = async ({
   plan,
   idempotencyKey
 }) => {
-  assertCheckoutReady(providers);
   if (!["builder", "pro", "agency"].includes(plan)) {
     throw billingError(400, "invalid_subscription_plan", "Plan must be builder, pro, or agency");
   }
@@ -79,21 +78,10 @@ export const createSubscriptionCheckout = async ({
   const hasSubscription =
     customer.startsWith("cus_") &&
     String(entitlement?.provider_subscription_id || "").startsWith("sub_") &&
-    ["active", "trialing", "past_due", "paused"].includes(String(entitlement?.status || ""));
+    !["canceled", "incomplete_expired"].includes(String(entitlement?.status || ""));
 
   if (hasSubscription) {
-    const portal = await createStripeSession({
-      providers,
-      config,
-      user,
-      path: "/billing_portal/sessions",
-      params: {
-        customer,
-        return_url: config.publicOrigin + "/"
-      },
-      action: "portal-existing-subscription",
-      idempotencyKey
-    });
+    const portal = await createCustomerPortal({ repository, providers, config, user, idempotencyKey });
     return {
       ok: true,
       kind: "portal",
@@ -101,6 +89,8 @@ export const createSubscriptionCheckout = async ({
       message: "An existing subscription must be changed through the customer portal."
     };
   }
+
+  assertCheckoutReady(providers);
 
   const metadata = {
     iabt_app_id: config.providers.stripe.metadataAppId,

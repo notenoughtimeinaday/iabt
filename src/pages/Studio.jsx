@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import FileUploader from "@/components/FileUploader";
 import JerichoLearningPanel from "@/components/JerichoLearningPanel";
+import JerichoMaintenancePanel from "@/components/JerichoMaintenancePanel";
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -1175,6 +1176,7 @@ export default function Studio() {
         )}
 
         {platformRuntime.backend === "standalone" && <JerichoLearningPanel />}
+        {platformRuntime.backend === "standalone" && <JerichoMaintenancePanel />}
 
         {artifacts.length > 0 && (
           <section className="creator-artifacts">

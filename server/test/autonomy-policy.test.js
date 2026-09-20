@@ -73,14 +73,14 @@ test("reused terminal jobs repair stale quoted and executing plan projections wi
   await f.repository.updateRecord("CreationPlan", first.plan.id, f.user, { status: "quoted" });
   const replay = await f.execute(first.plan);
   assert.equal(replay.reused, true);
-  assert.equal(replay.plan.status, "succeeded");
+  assert.equal(replay.plan.status, "completed");
   assert.equal(replay.job.status, "succeeded");
   assert.equal(replay.job.usage_state, "captured");
   assert.equal(replay.billing.credits_reserved, false);
   assert.equal(replay.billing.action, "already_finalized");
   await f.repository.updateRecord("CreationPlan", first.plan.id, f.user, { status: "executing" });
   const reloaded = await f.execute(first.plan);
-  assert.equal(reloaded.plan.status, "succeeded");
+  assert.equal(reloaded.plan.status, "completed");
   assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 19);
   assert.equal((await f.repository.listJobs(f.user)).length, 1);
 });
@@ -100,8 +100,8 @@ test("a worker completion between enqueue and plan write cannot be overwritten b
   };
   const result = await f.execute(quoted.plan);
   assert.equal(interleaved, true);
-  assert.equal(result.plan.status, "succeeded");
-  assert.equal((await f.repository.getRecord("CreationPlan", quoted.plan.id, f.user)).status, "succeeded");
+  assert.equal(result.plan.status, "completed");
+  assert.equal((await f.repository.getRecord("CreationPlan", quoted.plan.id, f.user)).status, "completed");
   assert.equal(result.billing.credits_reserved, false);
   assert.equal((await f.repository.getCreditAccount(f.user.id)).reserved_credits, 0);
 });

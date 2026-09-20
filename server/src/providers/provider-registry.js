@@ -108,8 +108,8 @@ export class ProviderRegistry {
       Number.isInteger(p.luma.costPerFiveSecondsCents) &&
       p.luma.costPerFiveSecondsCents > 0;
     const stripeKeyReady =
-      (p.stripe.mode === "test" && p.stripe.secretKey.startsWith("sk_test_")) ||
-      (p.stripe.mode === "live" && p.stripe.secretKey.startsWith("sk_live_"));
+      (p.stripe.mode === "test" && /^[sr]k_test_/.test(p.stripe.secretKey)) ||
+      (p.stripe.mode === "live" && /^[sr]k_live_/.test(p.stripe.secretKey));
     const stripePricesReady =
       Object.values(p.stripe.prices || {}).every((price) => String(price).startsWith("price_")) &&
       String(p.stripe.creditPackPriceId || "").startsWith("price_");

@@ -27,6 +27,7 @@ export const creationRequestDisposition = (requestText) => {
 };
 
 const TERMINAL_JOB_STATUSES = new Set(["succeeded", "failed", "needs_setup", "cancelled"]);
+const terminalPlanStatus = (jobStatus) => jobStatus === "succeeded" ? "completed" : "failed";
 
 export const inferCreationIntent = (requestText) => {
   const text = normalize(requestText).toLowerCase();
@@ -602,8 +603,8 @@ export const executeCreationPlan = async ({
     if (plan.execution_job_id) {
       const existing = await repository.getJob(plan.execution_job_id, user);
       if (!existing) throw Object.assign(new Error("The execution job could not be found"), { status: 409, code: "plan_job_missing" });
-      const reconciled = TERMINAL_JOB_STATUSES.has(existing.status) && plan.status !== existing.status
-        ? await repository.updateRecord("CreationPlan", plan.id, user, { status: existing.status })
+      const reconciled = TERMINAL_JOB_STATUSES.has(existing.status) && plan.status !== terminalPlanStatus(existing.status)
+        ? await repository.updateRecord("CreationPlan", plan.id, user, { status: terminalPlanStatus(existing.status) })
         : plan;
       return { ok: true, reused: true, job: existing, plan: reconciled };
     }
@@ -660,7 +661,7 @@ export const executeCreationPlan = async ({
     maxAttempts: 3
   });
   let updated = await repository.updateRecord("CreationPlan", plan.id, user, {
-    status: TERMINAL_JOB_STATUSES.has(job.status) ? job.status : "executing",
+    status: TERMINAL_JOB_STATUSES.has(job.status) ? terminalPlanStatus(job.status) : "executing",
     approved_at: job.approval?.approved_at || new Date().toISOString(),
     execution_job_id: job.id
   });
@@ -669,8 +670,8 @@ export const executeCreationPlan = async ({
   // completed plan to "executing" or advertise a second credit reservation.
   job = await repository.getJob(job.id, user) || job;
   const terminal = TERMINAL_JOB_STATUSES.has(job.status);
-  if (terminal && updated.status !== job.status) {
-    updated = await repository.updateRecord("CreationPlan", plan.id, user, { status: job.status });
+  if (terminal && updated.status !== terminalPlanStatus(job.status)) {
+    updated = await repository.updateRecord("CreationPlan", plan.id, user, { status: terminalPlanStatus(job.status) });
   }
   await repository.createRecord("ConsentGrant", user, {
     user_id: user.id,

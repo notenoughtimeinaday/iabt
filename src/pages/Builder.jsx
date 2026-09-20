@@ -170,7 +170,7 @@ export default function Builder() {
         ]);
         if (!active) return;
         const entitlementPayload = entitlementResponse?.data || entitlementResponse;
-        setEntitlement(entitlementPayload?.entitlement || null);
+        setEntitlement(entitlementPayload?.entitlement || entitlementPayload || null);
         setBillingStatus(entitlementPayload?.billing || null);
         const remoteDefinition = normalizeAppDefinition(remote.app_definition, remote.title);
         let initial = remoteDefinition;

@@ -3,6 +3,7 @@
 // calls providers, changes permissions, or updates model weights.
 import { loadLearningContext } from "../learning/service.js";
 import { capabilityRegistry } from "../autonomy/capabilities.js";
+import { readMaintenanceStatus } from "../maintenance/service.js";
 export const SUPPORTED_AGENT_NAMES = Object.freeze(["iabt_creator", "iabt_exchange"]);
 
 const FAILURE_GUIDES = [
@@ -84,6 +85,7 @@ export const buildJerichoKnowledge = async ({ repository, user, providers, stora
   const ready = providerSummary(providers?.readiness?.(), user.role);
   const learning = await loadLearningContext({ repository, user });
   const registry = await capabilityRegistry({ repository, config, providers, storage });
+  const maintenance = await readMaintenanceStatus({ repository, user, config });
   return {
     version: "jericho-operations-v1",
     runtime: "standalone",
@@ -91,6 +93,7 @@ export const buildJerichoKnowledge = async ({ repository, user, providers, stora
     evidence_scope: "signed_in_account_latest_50_jobs_and_incidents",
     observed_at: new Date().toISOString(),
     capability_registry: registry,
+    maintenance,
     capabilities: {
       planning: "deterministic_intent_routing_with_server_signed_quotes",
       interactive: "bounded_templates_with_html_preview_and_react_source_zip",
@@ -155,6 +158,7 @@ export const respondToSupportRequest = async (context) => {
     "Available creation paths include bounded app/website templates, document exports, code scaffolds, design boards, simulation-only G-code, and disabled automation runbooks. Media production depends on provider configuration, commercial gates, and an approved quote.",
     "Latest account evidence: " + knowledge.recent_jobs.length + " job(s), " + knowledge.active_incident_count + " unresolved incident(s) in the latest 50 records.",
     "Learning curriculum: " + knowledge.learning.curriculum.version + "; " + knowledge.learning.lessons.length + " retained lesson(s), " + knowledge.learning.successful_recoveries.length + " verified recovery record(s). User corrections remain candidates until accepted against verified delivery. These records guide future work without changing permissions or model weights.",
+    "Scheduled maintenance can reconcile completed job records, retain missing outcome lessons and check stored artifacts while the server is running. Inspect or pause it in Studio under Jericho maintenance. Its saved checks do not authorize paid jobs, code changes or deployment, and do not certify launch readiness.",
     ...knowledge.recent_jobs.slice(0, 5).map((job) =>
       "Job " + job.job_id + ": " + job.status +
       (job.verified_output ? "; verified output recorded" : "; no verified delivery established by this snapshot") +

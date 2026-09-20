@@ -48,6 +48,13 @@ Authenticated function endpoints under `/v1/functions/`:
 | `withdraw-jericho-lesson` | Remove a lesson from active use |
 | `propose-jericho-improvement` | Create or refresh a proposal linked to a lesson |
 | `get-capability-registry` | Read server-owned configuration, blockers, fallbacks and observed local health |
+| `get-jericho-maintenance` | Inspect own durable schedule, progress and integrity findings |
+| `configure-jericho-maintenance` | Pause/resume own schedule or set a bounded interval |
+
+See [durable maintenance](docs/JERICHO_MAINTENANCE.md) for the app-owned loop that
+continues while a worker is running, independently of Codex. It repairs derived
+internal state and verifies bounded artifact reads; it cannot finish arbitrary
+software development or certify launch readiness by itself.
 
 Responses initially receive at most eight relevant typed lessons with compact evidence references. Historical observations are explicitly marked as reference data, not instructions or authorization. The account dashboard can retrieve up to 50 lessons. Raw correction prose and arbitrary prompts are not promoted into the teaching curriculum.
 

@@ -61,6 +61,7 @@ export class MemoryRepository {
     this.incidents = new Map();
     this.storedObjects = new Map();
     this.stripeEvents = new Map();
+    this.maintenanceSchedules = new Map();
   }
 
   async health() {
@@ -292,7 +293,8 @@ export class MemoryRepository {
 
   async startStripeEvent({ eventId, eventType, livemode, payloadSha256 }) {
     const existing = this.stripeEvents.get(eventId);
-    if (existing && existing.status !== "failed") {
+    const stale = existing?.status === "processing" && Date.parse(existing.updated_date) < Date.now() - 15 * 60 * 1000;
+    if (existing && existing.status !== "failed" && !stale) {
       return { claimed: false, event: clone(existing) };
     }
     const timestamp = nowIso();
@@ -301,6 +303,7 @@ export class MemoryRepository {
       event_type: eventType,
       livemode: Boolean(livemode),
       status: "processing",
+      claim_token: createId(),
       payload_sha256: payloadSha256,
       error_code: null,
       created_date: existing?.created_date || timestamp,
@@ -311,9 +314,10 @@ export class MemoryRepository {
     return { claimed: true, event: clone(event) };
   }
 
-  async finishStripeEvent(eventId) {
+  async finishStripeEvent(eventId, { claimToken } = {}) {
     const event = this.stripeEvents.get(eventId);
     if (!event) return null;
+    if (claimToken && (event.status !== "processing" || event.claim_token !== claimToken)) return null;
     event.status = "succeeded";
     event.error_code = null;
     event.updated_date = nowIso();
@@ -321,9 +325,10 @@ export class MemoryRepository {
     return clone(event);
   }
 
-  async failStripeEvent(eventId, errorCode) {
+  async failStripeEvent(eventId, errorCode, { claimToken } = {}) {
     const event = this.stripeEvents.get(eventId);
     if (!event) return null;
+    if (claimToken && (event.status !== "processing" || event.claim_token !== claimToken)) return null;
     event.status = "failed";
     event.error_code = String(errorCode || "stripe_event_failed");
     event.updated_date = nowIso();
@@ -344,6 +349,13 @@ export class MemoryRepository {
 
   async getCreditAccount(ownerId) {
     return clone(this.creditAccount(ownerId));
+  }
+
+  async findLegacyStripeCreditGrants({ checkoutSessionId }) {
+    if (!/^cs_[a-zA-Z0-9_]+$/.test(String(checkoutSessionId || ""))) throw new Error("Invalid checkout session identity");
+    return clone(this.creditEntries.filter((entry) => entry.entry_type === "grant" &&
+      /^stripe:evt_[a-zA-Z0-9_]+$/.test(entry.idempotency_key) &&
+      entry.metadata?.checkout_session_id === checkoutSessionId).slice(0, 2));
   }
 
   async grantCredits({ ownerId, amount, idempotencyKey, metadata = {} }) {
@@ -677,6 +689,7 @@ export class MemoryRepository {
   // Exchange workflows change several records together. Serialize workflows
   // and publish only their record changes after every required write succeeds.
   async withRecordTransaction(callback) {
+    if (this.recordTransactionActive) return callback(this);
     const previous = this.recordTransactionTail || Promise.resolve();
     let release;
     this.recordTransactionTail = new Promise((resolve) => { release = resolve; });
@@ -685,6 +698,8 @@ export class MemoryRepository {
     const transaction = Object.create(this);
     transaction.records = clone(original);
     transaction.auditEvents = [];
+    transaction.recordTransactionActive = true;
+    transaction.maintenanceSchedules = clone(this.maintenanceSchedules);
     try {
       const result = await callback(transaction);
       for (const [entity, rows] of transaction.records) {
@@ -696,6 +711,7 @@ export class MemoryRepository {
         for (const id of before.keys()) if (!rows.has(id)) target.delete(id);
       }
       this.auditEvents.push(...transaction.auditEvents);
+      this.maintenanceSchedules = transaction.maintenanceSchedules;
       return result;
     } finally {
       release();
@@ -704,5 +720,102 @@ export class MemoryRepository {
 
   async listRecordsExact(entityName, user, options = {}) {
     return this.listRecords(entityName, user, options);
+  }
+
+  async ensureMaintenance({ ownerId, intervalMs = 900000 }) {
+    return this.withRecordTransaction(async (tx) => {
+      if (!tx.users.get(ownerId)?.email_verified) return null;
+      if (!tx.maintenanceSchedules.has(ownerId)) {
+        const time = nowIso();
+        tx.maintenanceSchedules.set(ownerId, { owner_id: ownerId, enabled: true, interval_ms: intervalMs, next_run_at: time, lease_token: null, locked_by: null, lease_expires_at: null, checkpoint: {}, summary: {}, consecutive_failures: 0, last_started_at: null, last_completed_at: null, created_at: time, updated_at: time });
+      }
+      return clone(tx.maintenanceSchedules.get(ownerId));
+    });
+  }
+
+  async getMaintenance(ownerId) {
+    return clone(this.maintenanceSchedules.get(ownerId) || null);
+  }
+
+  async enrollVerifiedMaintenance({ intervalMs = 900000, limit = 100 } = {}) {
+    return this.withRecordTransaction(async (tx) => {
+      const users = [...tx.users.values()].filter((user) => user.email_verified && !tx.maintenanceSchedules.has(user.id)).slice(0, Math.max(1, Math.min(100, limit)));
+      for (const user of users) await tx.ensureMaintenance({ ownerId: user.id, intervalMs });
+      return users.length;
+    });
+  }
+
+  async configureMaintenance({ ownerId, enabled, intervalMs }) {
+    return this.withRecordTransaction(async (tx) => {
+      const row = tx.maintenanceSchedules.get(ownerId);
+      if (!row) return null;
+      row.enabled = enabled;
+      row.interval_ms = intervalMs;
+      row.next_run_at = nowIso();
+      row.lease_token = null;
+      row.locked_by = null;
+      row.lease_expires_at = null;
+      row.updated_at = nowIso();
+      return clone(row);
+    });
+  }
+
+  async claimDueMaintenance({ workerId, leaseMs }) {
+    return this.withRecordTransaction(async (tx) => {
+      const time = Date.now();
+      const row = [...tx.maintenanceSchedules.values()].filter((item) => item.enabled && tx.users.get(item.owner_id)?.email_verified && Date.parse(item.next_run_at) <= time && (!item.lease_token || Date.parse(item.lease_expires_at) <= time)).sort((a, b) => a.next_run_at.localeCompare(b.next_run_at))[0];
+      if (!row) return null;
+      row.lease_token = createId();
+      row.locked_by = workerId;
+      row.lease_expires_at = new Date(time + leaseMs).toISOString();
+      row.last_started_at = nowIso();
+      row.updated_at = nowIso();
+      return clone(row);
+    });
+  }
+
+  async withMaintenanceLease({ ownerId, leaseToken }, callback) {
+    return this.withRecordTransaction(async (tx) => {
+      const row = tx.maintenanceSchedules.get(ownerId);
+      if (!row?.enabled || row.lease_token !== leaseToken || Date.parse(row.lease_expires_at) <= Date.now()) throw Object.assign(new Error("Maintenance lease changed"), { code: "maintenance_lease_lost" });
+      return callback(tx, clone(row));
+    });
+  }
+
+  async renewMaintenanceLease({ ownerId, leaseToken, leaseMs }) {
+    return this.withMaintenanceLease({ ownerId, leaseToken }, async (tx) => {
+      tx.maintenanceSchedules.get(ownerId).lease_expires_at = new Date(Date.now() + leaseMs).toISOString();
+      return true;
+    });
+  }
+
+  async saveMaintenanceProgress({ ownerId, leaseToken, checkpoint, summary }) {
+    return this.withMaintenanceLease({ ownerId, leaseToken }, async (tx) => {
+      const row = tx.maintenanceSchedules.get(ownerId);
+      if (checkpoint !== undefined) row.checkpoint = clone(checkpoint);
+      if (summary !== undefined) row.summary = clone(summary);
+      row.updated_at = nowIso();
+      return clone(row);
+    });
+  }
+
+  async finishMaintenance({ ownerId, leaseToken, checkpoint, summary, nextRunAt, failed = false }) {
+    return this.withMaintenanceLease({ ownerId, leaseToken }, async (tx) => {
+      const row = tx.maintenanceSchedules.get(ownerId);
+      row.checkpoint = clone(checkpoint);
+      row.summary = clone(summary);
+      row.next_run_at = nextRunAt;
+      row.consecutive_failures = failed ? row.consecutive_failures + 1 : 0;
+      row.last_completed_at = nowIso();
+      row.updated_at = nowIso();
+      row.lease_token = null;
+      row.locked_by = null;
+      row.lease_expires_at = null;
+      return clone(row);
+    });
+  }
+
+  async listMaintenanceJobs({ ownerId, cursor = null, limit = 25 }) {
+    return clone([...this.jobs.values()].filter((job) => job.owner_id === ownerId && ["succeeded", "failed", "needs_setup"].includes(job.status) && job.completed_date && (!cursor || job.completed_date > cursor.completed_at || (job.completed_date === cursor.completed_at && job.id > cursor.job_id))).sort((a, b) => a.completed_date.localeCompare(b.completed_date) || a.id.localeCompare(b.id)).slice(0, Math.max(1, Math.min(25, limit))));
   }
 }

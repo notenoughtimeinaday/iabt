@@ -17,6 +17,7 @@ import {
 } from "./creation/planner.js";
 import { processStripeWebhook } from "./billing/stripe-webhook.js";
 import { planDefaults } from "./billing/plans.js";
+import { createProjectsWithinQuota } from "./billing/project-quota.js";
 import {
   createCreditCheckout,
   createCustomerPortal,
@@ -30,6 +31,7 @@ import { handleIntegrationFunction } from "./functions/integrations.js";
 import { fileIdsFromRequest } from "./files/text-sources.js";
 import { capabilityRegistry } from "./autonomy/capabilities.js";
 import { loadLearningContext, recordUserCorrection, resolveUserCorrection, withdrawLesson, proposeImprovement, listImprovementProposals } from "./learning/service.js";
+import { ensureMaintenanceSchedule, readMaintenanceStatus, configureMaintenance } from "./maintenance/service.js";
 
 const WORKFLOW_ENTITIES = new Set([
   "AgentConversation", "CollaborationProfile", "ProjectNeed", "MatchRecord",
@@ -391,6 +393,10 @@ const handleEntity = async ({ req, segments, body, repository, config }) => {
     if (!Array.isArray(body.records) || body.records.length > 500) {
       throw new HttpError(400, "invalid_records", "records must be an array of at most 500 items");
     }
+    if (entityName === "Project") {
+      const records = await createProjectsWithinQuota({ repository, user, inputs: body.records.map(asObject), bulk: true });
+      return { status: 201, payload: records };
+    }
     const records = [];
     for (const input of body.records) {
       records.push(await repository.createRecord(entityName, user, asObject(input)));
@@ -412,6 +418,10 @@ const handleEntity = async ({ req, segments, body, repository, config }) => {
   }
 
   if (segments.length === 3 && req.method === "POST") {
+    if (entityName === "Project") {
+      const [record] = await createProjectsWithinQuota({ repository, user, inputs: [asObject(body)] });
+      return { status: 201, payload: record };
+    }
     const record = await repository.createRecord(entityName, user, asObject(body));
     await repository.appendAudit(user, "entity.create", {
       entity_name: entityName,
@@ -878,6 +888,13 @@ const handleFunction = async ({
   if (name === "get-jericho-learning") {
     return { status: 200, payload: { data: { ...(await loadLearningContext({ repository, user })), proposals: await listImprovementProposals({ repository, user }) } } };
   }
+  if (name === "get-jericho-maintenance") {
+    await ensureMaintenanceSchedule({ repository, user, config });
+    return { status: 200, payload: { data: await readMaintenanceStatus({ repository, user, config }) } };
+  }
+  if (name === "configure-jericho-maintenance") {
+    return { status: 200, payload: { data: await configureMaintenance({ repository, user, config, enabled: body.enabled, intervalMinutes: body.interval_minutes }) } };
+  }
   const learningFunctions = {
     "record-jericho-correction": () => recordUserCorrection({ repository, user, jobId: body.job_id, category: body.category, requestId: body.request_id }),
     "resolve-jericho-correction": () => resolveUserCorrection({ repository, user, lessonId: body.lesson_id, jobId: body.job_id, accepted: body.accepted === true }),
@@ -984,7 +1001,7 @@ const handleFunction = async ({
           total_remaining: account.available_credits,
           total_iabt_credits_remaining: account.available_credits,
           base44_required: false,
-          billing: providers?.readiness?.().stripe || {}
+          billing: { ...(providers?.readiness?.().stripe || {}), credit_pack_size: config.providers.stripe.creditPackSize }
         }
       }
     };

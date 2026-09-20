@@ -11,6 +11,7 @@ import { createProviderRegistry } from "../src/providers/provider-registry.js";
 import { LocalObjectStorage } from "../src/storage/local-storage.js";
 import { createJobWorker } from "../src/worker.js";
 import { createOpaqueToken, hashToken } from "../src/security.js";
+import { getLearningCurriculum } from "../src/learning/curriculum.js";
 
 const fixture = async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "iabt-learning-"));
@@ -114,7 +115,9 @@ test("Studio support retrieves learned evidence and curriculum without starting 
   const conversation = await f.api("/v1/agents/conversations", { token: owner.token, body: { agent_name: "iabt_creator" } });
   const response = await f.api(`/v1/agents/conversations/${conversation.payload.id}/messages`, { token: owner.token, body: { role: "user", content: "What do you know? Learn from my jobs." } });
   assert.equal(response.status, 200);
-  assert.match(JSON.stringify(response.payload), /jericho-learning-v1/);
+  const curriculum = response.payload.messages.at(-1).metadata.knowledge.learning.curriculum;
+  assert.equal(curriculum.version, getLearningCurriculum().version);
+  assert.equal(curriculum.sha256, getLearningCurriculum().sha256);
   assert.match(JSON.stringify(response.payload), new RegExp(job.id));
   assert.equal(JSON.stringify(response.payload).includes("private output content"), false);
   assert.equal((await f.repository.listJobs(owner.user)).length, 1);

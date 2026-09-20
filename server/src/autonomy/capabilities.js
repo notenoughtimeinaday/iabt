@@ -56,6 +56,7 @@ export async function capabilityRegistry({ config = {}, providers, repository, s
       luma: remote("luma", readiness.luma, "document"),
       file_processing: entry("file_processing", { configured: Boolean(storage), operational: storageOk, risk: "read", blockers: storageOk === true ? [] : ["storage_not_verified"], limitations: ["Bounded UTF-8 text/code extraction only."] }),
       background_jobs: entry("background_jobs", { configured: Boolean(repository), operational: null, blockers: ["worker_heartbeat_not_observed"] }),
+      scheduled_maintenance: entry("scheduled_maintenance", { configured: Boolean(repository?.claimDueMaintenance && config.maintenance?.enabled), operational: null, risk: "validate", blockers: ["maintenance_pass_not_observed"], implementation: "durable_account_schedule", limitations: ["Requires a running worker; inspect the account maintenance snapshot for actual progress.", "Repairs derived records and checks bounded private files using existing infrastructure; does not charge credits or execute paid generation.", "Cannot edit code, deploy or certify launch readiness."] }),
       artifact_verification: entry("artifact_verification", { configured: Boolean(storage), operational: storageOk, risk: "validate", blockers: storageOk === true ? [] : ["storage_not_verified"] })
     }
   };

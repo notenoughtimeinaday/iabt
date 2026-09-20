@@ -78,6 +78,8 @@ The Resend HTTP 403 was traced to missing sender-domain DNS records. On 2026-09-
 
 The founding catalog remains Free, Builder, Pro and Agency, with IABT credit allowances and optional credit packs. Stripe configuration uses `STRIPE_BUILDER_PRICE_ID`, `STRIPE_PRO_PRICE_ID`, `STRIPE_AGENCY_PRICE_ID`, `STRIPE_AI_CREDIT_PACK_PRICE_ID`, `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in the **standalone server environment**. `IABT_STRIPE_MODE` defaults to test. The API derives identity, prices and redirects on the server.
 
+Project capacity is enforced transactionally by the server for both single and bulk creation, including concurrent requests and administrator accounts. See the [billing contract and project limits](docs/BILLING_FULFILLMENT.md#project-capacity) for payment fulfillment, migration boundaries and regression evidence.
+
 Do not treat code or mocked payment tests as a verified revenue flow. Before live billing, complete checkout → entitlement → delivered artifact → cancellation/refund/credit-restoration tests, confirm actual supplier costs and margin controls, and approve the production billing setup. IABT credit restoration is distinct from a cash or supplier refund. Final policies and customer-facing commercial claims need their own release review.
 
 ## Migration and legacy context

@@ -67,6 +67,23 @@ async function fixture(t) {
   return { start, sentEmail, providerCalls: () => providerCalls };
 }
 
+postgresTest("postgres credit grants deduplicate one purchase across concurrent connections and restart", async (t) => {
+  const f = await fixture(t);
+  const first = await f.start();
+  const second = await f.start();
+  const user = await first.repository.createUser({ email: "credits@example.test", passwordHash: "unused", emailVerified: true });
+  const grant = { ownerId: user.id, amount: 100, idempotencyKey: "stripe:checkout:same-purchase" };
+  const responses = await Promise.all(Array.from({ length: 16 }, (_, index) => (index % 2 ? first : second).repository.grantCredits(grant)));
+  assert.equal(responses.length, 16, "Every duplicate delivery must return successfully");
+  assert.equal((await first.repository.getCreditAccount(user.id)).available_credits, 100);
+  const rows = await first.repository.pool.query("SELECT count(*)::int AS count FROM iabt_credit_entries WHERE owner_id=$1 AND entry_type='grant'", [user.id]);
+  assert.equal(rows.rows[0].count, 1);
+  await first.close();
+  const restarted = await f.start();
+  assert.equal((await restarted.repository.grantCredits(grant)).available_credits, 100);
+  assert.equal((await restarted.repository.grantCredits({ ...grant, idempotencyKey: "stripe:checkout:different-purchase" })).available_credits, 200);
+});
+
 postgresTest("postgres HTTP: verified account, automatic source review, private artifacts and learning survive restart without repeat charges", async (t) => {
   const f = await fixture(t);
   const first = await f.start();
