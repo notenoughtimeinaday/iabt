@@ -41,7 +41,12 @@ const mockProviders = () => {
         durable: false,
         data: {
           id: payload.path === "/checkout/sessions" ? "cs_test_123" : "bps_test_123",
-          url: "https://checkout.stripe.test/session"
+          url: "https://checkout.stripe.test/session",
+          ...(payload.params.mode === "subscription" ? {
+            mode: "subscription", livemode: false, status: "open", expires_at: Number(payload.params.expires_at),
+            client_reference_id: payload.params.client_reference_id, customer: payload.params.customer || null,
+            metadata: Object.fromEntries(Object.entries(payload.params).filter(([key]) => key.startsWith("metadata[")).map(([key, value]) => [key.slice(9, -1), value]))
+          } : {})
         }
       };
     }

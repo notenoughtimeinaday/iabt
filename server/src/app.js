@@ -24,6 +24,7 @@ import {
   createSubscriptionCheckout
 } from "./billing/stripe-checkout.js";
 import { createTransactionalEmailSender } from "./email/resend.js";
+import { ensureStarterCredits, withStarterCredits } from "./auth/starter-credits.js";
 import { recordPolicyAcceptance } from "./operations/policy-acceptance.js";
 import { SUPPORTED_AGENT_NAMES, respondToSupportRequest, buildJerichoKnowledge } from "./operations/jericho-support.js";
 import { handleExchangeFunction } from "./functions/exchange.js";
@@ -156,7 +157,7 @@ const issueSession = async (repository, config, user, expectedPasswordHash) => {
     expectedPasswordHash
   });
   if (!created) throw new HttpError(401, "invalid_credentials", "Account credentials changed. Please sign in again.");
-  return { access_token: token, expires_at: expiresAt, user };
+  return withStarterCredits({ repository, user, payload: { access_token: token, expires_at: expiresAt, user } });
 };
 
 const limitAuthRequest = async (req, action, email, repository, config) => {
@@ -238,9 +239,6 @@ const handleAuth = async ({
       });
       if (!user) throw new HttpError(409, "email_exists", "An account already exists. Please sign in or request a verification code.");
     }
-    // Existing migrated accounts use recovery, so this allowance applies only
-    // to fresh signups/retries authenticated with their original password.
-    await repository.grantCredits({ ownerId: user.id, amount: 10, idempotencyKey: "signup:free:v1", metadata: { source: "initial_free_allowance" } });
     const challenge = await issueChallenge(
       repository,
       config,
@@ -263,7 +261,7 @@ const handleAuth = async ({
       session: { tokenHash: hashToken(token), expiresAt }
     });
     if (!user) throw new HttpError(400, "invalid_otp", "Verification code is invalid or expired. Request a new code or sign in if already verified.");
-    return { status: 200, payload: { access_token: token, expires_at: expiresAt, user } };
+    return { status: 200, payload: await withStarterCredits({ repository, user, payload: { access_token: token, expires_at: expiresAt, user } }) };
   }
 
   if (req.method === "POST" && action === "resend-otp") {
@@ -341,7 +339,7 @@ const handleAuth = async ({
       passwordHash
     });
     if (!user) throw new HttpError(400, "invalid_reset", "Reset code is invalid or expired. Request a new code.");
-    return { status: 200, payload: { ok: true } };
+    return { status: 200, payload: await withStarterCredits({ repository, user, payload: { ok: true } }) };
   }
 
   throw new HttpError(404, "route_not_found", "Authentication route was not found");
@@ -973,7 +971,7 @@ const handleFunction = async ({
   }
 
   if (name === "get-account-entitlement") {
-    const account = await repository.getCreditAccount(user.id);
+    const account = await ensureStarterCredits({ repository, user });
     const existing = (
       await repository.listRecords("AccountEntitlement", user, {
         query: { user_id: user.id },

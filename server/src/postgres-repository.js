@@ -583,6 +583,17 @@ export class PostgresRepository {
     return result.rows;
   }
 
+  async findStarterCreditGrant(ownerId) {
+    const result = await this.pool.query(
+      `SELECT id, owner_id, amount, idempotency_key FROM iabt_credit_entries
+       WHERE owner_id = $1 AND entry_type = 'grant'
+         AND (idempotency_key = 'signup:free:v1' OR metadata ->> 'source' = 'initial_free_allowance')
+       LIMIT 1`,
+      [ownerId]
+    );
+    return result.rows[0] || null;
+  }
+
   async grantCredits({ ownerId, amount, idempotencyKey, metadata = {} }) {
     const value = Math.floor(Number(amount));
     if (!Number.isInteger(value) || value <= 0) throw new Error("Credit grant must be positive");

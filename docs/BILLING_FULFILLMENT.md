@@ -1,6 +1,37 @@
 # Standalone billing contract
 
 Free accounts receive **10 starter credits once** after verified account access.
+Registration alone does not fund an unverified account. Successful verification,
+sign-in and verified password recovery check the original `signup:free:v1`
+allowance identity. Authenticated `get-account-entitlement` performs the same
+check, repairing older verified accounts with an existing session that never
+went through current registration. The amount and owner come from the server;
+request fields cannot select a recipient, quantity or replacement grant key.
+
+The check reloads the verified account and looks for its earlier starter grant
+by that stable key or the recorded `source: initial_free_allowance` provenance.
+An identified grant under an older or reviewed import key is preserved. Its
+amount is not topped up, even when the balance is now zero. Existing purchased
+credits remain intact; an account that has never received the starter allowance
+can receive it once alongside purchased credits. Parallel requests and restarts
+reuse the ledger's existing grant transaction and key rather than replenishing
+spent credits.
+
+A temporary allowance failure does not burn successful authentication or the
+one-time verification/recovery code: the auth response includes
+`starter_credits_pending: true`, and the next entitlement read retries the check.
+This is a normal account workflow, not an operator SQL credit adjustment.
+`server/test/starter-credits.test.js` covers verification, migrated recovery,
+historical provenance, spent balances, owner isolation and concurrent API reads
+against both memory and disposable PostgreSQL repositories.
+
+This check does not infer or import Base44 balances from an email address, a
+plan label or a zero balance. Runtime billing/credit migration still needs a
+reviewed converter and reconciliation; known starter provenance must be
+preserved during such a migration to prevent duplication. No live account is
+changed by these code tests, and IABT credits are not cash or a funded supplier
+account.
+
 Paid monthly plans grant Builder 100, Pro 500 or Agency 2,000 credits after a
 verified `invoice.paid` for subscription creation or a regular monthly renewal.
 Credits accumulate in the execution ledger and are not erased by cancellation.
@@ -46,6 +77,35 @@ Existing subscribers can manage overdue or incomplete subscriptions even when
 new purchases are unavailable. New subscription checkout cannot silently replace
 an existing recoverable subscription. Builder accepts the standalone flat
 entitlement response, so paid export flags reach the editor.
+
+## One pending subscription Checkout
+
+The [pending Checkout guard](../server/src/billing/checkout-attempt.js) stores one
+private attempt per account and Stripe mode. Concurrent requests, tabs and
+restarts reuse its unexpired session. A short database transaction claims the
+attempt; provider calls happen after commit. Retry keeps the same server-owned
+Stripe idempotency key and frozen parameters, including plan, price, app/user
+metadata and expiry. Late handlers cannot overwrite a reclaimed lease.
+
+Sessions request 31 minutes of validity, providing a transmission margin above
+Stripe's [30-minute minimum](https://docs.stripe.com/api/checkout/sessions/create#checkout_session_create-expires_at).
+An elapsed local timestamp is insufficient to open another session: Stripe must
+confirm expiry. Completed Checkout waits for entitlement reconciliation; a
+verified canceled prior subscription can start a later purchase. Existing active
+or recoverable subscriptions continue through the customer portal.
+
+The browser's cancel return can reopen the same still-payable offer; it does not
+expire the session. A different pending plan or price produces an explicit
+conflict until the previous offer is resolved or Stripe confirms expiry. Unknown
+creation outcomes cannot switch credentials/terms, and retries stop before
+Stripe's documented [idempotency retention boundary](https://docs.stripe.com/api/idempotent_requests)
+instead of risking a new purchase. Operators need Checkout read permission to
+verify existing sessions. `BillingCheckoutAttempt` is outside generic entity
+routes; its URLs and frozen account parameters are not public registry facts.
+
+Memory and real local PostgreSQL tests cover concurrency, restart, lost
+responses, stale lease owners, changed terms and verified expiry/cancellation.
+The [sandbox acceptance matrix](BILLING_ACCEPTANCE.md) remains separate evidence.
 
 ## Project capacity
 

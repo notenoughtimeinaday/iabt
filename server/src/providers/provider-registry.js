@@ -441,9 +441,12 @@ export class ProviderRegistry {
     }
     const response = await this.fetch("https://api.stripe.com/v1" + path, {
       method: "POST",
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
       headers: {
         Authorization: "Bearer " + this.config.providers.stripe.secretKey,
         "Content-Type": "application/x-www-form-urlencoded",
+        "Stripe-Version": "2026-08-26.dahlia",
         "Idempotency-Key": context.idempotencyKey
       },
       body: new URLSearchParams(payload.params || {})

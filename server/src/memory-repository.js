@@ -358,6 +358,11 @@ export class MemoryRepository {
       entry.metadata?.checkout_session_id === checkoutSessionId).slice(0, 2));
   }
 
+  async findStarterCreditGrant(ownerId) {
+    return clone(this.creditEntries.find((entry) => entry.owner_id === ownerId && entry.entry_type === "grant" &&
+      (entry.idempotency_key === "signup:free:v1" || entry.metadata?.source === "initial_free_allowance")) || null);
+  }
+
   async grantCredits({ ownerId, amount, idempotencyKey, metadata = {} }) {
     const existing = this.creditEntries.find(
       (entry) =>
