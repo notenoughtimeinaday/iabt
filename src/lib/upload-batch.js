@@ -40,7 +40,9 @@ export function createAttachmentTracker() {
       state = { scopeId, conversationId, rows: rows || [], ready: rows !== null, loading: false, error: "", busy: false, pending: 0, revision: 0 };
     },
     beginLoad(scopeId, conversationId) {
-      if (!matches(scopeId, conversationId)) return null;
+      // Conversation subscriptions and the production desk poll can overlap.
+      // A new poll must not supersede a still-running read on a slow connection.
+      if (!matches(scopeId, conversationId) || state.loading) return null;
       state.loading = true;
       return { epoch, sequence: ++sequence, revision: state.revision };
     },
@@ -80,7 +82,9 @@ export function createAttachmentTracker() {
       if (state.busy) return "Wait for your attachments to finish uploading and saving before sending your request.";
       if (state.pending) return "Some attachments did not finish saving. Retry them or discard the unfinished attachments before sending your request.";
       if (state.error) return "Your saved attachments could not be checked. Refresh the attachment list before sending your request.";
-      if (!state.ready || state.loading) return "Wait for your saved attachments to finish loading before sending your request.";
+      // Once verified, retain the saved snapshot during background refreshes.
+      // A failed refresh invalidates ready above and still blocks submission.
+      if (!state.ready) return "Wait for your saved attachments to finish loading before sending your request.";
       return "";
     }
   };

@@ -956,6 +956,9 @@ export default function Studio() {
                     if (attachmentTracker.current.mergeUploaded(assetScopeId, conversation?.id || "", uploaded)) publishAttachments();
                   }}
                 />
+                {!attachmentStatus.ready && attachmentStatus.loading && !attachmentStatus.error && (
+                  <p role="status">Loading your saved attachments before creating…</p>
+                )}
                 {attachmentStatus.error && (
                   <p role="alert">Saved attachments could not be checked. <button type="button" onClick={() => loadResources(conversation?.id)}>Retry loading attachments</button></p>
                 )}

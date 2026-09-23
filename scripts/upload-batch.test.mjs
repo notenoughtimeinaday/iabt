@@ -87,6 +87,45 @@ test("poll responses cannot erase files saved while the poll was running", () =>
   assert.equal(tracker.planningError(), "");
 });
 
+test("overlapping slow subscription and desk polls cannot starve a restored attachment load", () => {
+  const tracker = createAttachmentTracker();
+  tracker.switchScope("scope", "conversation");
+  const original = tracker.beginLoad("scope", "conversation");
+  assert.match(tracker.planningError(), /finish loading/);
+
+  // A slow initial response can span many subscription and desk refreshes.
+  for (let poll = 0; poll < 10; poll += 1) {
+    assert.equal(tracker.beginLoad("scope", "conversation"), null);
+  }
+  assert.equal(tracker.finishLoad(original, [{ id: "restored", file_id: "saved-file" }]), true);
+  assert.equal(tracker.snapshot().loading, false);
+  assert.equal(tracker.planningError(), "");
+  assert.equal(tracker.snapshot().rows[0].file_id, "saved-file");
+});
+
+test("background refresh keeps verified references usable, but failures and unfinished uploads still block", () => {
+  const tracker = createAttachmentTracker();
+  tracker.switchScope("scope", "conversation");
+  tracker.finishLoad(tracker.beginLoad("scope", "conversation"), [{ id: "saved" }]);
+  const refresh = tracker.beginLoad("scope", "conversation");
+  assert.equal(tracker.snapshot().loading, true);
+  assert.equal(tracker.planningError(), "");
+  tracker.setUploadStatus("scope", "conversation", { busy: true, pending: 1 });
+  assert.match(tracker.planningError(), /finish uploading/);
+  tracker.setUploadStatus("scope", "conversation", { busy: false, pending: 1 });
+  assert.match(tracker.planningError(), /Retry them or discard/);
+  tracker.setUploadStatus("scope", "conversation", { busy: false, pending: 0 });
+  assert.equal(tracker.planningError(), "");
+
+  assert.equal(tracker.finishLoad(refresh, [], "request failed"), true);
+  assert.equal(tracker.snapshot().rows[0].id, "saved");
+  assert.match(tracker.planningError(), /could not be checked/);
+  const retry = tracker.beginLoad("scope", "conversation");
+  assert.match(tracker.planningError(), /could not be checked/);
+  assert.equal(tracker.finishLoad(retry, [{ id: "saved" }]), true);
+  assert.equal(tracker.planningError(), "");
+});
+
 test("failed attachment reads preserve existing references and block planning until a successful refresh", () => {
   const tracker = createAttachmentTracker();
   tracker.switchScope("scope", "conversation", [{ id: "saved" }]);
