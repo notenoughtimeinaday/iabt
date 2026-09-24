@@ -13,7 +13,8 @@ import {
   Sparkles,
   Video,
 } from "lucide-react";
-import { base44 } from "@/api/iabtClient";
+import { base44, platformRuntime } from "@/api/iabtClient";
+import { storedFileId, resolveFileDownload, openFileDownload } from "@/lib/stored-files";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -122,6 +123,18 @@ export default function Deliverables() {
     }
   }
 
+  async function downloadStoredArtifact(artifact) {
+    setResolving((current) => ({ ...current, [artifact.id]: true }));
+    try {
+      const url = await resolveFileDownload(base44, artifact, true);
+      openFileDownload(url, artifact.name, true);
+    } catch (error) {
+      toast({ title: "File could not be downloaded", description: error.message, variant: "destructive" });
+    } finally {
+      setResolving((current) => ({ ...current, [artifact.id]: false }));
+    }
+  }
+
   return (
     <div className="iabt-home iabt-library-page">
       <header className="iabt-home-nav">
@@ -219,12 +232,17 @@ export default function Deliverables() {
                           <Download /> Download file
                         </button>
                       )}
-                      {deliveryUrl && (
+                      {platformRuntime.backend === "standalone" && storedFileId(artifact) && (
+                        <button type="button" disabled={resolving[artifact.id]} onClick={() => downloadStoredArtifact(artifact)}>
+                          <Download /> Download
+                        </button>
+                      )}
+                      {deliveryUrl && platformRuntime.backend !== "standalone" && (
                         <a href={deliveryUrl} target="_blank" rel="noreferrer">
                           <ArrowUpRight /> Open
                         </a>
                       )}
-                      {deliveryUrl && (
+                      {deliveryUrl && platformRuntime.backend !== "standalone" && (
                         <a href={deliveryUrl} download>
                           <Download /> Download
                         </a>

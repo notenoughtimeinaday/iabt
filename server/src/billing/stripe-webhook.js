@@ -1,5 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { planDefaults, planForPrice } from "./plans.js";
+import { billingRecordId, fulfillCredits } from "./fulfillment.js";
+import { retrieveStripeSubscription } from "./stripe-read.js";
 
 const stripeError = (status, code, message) =>
   Object.assign(new Error(message), { status, code });
@@ -70,7 +72,7 @@ const resolveUser = async (repository, object) => {
     ""
   ).trim().toLowerCase();
   const byId = userId ? await repository.getUser(userId) : null;
-  const user = byId || (email ? await repository.findUserByEmail(email) : null);
+  const user = userId ? byId : (email ? await repository.findUserByEmail(email) : null);
   if (!user) {
     throw stripeError(
       422,
@@ -88,13 +90,34 @@ const resolveUser = async (repository, object) => {
   return user;
 };
 
+const timestampIso = (seconds) => {
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) return null;
+  const date = new Date(seconds * 1000);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+};
+
 const periodEnd = (subscription) => {
-  const direct = Number(subscription?.current_period_end || 0);
+  const direct = timestampIso(subscription?.current_period_end);
   const itemEnds = (subscription?.items?.data || [])
-    .map((item) => Number(item?.current_period_end || 0))
-    .filter(Boolean);
-  const seconds = direct || (itemEnds.length ? Math.max(...itemEnds) : 0);
-  return seconds ? new Date(seconds * 1000).toISOString() : null;
+    .map((item) => item?.current_period_end)
+    .filter((seconds) => timestampIso(seconds));
+  return direct || (itemEnds.length ? timestampIso(Math.max(...itemEnds)) : null);
+};
+
+const cancellationSchedule = (subscription, status, currentPeriodEnd) => {
+  const cancelAt = timestampIso(subscription.cancel_at);
+  const providerAtPeriodEnd = subscription.cancel_at_period_end === true;
+  const scheduled = !["canceled", "inactive"].includes(status) && Boolean(cancelAt || providerAtPeriodEnd);
+  return {
+    cancel_at: cancelAt,
+    cancellation_scheduled: scheduled,
+    provider_cancel_at_period_end: providerAtPeriodEnd,
+    // Current Stripe responses can schedule the exact item period boundary via
+    // cancel_at while leaving cancel_at_period_end false. Preserve that raw
+    // provider flag and project the equivalent schedule for existing clients.
+    // A custom mid-cycle date must not be mislabeled as period-end cancellation.
+    cancel_at_period_end: scheduled && (providerAtPeriodEnd || Boolean(cancelAt && cancelAt === currentPeriodEnd))
+  };
 };
 
 const subscriptionPrice = (subscription) =>
@@ -102,59 +125,87 @@ const subscriptionPrice = (subscription) =>
 
 const entitlementStatus = (status) => {
   const value = String(status || "").toLowerCase();
-  if (["active", "trialing", "past_due", "paused", "unpaid", "canceled"].includes(value)) {
+  if (["active", "trialing", "past_due", "paused", "unpaid", "incomplete", "canceled"].includes(value)) {
     return value;
   }
   return value === "incomplete_expired" ? "canceled" : "inactive";
 };
 
-const upsertSubscription = async ({ repository, config, subscription }) => {
+const idOf = (value) => typeof value === "string" ? value : String(value?.id || "");
+const ownerEntitlement = async (repository, user) => (await repository.listRecordsExact("AccountEntitlement", { ...user, role: "user" }, {
+  query: { user_id: user.id }, sort: "-updated_date", limit: 1
+}))[0];
+
+const upsertSubscription = async ({ repository, config, subscription: snapshot, fetchImpl }) => {
+  if (!eventBelongsToIabt(config, metadataFor(snapshot))) {
+    return { action: "ignored_other_app" };
+  }
+  const user = await resolveUser(repository, snapshot);
+  const owner = { ...user, role: "user" };
+  const subscriptionId = String(snapshot.id || "");
+  if (!/^sub_[a-zA-Z0-9_]+$/.test(subscriptionId)) throw stripeError(422, "stripe_subscription_invalid", "Stripe subscription identity is invalid");
+  // Stripe snapshots are unordered (even event.created can tie). Claim a local
+  // generation, then retrieve current provider state outside the transaction.
+  // A slower earlier GET cannot overwrite a newer reconciliation's result.
+  const claim = await repository.withRecordTransaction(async (tx) => {
+    const id = billingRecordId(`stripe-sync:${config.providers.stripe.mode}:${subscriptionId}`);
+    const existing = await tx.getRecord("BillingSubscriptionSync", id, owner);
+    const revision = Number(existing?.revision || 0) + 1;
+    if (existing) await tx.updateRecord("BillingSubscriptionSync", id, owner, { revision });
+    else await tx.createRecord("BillingSubscriptionSync", owner, { user_id: user.id, subscription_id: subscriptionId, revision }, { id });
+    return { id, revision };
+  });
+  const subscription = await retrieveStripeSubscription({ config, subscriptionId, fetchImpl });
   const metadata = metadataFor(subscription);
   if (!eventBelongsToIabt(config, metadata)) {
     throw stripeError(409, "stripe_event_not_iabt", "Stripe event does not belong to this IABT app");
   }
-  const user = await resolveUser(repository, subscription);
+  const reconciledUser = await resolveUser(repository, subscription);
+  if (reconciledUser.id !== user.id) throw stripeError(409, "stripe_user_mismatch", "Stripe subscription owner changed during verification");
   const paidPlan = planForPrice(config.providers.stripe, subscriptionPrice(subscription));
-  if (!paidPlan) {
+  const status = entitlementStatus(subscription.status);
+  const grantsPlan = ["active", "trialing", "past_due"].includes(status);
+  if (!paidPlan && grantsPlan) {
     throw stripeError(
       503,
       "stripe_price_not_configured",
       "The Stripe subscription price is not mapped to an IABT plan"
     );
   }
-  const status = entitlementStatus(subscription.status);
-  const plan = ["active", "trialing", "past_due"].includes(status) ? paidPlan : "free";
+  const plan = grantsPlan ? paidPlan : "free";
   const defaults = planDefaults(plan);
-  const existing = (
-    await repository.listRecords("AccountEntitlement", user, {
-      query: { user_id: user.id },
-      sort: "-updated_date",
-      limit: 1
-    })
-  )[0];
-  const fields = {
-    user_id: user.id,
-    user_email: user.email,
-    plan,
-    status,
-    billing_provider: "stripe",
-    provider_customer_id:
-      typeof subscription.customer === "string"
-        ? subscription.customer
-        : String(subscription.customer?.id || ""),
-    provider_subscription_id: String(subscription.id || ""),
-    current_period_end: periodEnd(subscription),
-    cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
-    ...defaults,
-    bonus_ai_credits: Number(existing?.bonus_ai_credits || 0)
-  };
-  const entitlement = existing
-    ? await repository.updateRecord("AccountEntitlement", existing.id, user, fields)
-    : await repository.createRecord("AccountEntitlement", user, {
-        ...fields,
-        notes: "Created by verified standalone Stripe webhook"
-      });
-  return { user, entitlement, action: "subscription_entitlement_updated" };
+  return repository.withRecordTransaction(async (tx) => {
+    const sync = await tx.getRecord("BillingSubscriptionSync", claim.id, owner);
+    if (sync.revision !== claim.revision) return { user, action: "subscription_sync_superseded" };
+    const existing = await ownerEntitlement(tx, user);
+    if (existing?.provider_subscription_id && existing.provider_subscription_id !== subscriptionId &&
+        !["canceled", "inactive"].includes(existing.status)) {
+      // Old subscription cancellation must not revoke a newer subscription.
+      if (["canceled", "inactive"].includes(status)) return { user, action: "ignored_other_subscription" };
+      throw stripeError(409, "stripe_subscription_conflict", "Multiple subscriptions require billing reconciliation");
+    }
+    if (existing?.provider_customer_id && existing.provider_customer_id !== idOf(subscription.customer)) {
+      throw stripeError(409, "stripe_customer_mismatch", "Stripe customer does not match this account");
+    }
+    const currentPeriodEnd = periodEnd(subscription);
+    const fields = {
+      user_id: user.id,
+      user_email: user.email,
+      plan,
+      status,
+      billing_provider: "stripe",
+      provider_customer_id: idOf(subscription.customer),
+      provider_subscription_id: String(subscription.id || ""),
+      current_period_end: currentPeriodEnd,
+      ...cancellationSchedule(subscription, status, currentPeriodEnd),
+      ...defaults,
+      bonus_ai_credits: Number(existing?.bonus_ai_credits || 0)
+    };
+    const entitlement = existing
+      ? await tx.updateRecord("AccountEntitlement", existing.id, owner, fields)
+      : await tx.createRecord("AccountEntitlement", owner, fields);
+    return { user, entitlement, action: "subscription_entitlement_updated" };
+  });
 };
 
 const grantCreditPack = async ({ repository, config, event, session }) => {
@@ -162,22 +213,66 @@ const grantCreditPack = async ({ repository, config, event, session }) => {
   if (!eventBelongsToIabt(config, metadata) || metadata.product_type !== "ai_credit_pack") {
     throw stripeError(409, "stripe_event_not_iabt", "Stripe credit event does not belong to IABT");
   }
-  if (session.payment_status !== "paid") {
-    throw stripeError(409, "stripe_payment_not_complete", "Stripe credit purchase is not paid");
+  if (session.payment_status === "unpaid") return { action: "credit_pack_payment_pending" };
+  if (session.mode !== "payment" || session.payment_status !== "paid" || !/^cs_[a-zA-Z0-9_]+$/.test(String(session.id || ""))) {
+    throw stripeError(422, "stripe_payment_not_complete", "Stripe credit purchase has no verified completed payment");
   }
   const user = await resolveUser(repository, session);
-  const credits = config.providers.stripe.creditPackSize;
-  await repository.grantCredits({
-    ownerId: user.id,
-    amount: credits,
-    idempotencyKey: "stripe:" + event.id,
-    metadata: {
+  const amount = Number(metadata.credits);
+  if (!/^\d+$/.test(String(metadata.credits || "")) || !Number.isSafeInteger(amount) || amount < 1 || amount > 1000000) {
+    throw stripeError(422, "stripe_credit_quantity_invalid", "Stripe credit purchase quantity requires reconciliation");
+  }
+  const credits = await fulfillCredits({
+    repository, user, amount, key: `stripe:${config.providers.stripe.mode}:checkout:${session.id}`,
+    source: {
       event_id: event.id,
       checkout_session_id: String(session.id || ""),
       product_type: "ai_credit_pack"
     }
   });
   return { user, credits, action: "credit_pack_granted" };
+};
+
+const grantSubscriptionCredits = async ({ repository, config, event, invoice }) => {
+  const details = invoice.parent?.subscription_details || invoice.subscription_details || {};
+  const metadata = details.metadata || {};
+  if (!eventBelongsToIabt(config, metadata)) return { action: "ignored_other_app" };
+  if (invoice.status !== "paid" || !["subscription_create", "subscription_cycle"].includes(invoice.billing_reason)) {
+    return { action: "subscription_invoice_no_allowance" };
+  }
+  const subscriptionId = idOf(details.subscription || invoice.subscription);
+  if (!/^in_[a-zA-Z0-9_]+$/.test(String(invoice.id || "")) || !/^sub_[a-zA-Z0-9_]+$/.test(subscriptionId)) {
+    throw stripeError(422, "stripe_invoice_invalid", "Stripe invoice identity is invalid");
+  }
+  if (invoice.lines?.has_more) throw stripeError(422, "stripe_invoice_incomplete", "Stripe invoice lines require reconciliation");
+  const lines = (invoice.lines?.data || []).filter((line) =>
+    (line.type === "subscription" || line.parent?.type === "subscription_item_details") &&
+    !(line.proration ?? line.parent?.subscription_item_details?.proration));
+  const eligible = lines.filter((line) => Number(line.amount) > 0);
+  if (!eligible.length && lines.length) return { action: "subscription_invoice_no_allowance" }; // trial
+  if (eligible.length !== 1) throw stripeError(422, "stripe_invoice_plan_ambiguous", "Stripe invoice must identify one monthly plan");
+  const line = eligible[0];
+  const plan = planForPrice(config.providers.stripe, idOf(line.price || line.pricing?.price_details?.price));
+  const start = Number(line.period?.start);
+  const end = Number(line.period?.end);
+  const days = (end - start) / 86400;
+  const lineSubscription = idOf(line.subscription || line.parent?.subscription_item_details?.subscription);
+  if (!plan || line.quantity !== 1 || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start <= 0 || days < 27 || days > 32 ||
+      (lineSubscription && lineSubscription !== subscriptionId)) {
+    throw stripeError(422, "stripe_invoice_plan_invalid", "Stripe invoice does not match a supported monthly IABT plan");
+  }
+  const user = await resolveUser(repository, { metadata });
+  const existing = await ownerEntitlement(repository, user);
+  if (existing?.provider_customer_id && existing.provider_customer_id !== idOf(invoice.customer)) {
+    throw stripeError(409, "stripe_customer_mismatch", "Stripe invoice customer does not match this account");
+  }
+  const credits = await fulfillCredits({
+    repository, user, amount: planDefaults(plan).ai_monthly_limit,
+    key: `stripe:${config.providers.stripe.mode}:cycle:${subscriptionId}:${start}`,
+    source: { event_id: event.id, invoice_id: invoice.id, subscription_id: subscriptionId, plan,
+      period_start: start, period_end: end, product_type: "subscription_allowance" }
+  });
+  return { user, credits, action: "subscription_credits_granted" };
 };
 
 const recordBillingEvent = async ({ repository, result, event }) => {
@@ -190,7 +285,7 @@ const recordBillingEvent = async ({ repository, result, event }) => {
     action: result.action,
     credits_granted: Number(result.credits || 0),
     processed_at: new Date().toISOString()
-  });
+  }, { id: billingRecordId("billing-event:" + event.id) });
 };
 
 export const processStripeWebhook = async ({
@@ -198,7 +293,8 @@ export const processStripeWebhook = async ({
   signatureHeader,
   repository,
   config,
-  nowSeconds
+  nowSeconds,
+  fetchImpl
 }) => {
   const event = verifyStripeEvent({
     rawBody,
@@ -226,6 +322,11 @@ export const processStripeWebhook = async ({
     payloadSha256: createHash("sha256").update(rawBody).digest("hex")
   });
   if (!started.claimed) {
+    if (started.event?.status !== "succeeded") {
+      // A 2xx stops Stripe retrying. Only a completed event may be acknowledged;
+      // a live or interrupted processing claim must be retried until reclaimable.
+      throw Object.assign(stripeError(503, "stripe_event_processing", "Stripe event processing is still pending; retry delivery"), { retryable: true });
+    }
     return {
       received: true,
       reused: true,
@@ -249,10 +350,13 @@ export const processStripeWebhook = async ({
       "customer.subscription.paused",
       "customer.subscription.resumed"
     ].includes(eventType)) {
-      result = await upsertSubscription({ repository, config, subscription: object });
+      result = await upsertSubscription({ repository, config, subscription: object, fetchImpl });
+    } else if (eventType === "invoice.paid") {
+      result = await grantSubscriptionCredits({ repository, config, event, invoice: object });
     }
     await recordBillingEvent({ repository, result, event });
-    await repository.finishStripeEvent(event.id);
+    const finished = await repository.finishStripeEvent(event.id, { claimToken: started.event.claim_token });
+    if (!finished) throw Object.assign(stripeError(503, "stripe_event_claim_lost", "Stripe event processing must be retried"), { retryable: true });
     return {
       received: true,
       reused: false,
@@ -261,7 +365,7 @@ export const processStripeWebhook = async ({
       credits_granted: Number(result.credits || 0)
     };
   } catch (error) {
-    await repository.failStripeEvent(event.id, error.code || "stripe_event_failed");
+    await repository.failStripeEvent(event.id, error.code || "stripe_event_failed", { claimToken: started.event.claim_token });
     throw error;
   }
 };

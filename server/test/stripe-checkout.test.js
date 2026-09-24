@@ -41,7 +41,12 @@ const mockProviders = () => {
         durable: false,
         data: {
           id: payload.path === "/checkout/sessions" ? "cs_test_123" : "bps_test_123",
-          url: "https://checkout.stripe.test/session"
+          url: "https://checkout.stripe.test/session",
+          ...(payload.params.mode === "subscription" ? {
+            mode: "subscription", livemode: false, status: "open", expires_at: Number(payload.params.expires_at),
+            client_reference_id: payload.params.client_reference_id, customer: payload.params.customer || null,
+            metadata: Object.fromEntries(Object.entries(payload.params).filter(([key]) => key.startsWith("metadata[")).map(([key, value]) => [key.slice(9, -1), value]))
+          } : {})
         }
       };
     }
@@ -127,4 +132,32 @@ test("an existing managed subscription routes to the customer portal", async () 
   });
   assert.equal(direct.kind, "portal");
   assert.equal(providers.calls[1].payload.params.return_url, "https://insuredspending.org/");
+});
+
+test("payment-recovery subscriptions use the portal even when new checkout prices are unavailable", async () => {
+  for (const status of ["incomplete", "unpaid", "past_due", "paused", "inactive"]) {
+    const repository = new MemoryRepository();
+    const user = await makeUser(repository, status + "@example.test");
+    await repository.createRecord("AccountEntitlement", user, {
+      user_id: user.id, status, plan: "free", billing_provider: "stripe",
+      provider_customer_id: "cus_recovery", provider_subscription_id: "sub_recovery"
+    });
+    const providers = mockProviders();
+    providers.readiness = () => ({ stripe: { configured: true, checkout_ready: false, mode: "test" } });
+    const result = await createSubscriptionCheckout({ repository, providers, config, user, plan: "pro", idempotencyKey: "recover-" + status });
+    assert.equal(result.kind, "portal");
+    assert.equal(providers.calls.length, 1);
+    assert.equal(providers.calls[0].payload.path, "/billing_portal/sessions");
+  }
+});
+
+test("canceled subscriptions may restart checkout while unconfigured checkout never calls Stripe", async () => {
+  const repository = new MemoryRepository();
+  const user = await makeUser(repository, "restart@example.test");
+  await repository.createRecord("AccountEntitlement", user, { user_id: user.id, status: "canceled", billing_provider: "stripe", provider_customer_id: "cus_restart", provider_subscription_id: "sub_canceled" });
+  const providers = mockProviders();
+  assert.equal((await createSubscriptionCheckout({ repository, providers, config, user, plan: "builder", idempotencyKey: "restart" })).kind, "checkout");
+  providers.readiness = () => ({ stripe: { configured: false, checkout_ready: false } });
+  await assert.rejects(createCreditCheckout({ repository, providers, config, user, idempotencyKey: "blocked" }), { code: "stripe_checkout_not_ready" });
+  assert.equal(providers.calls.length, 1);
 });

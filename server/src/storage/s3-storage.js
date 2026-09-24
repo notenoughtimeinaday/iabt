@@ -43,6 +43,36 @@ export class S3ObjectStorage {
     return { storage_provider: this.kind, storage_key: key };
   }
 
+  async read(key, { maxBytes = 128 * 1024 } = {}) {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new Error("A positive read limit is required");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    let body;
+    try {
+      const result = await this.client.send(new this.modules.GetObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key
+      }), { abortSignal: controller.signal });
+      body = result.Body;
+      const tooLarge = () => Object.assign(new Error("Source exceeds the read limit"), { status: 413, code: "source_too_large" });
+      if (Number(result.ContentLength) > maxBytes) throw tooLarge();
+      if (!body?.[Symbol.asyncIterator]) throw new Error("Object storage returned no readable body");
+      const chunks = [];
+      let length = 0;
+      for await (const chunk of body) {
+        const bytes = Buffer.from(chunk);
+        length += bytes.length;
+        if (length > maxBytes) throw tooLarge();
+        chunks.push(bytes);
+      }
+      return Buffer.concat(chunks, length);
+    } finally {
+      clearTimeout(timer);
+      body?.destroy?.();
+      controller.abort();
+    }
+  }
+
   async createReadUrl(record, { expiresInSeconds = 300 } = {}) {
     return this.modules.getSignedUrl(
       this.client,

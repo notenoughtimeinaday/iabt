@@ -108,8 +108,8 @@ export class ProviderRegistry {
       Number.isInteger(p.luma.costPerFiveSecondsCents) &&
       p.luma.costPerFiveSecondsCents > 0;
     const stripeKeyReady =
-      (p.stripe.mode === "test" && p.stripe.secretKey.startsWith("sk_test_")) ||
-      (p.stripe.mode === "live" && p.stripe.secretKey.startsWith("sk_live_"));
+      (p.stripe.mode === "test" && /^[sr]k_test_/.test(p.stripe.secretKey)) ||
+      (p.stripe.mode === "live" && /^[sr]k_live_/.test(p.stripe.secretKey));
     const stripePricesReady =
       Object.values(p.stripe.prices || {}).every((price) => String(price).startsWith("price_")) &&
       String(p.stripe.creditPackPriceId || "").startsWith("price_");
@@ -441,9 +441,12 @@ export class ProviderRegistry {
     }
     const response = await this.fetch("https://api.stripe.com/v1" + path, {
       method: "POST",
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
       headers: {
         Authorization: "Bearer " + this.config.providers.stripe.secretKey,
         "Content-Type": "application/x-www-form-urlencoded",
+        "Stripe-Version": "2026-08-26.dahlia",
         "Idempotency-Key": context.idempotencyKey
       },
       body: new URLSearchParams(payload.params || {})

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { runClaimedJob } from "./job-runner.js";
+import { createMaintenanceWorker } from "./maintenance/worker.js";
 
 export const createJobWorker = ({
   repository,
@@ -12,6 +13,7 @@ export const createJobWorker = ({
   let inFlight = null;
   let draining = null;
   let stopping = false;
+  const maintenance = createMaintenanceWorker({ repository, storage, config, workerId: workerId + "-maintenance" });
 
   const executeOnce = async () => {
     const job = await repository.claimNextJob({
@@ -51,6 +53,7 @@ export const createJobWorker = ({
         repository,
         storage,
         providers,
+        config,
         assertLease: renew,
         pollDelayMs: config.environment === "test"
           ? 0
@@ -75,8 +78,11 @@ export const createJobWorker = ({
     if (draining || stopping) return;
     draining = (async () => {
       try {
-        while (!stopping && await runOnce()) {
-          // Drain the ready queue before waiting for the next poll.
+        let completed = 0;
+        while (!stopping && completed < 25 && await runOnce()) {
+          // Bound a drain turn so scheduled maintenance and other work retain
+          // an event-loop opportunity even with an always-ready job queue.
+          completed += 1;
         }
       } catch (error) {
         console.error({ code: "worker_tick_failed", error_code: error?.code || "worker_error" });
@@ -89,9 +95,11 @@ export const createJobWorker = ({
   return {
     workerId,
     runOnce,
+    runMaintenanceOnce: maintenance.runOnce,
     start() {
       if (timer || stopping) return;
       timer = setInterval(tick, config.worker.pollMs);
+      maintenance.start();
       tick();
     },
     async stop() {
@@ -100,7 +108,7 @@ export const createJobWorker = ({
       timer = null;
       // Finish the claimed job while its lease heartbeat is still active. No
       // later job can be claimed after stopping has been requested.
-      await Promise.allSettled([inFlight, draining].filter(Boolean));
+      await Promise.allSettled([inFlight, draining, maintenance.stop()].filter(Boolean));
     }
   };
 };

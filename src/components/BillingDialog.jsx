@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Check, CreditCard, Loader2, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { base44 } from "@/api/iabtClient";
@@ -11,31 +11,32 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { AI_CREDIT_PACK, IABT_PLANS } from "@/lib/pricing";
+import { IABT_PLANS } from "@/lib/pricing";
+import { billingViewState } from "@/lib/billing-state";
 
 export default function BillingDialog({ open, onOpenChange, entitlement, billingStatus }) {
   const { toast } = useToast();
   const [busyPlan, setBusyPlan] = useState("");
   const currentPlan = String(entitlement?.plan || "free").toLowerCase();
-  const billingMode = billingStatus?.mode === "live" ? "live" : "test";
-  const billingReady = Boolean(billingStatus?.ready);
-  const hasStripeSubscription =
-    entitlement?.billing_provider === "stripe" &&
-    String(entitlement?.provider_customer_id || "").startsWith("cus_") &&
-    String(entitlement?.provider_subscription_id || "").startsWith("sub_") &&
-    ["active", "trialing", "past_due", "paused"].includes(
-      String(entitlement?.status || "").toLowerCase(),
-    );
+  const billing = billingViewState(entitlement, billingStatus);
+  const billingMode = billing.mode;
+  const billingReady = billing.checkoutReady;
+  const hasStripeSubscription = billing.hasSubscription;
+  const checkoutKeys = useRef({});
+  const retryKey = (action) => {
+    if (!checkoutKeys.current[action]) checkoutKeys.current[action] = crypto.randomUUID();
+    return checkoutKeys.current[action];
+  };
   const foundingAccess =
     currentPlan === "pro" &&
     entitlement?.billing_provider === "none" &&
     entitlement?.status === "active";
-  const remainingCredits = Number(entitlement?.total_iabt_credits_remaining ?? entitlement?.bonus_ai_credits ?? 0);
+  const remainingCredits = billing.credits;
 
   async function startCheckout(plan) {
     setBusyPlan(plan);
     try {
-      const response = await base44.functions.invoke("stripe-create-checkout", { plan });
+      const response = await base44.functions.invoke("stripe-create-checkout", { plan, idempotency_key: retryKey(plan) });
       const payload = response?.data || response;
       if (payload?.error) throw new Error(payload.error);
       if (!payload?.url) throw new Error("Stripe did not return a checkout link.");
@@ -55,7 +56,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
   async function startCreditCheckout() {
     setBusyPlan("credits");
     try {
-      const response = await base44.functions.invoke("stripe-create-credit-checkout", {});
+      const response = await base44.functions.invoke("stripe-create-credit-checkout", { idempotency_key: retryKey("credits") });
       const payload = response?.data || response;
       if (payload?.error) throw new Error(payload.error);
       if (!payload?.url) throw new Error("Stripe did not return a checkout link.");
@@ -96,9 +97,10 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
           <div>
             <DialogTitle>Plans & billing</DialogTitle>
             <DialogDescription>
-              {billingMode === "live"
-                ? "Secure Stripe billing is configured for live payments."
-                : "Stripe is in safe test mode. Real charges remain disabled until live billing is explicitly configured."}
+              {!billing.loaded ? "Billing availability is being checked."
+                : billingMode === "live"
+                  ? "Review the price, currency and taxes in Stripe before paying."
+                  : "Test billing only. Test checkout does not create real charges."}
             </DialogDescription>
           </div>
         </DialogHeader>
@@ -109,22 +111,23 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
           <span><Zap /> Change plans through Stripe</span>
         </div>
 
-        {!billingReady && billingStatus && (
+        {!billingReady && billing.loaded && (
           <div className="iabt-billing-economics" role="status">
             <div><ShieldCheck /></div>
             <p>
-              <strong>Stripe setup is incomplete.</strong>
-              <span>
-                Test API key: {billingStatus.key_ready ? "ready" : "missing or invalid"} · Webhook secret: {billingStatus.webhook_ready ? "ready" : "missing or invalid"} · Price IDs: {billingStatus.prices_ready ? "ready" : "missing or invalid"}. Checkout stays disabled until all three are ready.
-              </span>
+              <strong>New purchases are currently unavailable.</strong>
+              <span>Your existing credits remain available. {billing.portalReady ? "Existing subscribers can still open billing management." : "Try again after billing setup is completed."}</span>
             </p>
           </div>
         )}
 
         <div className="iabt-billing-economics">
           <div><Zap /></div>
-          <p><strong>Customers buy from IABT.</strong><span>Paid subscriptions include credits that can cover eligible third-party production after an exact quote and approval. Free-plan production and paid-plan overages use purchased credits. IABT privately pays approved, replaceable suppliers and restores reserved credits when no durable result is produced.</span></p>
+          <p><strong>Credits fund your creation work.</strong><span>Free accounts receive 10 starter credits. Paid plans add credits after each verified monthly payment. Supported private work can run automatically within your balance; paid-provider work requires quote approval. A saved file does not guarantee a finished, tested application.</span></p>
         </div>
+
+        {billing.needsPaymentAttention && <p role="status" className="iabt-billing-note">Your subscription needs attention ({billing.subscriptionStatus.replaceAll("_", " ")}). Open billing management to review payment or resume your subscription.</p>}
+        {entitlement?.cancel_at_period_end && <p role="status" className="iabt-billing-note">Cancellation is scheduled at the end of your billing period. Purchased credits remain available.</p>}
 
         <div className="iabt-plan-grid">
           {IABT_PLANS.map((plan) => {
@@ -142,8 +145,8 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
                 </div>
                 <h3>{plan.name}</h3>
                 <div className="iabt-plan-price">
-                  <strong>{plan.monthlyPrice ? `$${plan.monthlyPrice}` : "$0"}</strong>
-                  <span>/ month</span>
+                  <strong>{plan.id === "free" ? "$0" : "Monthly plan"}</strong>
+                  <span>{plan.id === "free" ? "to start" : "price confirmed in Stripe"}</span>
                 </div>
                 <p>{plan.description}</p>
                 <ul>
@@ -157,7 +160,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
                     variant="outline"
                     className="w-full"
                     onClick={openBillingPortal}
-                    disabled={Boolean(busyPlan) || !billingReady}
+                    disabled={Boolean(busyPlan) || !billing.portalReady}
                   >
                     {busyPlan === "portal" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     {isCurrent
@@ -191,8 +194,8 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
         <div className="iabt-credit-pack">
           <div>
             <span className="iabt-credit-pack-kicker">Flexible creation capacity</span>
-            <strong>{AI_CREDIT_PACK.credits} extra IABT credits for {"$" + AI_CREDIT_PACK.price}</strong>
-            <p>Purchased credits remain available until used. They cover Free-plan paid production and overages after a paid plan's included credits are used. Every production job receives an exact IABT credit quote before approval.</p>
+            <strong>{billing.creditPackSize ? `${billing.creditPackSize.toLocaleString()} extra IABT credits` : "Extra IABT credit pack"}</strong>
+            <p>Purchased credits remain available until used. Review the price and taxes in Stripe before paying. Paid-provider work requires an accepted quote; supported private work can run automatically within your credit balance.</p>
           </div>
           <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan) || !billingReady}>
             {busyPlan === "credits" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -201,13 +204,13 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
         </div>
 
         <p className="iabt-billing-note">
-          {billingMode === "live"
+          {!billing.loaded ? "Billing status is unavailable. Reopen this page once your account has loaded." : billingMode === "live"
             ? billingReady
-              ? "Live Stripe configuration is complete. Checkout can create real charges."
-              : "Live billing mode is selected, but one or more Stripe keys, webhook settings, or price IDs are missing. Checkout will remain unavailable until configuration is complete."
+              ? "Live checkout can create real charges after you confirm payment in Stripe. Credits appear only after payment is verified."
+              : "Live purchases are unavailable until billing setup is completed."
             : billingReady
-              ? "Stripe test mode is fully configured. Test cards cannot create real charges."
-              : "Stripe test mode is selected, but one or more test keys, webhook settings, or price IDs still need configuration."}
+              ? "Test checkout is available. Credits from test payments are for testing this environment."
+              : "Test checkout is unavailable until billing setup is completed."}
         </p>
         <p className="iabt-billing-legal">
           Purchases are subject to the <Link to="/terms">Terms</Link>,{" "}
