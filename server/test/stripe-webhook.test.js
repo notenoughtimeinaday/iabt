@@ -175,6 +175,73 @@ const makeFixture = async () => {
   return { repository, user, metadata, subscription, session, invoice, deliver };
 };
 
+test("current Stripe item-boundary cancellation is projected without changing access or credits, and resumption clears it", async () => {
+  const f = await makeFixture();
+  const end = 1792523684;
+  delete f.subscription.current_period_end;
+  f.subscription.items.data[0].current_period_end = end;
+  f.subscription.cancel_at_period_end = false;
+  f.subscription.cancel_at = end;
+  await f.deliver("evt_schedule_funding", "checkout.session.completed", f.session);
+  await f.deliver("evt_schedule_current", "customer.subscription.updated", f.subscription);
+  const read = async () => (await f.repository.listRecords("AccountEntitlement", f.user))[0];
+  let entitlement = await read();
+  assert.equal(entitlement.plan, "pro");
+  assert.equal(entitlement.status, "active");
+  assert.equal(entitlement.cancel_at, new Date(end * 1000).toISOString());
+  assert.equal(entitlement.current_period_end, entitlement.cancel_at);
+  assert.equal(entitlement.cancellation_scheduled, true);
+  assert.equal(entitlement.cancel_at_period_end, true);
+  assert.equal(entitlement.provider_cancel_at_period_end, false);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 100);
+
+  // A stale event carries a schedule, but the current provider object is resumed.
+  const scheduledSnapshot = structuredClone(f.subscription);
+  f.subscription.cancel_at = null;
+  await f.deliver("evt_schedule_resumed", "customer.subscription.updated", scheduledSnapshot);
+  entitlement = await read();
+  assert.equal(entitlement.plan, "pro");
+  assert.equal(entitlement.cancel_at, null);
+  assert.equal(entitlement.cancellation_scheduled, false);
+  assert.equal(entitlement.cancel_at_period_end, false);
+
+  // Effective cancellation changes access only after Stripe reports canceled.
+  f.subscription.cancel_at = end;
+  f.subscription.status = "canceled";
+  await f.deliver("evt_schedule_effective", "customer.subscription.deleted", f.subscription);
+  entitlement = await read();
+  assert.equal(entitlement.plan, "free");
+  assert.equal(entitlement.cancellation_scheduled, false);
+  assert.equal(entitlement.cancel_at_period_end, false);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 100);
+  assert.equal(f.repository.creditEntries.length, 1);
+});
+
+test("custom and legacy cancellation schedules retain their meaning and malformed timestamps do not schedule cancellation", async () => {
+  const f = await makeFixture();
+  const end = f.subscription.current_period_end;
+  const cases = [
+    { name: "custom", cancel_at: end - 86400, cancel_at_period_end: false, scheduled: true, atEnd: false },
+    { name: "legacy", cancel_at: null, cancel_at_period_end: true, scheduled: true, atEnd: true },
+    { name: "zero", cancel_at: 0, cancel_at_period_end: false, scheduled: false, atEnd: false },
+    { name: "negative", cancel_at: -1, cancel_at_period_end: false, scheduled: false, atEnd: false },
+    { name: "invalid", cancel_at: "invalid", cancel_at_period_end: false, scheduled: false, atEnd: false },
+    { name: "overflow", cancel_at: Number.MAX_SAFE_INTEGER, cancel_at_period_end: false, scheduled: false, atEnd: false }
+  ];
+  for (const example of cases) {
+    f.subscription.cancel_at = example.cancel_at;
+    f.subscription.cancel_at_period_end = example.cancel_at_period_end;
+    await f.deliver("evt_schedule_" + example.name, "customer.subscription.updated", f.subscription);
+    const entitlement = (await f.repository.listRecords("AccountEntitlement", f.user))[0];
+    assert.equal(entitlement.cancellation_scheduled, example.scheduled, example.name);
+    assert.equal(entitlement.cancel_at_period_end, example.atEnd, example.name);
+    assert.equal(entitlement.provider_cancel_at_period_end, example.cancel_at_period_end, example.name);
+    assert.equal(entitlement.cancel_at, example.name === "custom" ? new Date(example.cancel_at * 1000).toISOString() : null, example.name);
+    assert.equal(entitlement.plan, "pro", example.name);
+  }
+  assert.equal(f.repository.creditEntries.length, 0);
+});
+
 test("different event IDs and delayed-success events fulfill one Checkout session only once", async () => {
   const f = await makeFixture();
   const outcomes = await Promise.all(Array.from({ length: 8 }, (_, i) => f.deliver(`evt_pack_${i}`,

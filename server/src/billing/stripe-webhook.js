@@ -90,13 +90,34 @@ const resolveUser = async (repository, object) => {
   return user;
 };
 
+const timestampIso = (seconds) => {
+  if (!Number.isSafeInteger(seconds) || seconds <= 0) return null;
+  const date = new Date(seconds * 1000);
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+};
+
 const periodEnd = (subscription) => {
-  const direct = Number(subscription?.current_period_end || 0);
+  const direct = timestampIso(subscription?.current_period_end);
   const itemEnds = (subscription?.items?.data || [])
-    .map((item) => Number(item?.current_period_end || 0))
-    .filter(Boolean);
-  const seconds = direct || (itemEnds.length ? Math.max(...itemEnds) : 0);
-  return seconds ? new Date(seconds * 1000).toISOString() : null;
+    .map((item) => item?.current_period_end)
+    .filter((seconds) => timestampIso(seconds));
+  return direct || (itemEnds.length ? timestampIso(Math.max(...itemEnds)) : null);
+};
+
+const cancellationSchedule = (subscription, status, currentPeriodEnd) => {
+  const cancelAt = timestampIso(subscription.cancel_at);
+  const providerAtPeriodEnd = subscription.cancel_at_period_end === true;
+  const scheduled = !["canceled", "inactive"].includes(status) && Boolean(cancelAt || providerAtPeriodEnd);
+  return {
+    cancel_at: cancelAt,
+    cancellation_scheduled: scheduled,
+    provider_cancel_at_period_end: providerAtPeriodEnd,
+    // Current Stripe responses can schedule the exact item period boundary via
+    // cancel_at while leaving cancel_at_period_end false. Preserve that raw
+    // provider flag and project the equivalent schedule for existing clients.
+    // A custom mid-cycle date must not be mislabeled as period-end cancellation.
+    cancel_at_period_end: scheduled && (providerAtPeriodEnd || Boolean(cancelAt && cancelAt === currentPeriodEnd))
+  };
 };
 
 const subscriptionPrice = (subscription) =>
@@ -166,6 +187,7 @@ const upsertSubscription = async ({ repository, config, subscription: snapshot, 
     if (existing?.provider_customer_id && existing.provider_customer_id !== idOf(subscription.customer)) {
       throw stripeError(409, "stripe_customer_mismatch", "Stripe customer does not match this account");
     }
+    const currentPeriodEnd = periodEnd(subscription);
     const fields = {
       user_id: user.id,
       user_email: user.email,
@@ -174,8 +196,8 @@ const upsertSubscription = async ({ repository, config, subscription: snapshot, 
       billing_provider: "stripe",
       provider_customer_id: idOf(subscription.customer),
       provider_subscription_id: String(subscription.id || ""),
-      current_period_end: periodEnd(subscription),
-      cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
+      current_period_end: currentPeriodEnd,
+      ...cancellationSchedule(subscription, status, currentPeriodEnd),
       ...defaults,
       bonus_ai_credits: Number(existing?.bonus_ai_credits || 0)
     };

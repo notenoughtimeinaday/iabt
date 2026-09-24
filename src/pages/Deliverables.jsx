@@ -127,7 +127,7 @@ export default function Deliverables() {
     setResolving((current) => ({ ...current, [artifact.id]: true }));
     try {
       const url = await resolveFileDownload(base44, artifact, true);
-      openFileDownload(url, artifact.name);
+      openFileDownload(url, artifact.name, true);
     } catch (error) {
       toast({ title: "File could not be downloaded", description: error.message, variant: "destructive" });
     } finally {

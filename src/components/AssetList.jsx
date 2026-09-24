@@ -38,7 +38,7 @@ export default function AssetList({ assets, onDelete, onUpdate }) {
     setDownloading(asset.id);
     try {
       const url = await resolveFileDownload(base44, asset, platformRuntime.backend === "standalone");
-      openFileDownload(url, asset.name);
+      openFileDownload(url, asset.name, platformRuntime.backend === "standalone");
     } catch (error) {
       toast({ title: "File could not be downloaded", description: error.message, variant: "destructive" });
     } finally {
