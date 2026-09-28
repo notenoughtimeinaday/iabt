@@ -1,19 +1,12 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { mkdir, open, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { SignedDownloadGateway } from "./download-gateway.js";
 
-const safeEqual = (left, right) => {
-  const a = Buffer.from(String(left || ""));
-  const b = Buffer.from(String(right || ""));
-  return a.length === b.length && timingSafeEqual(a, b);
-};
-
-export class LocalObjectStorage {
+export class LocalObjectStorage extends SignedDownloadGateway {
   constructor({ rootDirectory, apiOrigin, signingSecret }) {
+    super({ apiOrigin, signingSecret });
     this.kind = "local";
     this.rootDirectory = path.resolve(rootDirectory);
-    this.apiOrigin = String(apiOrigin || "").replace(/\/+$/, "");
-    this.signingSecret = signingSecret;
   }
 
   async ready() {
@@ -65,29 +58,14 @@ export class LocalObjectStorage {
     }
   }
 
-  signature(objectId, expiresAt) {
-    return createHmac("sha256", this.signingSecret)
-      .update(String(objectId) + ":" + String(expiresAt))
-      .digest("base64url");
-  }
-
-  verifyDownload(objectId, expiresAt, signature) {
-    const expires = Number(expiresAt);
-    if (!Number.isFinite(expires) || expires <= Date.now()) return false;
-    return safeEqual(signature, this.signature(objectId, expires));
-  }
-
-  async createReadUrl(record, { expiresInSeconds = 300 } = {}) {
-    const expires = Date.now() + Math.max(30, Math.min(900, expiresInSeconds)) * 1000;
-    const signature = this.signature(record.id, expires);
-    return (
-      this.apiOrigin +
-      "/v1/files/" +
-      encodeURIComponent(record.id) +
-      "/content?expires=" +
-      expires +
-      "&signature=" +
-      encodeURIComponent(signature)
-    );
+  async openReadStream(key, { signal } = {}) {
+    const handle = await open(this.resolveKey(key), "r");
+    try {
+      const stat = await handle.stat();
+      return { stream: handle.createReadStream({ signal }), sizeBytes: stat.size };
+    } catch (error) {
+      await handle.close();
+      throw error;
+    }
   }
 }

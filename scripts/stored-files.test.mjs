@@ -4,8 +4,9 @@ import { openFileDownload, resolveFileDownload, storedFileId } from "../src/lib/
 
 test("standalone downloads renew a signed link every time, even with an expired stored URL", async () => {
   let calls = 0;
-  const client = { files: { access: async (id) => {
+  const client = { files: { access: async (id, options) => {
     assert.equal(id, "owned-file");
+    assert.deepEqual(options, { download: true }, "downloads must select attachment delivery, not a preview link");
     return { file_url: "https://private.example/file?signature=" + ++calls };
   } } };
   const asset = { file_id: "owned-file", file_url: "https://private.example/expired" };

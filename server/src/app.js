@@ -10,6 +10,7 @@ import {
   verifyPassword
 } from "./security.js";
 import { readSingleFile } from "./multipart.js";
+import { streamPrivateDownload } from "./storage/download-gateway.js";
 import {
   createCreationPlan,
   creationRequestDisposition,
@@ -693,17 +694,20 @@ const handleFiles = async ({
     const { user } = await authenticate(req, repository);
     const record = await repository.getStoredObject(id, { ...user, role: "user" });
     if (!record) throw new HttpError(404, "file_not_found", "File was not found");
+    const fileUrl = url.searchParams.get("download") === "1"
+      ? await storage.createDownloadUrl(record, { expiresInSeconds: 300 })
+      : await storage.createReadUrl(record, { expiresInSeconds: 300 });
     return {
       status: 200,
       payload: {
         file_id: record.id,
-        file_url: await storage.createReadUrl(record, { expiresInSeconds: 300 }),
+        file_url: fileUrl,
         expires_in_seconds: 300
       }
     };
   }
 
-  if (req.method === "GET" && id && segments[3] === "content" && storage.kind === "local") {
+  if (req.method === "GET" && id && segments.length === 4 && segments[3] === "content") {
     const expires = url.searchParams.get("expires");
     const signature = url.searchParams.get("signature");
     if (!storage.verifyDownload(id, expires, signature)) {
@@ -711,14 +715,7 @@ const handleFiles = async ({
     }
     const record = await repository.getStoredObjectById(id);
     if (!record) throw new HttpError(404, "file_not_found", "File was not found");
-    const bytes = await storage.read(record.storage_key);
-    res.writeHead(200, {
-      ...responseHeaders(origin),
-      "Content-Type": record.content_type,
-      "Content-Length": String(bytes.length),
-      "Content-Disposition": "attachment; filename*=UTF-8''" + encodeURIComponent(record.original_name)
-    });
-    res.end(bytes);
+    await streamPrivateDownload({ req, res, storage, record, headers: responseHeaders(origin) });
     return { direct: true };
   }
 

@@ -240,7 +240,7 @@ export const standaloneClient = {
     readiness: () => request("/v1/providers/readiness"),
   },
   files: {
-    access: (id) => request(`/v1/files/${encodeURIComponent(id)}/access`),
+    access: (id, { download = false } = {}) => request(`/v1/files/${encodeURIComponent(id)}/access${download ? "?download=1" : ""}`),
   },
   integrations: {
     Core: {

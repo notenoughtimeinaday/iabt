@@ -10,7 +10,7 @@ export async function resolveFileDownload(client, asset, standalone) {
   const id = storedFileId(asset);
   if (standalone) {
     if (!id) throw new Error("This older attachment has no permanent file reference. Please upload it again.");
-    const access = await client.files.access(id);
+    const access = await client.files.access(id, { download: true });
     if (!access?.file_url) throw new Error("A fresh private download link could not be created. Please try again.");
     let parsed;
     try { parsed = new URL(access.file_url); }
@@ -28,7 +28,7 @@ export function openFileDownload(url, name, standalone = false) {
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = name || "download";
-  // Private storage signs Content-Disposition: attachment. Navigate the existing
+  // The API download gateway sets Content-Disposition: attachment. Navigate the existing
   // context so a slow access request cannot turn this into a blocked popup.
   // Let the browser stream the file; fetching a Blob would require storage CORS
   // and buffer the entire file in the page. Legacy URLs keep their old behavior.

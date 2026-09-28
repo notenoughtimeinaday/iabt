@@ -1,5 +1,8 @@
-export class S3ObjectStorage {
+import { SignedDownloadGateway } from "./download-gateway.js";
+
+export class S3ObjectStorage extends SignedDownloadGateway {
   constructor(config) {
+    super(config);
     this.kind = "s3";
     this.config = config;
     this.client = null;
@@ -73,6 +76,17 @@ export class S3ObjectStorage {
     }
   }
 
+  async openReadStream(key, { signal } = {}) {
+    const result = await this.client.send(new this.modules.GetObjectCommand({
+      Bucket: this.config.bucket,
+      Key: key
+    }), { abortSignal: signal });
+    return { stream: result.Body, sizeBytes: result.ContentLength };
+  }
+
+  // Preserve the existing storage URL for media previews, including the
+  // provider's MIME type and byte-range support. Explicit downloads use the
+  // inherited app-owned gateway instead of relying on response overrides.
   async createReadUrl(record, { expiresInSeconds = 300 } = {}) {
     return this.modules.getSignedUrl(
       this.client,

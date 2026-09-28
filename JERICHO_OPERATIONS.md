@@ -73,6 +73,18 @@ Limits: 12 files; 128 KiB and 2,000 lines per source; 256 KiB and 4,000 lines to
 
 Opaque PDF, Office, archive and media files may be stored but are not parsed for source review yet. Anyone possessing a valid signed download link can use it until expiry; issuing a new link requires the file owner's account, including for administrators.
 
+Private downloads pass through the API attachment gateway. Some S3-compatible
+providers ignore signed response-header overrides and render text or PDF inline;
+the gateway sets attachment headers itself and streams only the persisted file's
+bytes. It enforces the recorded size and checksum, a 200,000,000-byte ceiling and
+a 120-second transfer deadline. Failed or interrupted transfers do not regenerate
+the artifact or charge creation credits. Existing local download signatures remain
+valid until expiry. Keep signed links out of logs and public evidence. Gateway
+traffic uses the existing API host, whose free tier can suspend when idle.
+Download buttons request `GET /v1/files/:id/access?download=1`. Ordinary access
+and media previews retain their existing storage links, content types and range
+behavior; the attachment gateway does not implement video seeking or resume.
+
 This flow performs no model call, paid-provider operation, uploaded-code execution, external-link fetch or repository edit. It extracts literal candidate requirements, not general semantic conclusions or proof of implementation. Attached-file requests for other creation intents remain unsupported by the current planner. The lower-level orchestration inspection tool also uses the verified text reader, but this is not a claim that all uploaded formats or creation modes work together.
 
 ## Access, email and policy acceptance
