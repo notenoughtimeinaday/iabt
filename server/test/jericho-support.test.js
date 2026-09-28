@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { loadConfig } from "../src/config.js";
 import { buildJerichoKnowledge, describeFailure, respondToSupportRequest } from "../src/operations/jericho-support.js";
 
-const user = { id: "owner-1", role: "admin" };
+const user = { id: "owner-1", role: "admin", email_verified: true };
 const secret = "THIS_SHOULD_NEVER_APPEAR_IN_DIAGNOSTICS";
 const context = ({ jobs = [], incidents = [], readiness = {} } = {}) => ({
   user,
@@ -14,6 +14,12 @@ const context = ({ jobs = [], incidents = [], readiness = {} } = {}) => ({
     execute: () => { throw new Error("Diagnostics cannot execute providers"); }
   },
   repository: {
+    getMaintenance: async (ownerId) => { assert.equal(ownerId, user.id); return null; },
+    listRecordsExact: async (_entity, account) => {
+      assert.equal(account.id, user.id);
+      assert.equal(account.role, "user");
+      return [];
+    },
     listJobs: async (account, options) => {
       assert.equal(account.role, "user");
       assert.equal(account.id, user.id);
@@ -50,6 +56,7 @@ test("operational knowledge scopes owners, omits raw prompts and secrets, and di
   assert.equal(knowledge.providers.luma.live_probe_performed, false);
   assert.equal(knowledge.infrastructure.deployment_verified, false);
   assert.equal(knowledge.infrastructure.worker_liveness, "not_probed");
+  assert.equal(knowledge.maintenance.status, "not_enrolled");
   assert.equal(knowledge.learning.model_training, false);
   assert.equal(knowledge.learning.self_modification, false);
   assert.equal(knowledge.healthy, undefined);

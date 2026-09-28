@@ -12,7 +12,11 @@ export const createObjectStorage = async (config) => {
       throw new Error("Private object storage is missing: " + missing.join(", "));
     }
     const { S3ObjectStorage } = await import("./s3-storage.js");
-    storage = new S3ObjectStorage(config.storage);
+    storage = new S3ObjectStorage({
+      ...config.storage,
+      apiOrigin: config.apiOrigin,
+      signingSecret: config.authSecret
+    });
   } else {
     if (config.environment === "production") {
       throw new Error("S3-compatible private object storage is required in production");

@@ -64,7 +64,7 @@ export default function Home() {
       ]);
       const entitlementPayload = entitlementResponse?.data || entitlementResponse;
       setProjects(records);
-      setEntitlement(entitlementPayload?.entitlement || null);
+      setEntitlement(entitlementPayload?.entitlement || entitlementPayload || null);
       setBillingStatus(entitlementPayload?.billing || null);
       const importedTags = new Set(records.flatMap((project) => project.tags || []).filter((tag) => String(tag).startsWith("legacy:")));
       setLegacyProjects(readLegacyProjects().filter((item) => !importedTags.has(legacyTag(item.legacyId))));
@@ -281,8 +281,8 @@ export default function Home() {
         <section className="iabt-hero">
           <div>
             <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> Intelligent Application Building Tool</p>
-            <h1>Bring an objective. Leave with a finished deliverable.</h1>
-            <p>Tell JERICHO what you need in plain language. It plans the work, shows you the cost before production, and keeps every finished file in your Deliverables library.</p>
+            <h1>Bring an objective. Create and review your deliverables.</h1>
+            <p>Describe what you want to create. Eligible private work can start automatically using your IABT credits, with no external provider charge. JERICHO asks before paid services or consequential actions.</p>
             <div className="iabt-hero-actions">
               <Button size="lg" onClick={() => navigate("/studio")}>
                 <Sparkles className="h-4 w-4 mr-2" /> Open JERICHO Studio
@@ -297,8 +297,8 @@ export default function Home() {
             <div className="iabt-orbit orbit-two" />
             <div className="iabt-hero-card">
               <img className="iabt-hero-emblem" src="/iabt-mark.svg" alt="" />
-              <strong>Describe → approve → receive</strong>
-              <span>One conversation from idea to verified result.</span>
+              <strong>Describe → create → review</strong>
+              <span>Saved files, clear progress and remaining checks.</span>
             </div>
           </div>
         </section>
@@ -313,8 +313,8 @@ export default function Home() {
           </div>
           <div className="iabt-operator-steps">
             <article><span>01</span><strong>Describe the outcome</strong><p>Explain what you want to create and add any important details or files.</p></article>
-            <article><span>02</span><strong>Review the plan</strong><p>See the proposed work, expected cost, and any approvals before production begins.</p></article>
-            <article><span>03</span><strong>Receive the result</strong><p>Open or download the finished file from your permanent Deliverables library.</p></article>
+            <article><span>02</span><strong>Follow the work</strong><p>Eligible private tasks run automatically. Review a quote when paid services or consequential actions need your approval.</p></article>
+            <article><span>03</span><strong>Review saved files</strong><p>Open your Deliverables library and review remaining checks. Verified file delivery and tested software behavior are separate milestones.</p></article>
           </div>
         </section>
 
@@ -371,8 +371,8 @@ export default function Home() {
           ) : filtered.length === 0 ? (
             <div className="iabt-project-empty">
               <div><FolderOpen /></div>
-              <h3>{query ? "No projects match that search" : "Create your first SaaS app"}</h3>
-              <p>{query ? "Try a different name or clear the search." : "Start in JERICHO Studio. It plans, quotes, creates, and verifies the generated app package for review and delivery."}</p>
+              <h3>{query ? "No projects match that search" : "Create your first app project"}</h3>
+              <p>{query ? "Try a different name or clear the search." : "Start in JERICHO Studio to create a private preview or source package. Review its limitations and test the software before use."}</p>
               {!query && (
                 <div className="iabt-empty-actions">
                   <Button onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-2" /> Create with JERICHO Studio</Button>

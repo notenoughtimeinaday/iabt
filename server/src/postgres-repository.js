@@ -21,6 +21,12 @@ const safeUser = (row, includeSecret = false) => {
 };
 
 const timestamp = (value) => value?.toISOString?.() || value || null;
+const maintenanceFromRow = (row) => row ? {
+  ...clone(row),
+  next_run_at: timestamp(row.next_run_at), lease_expires_at: timestamp(row.lease_expires_at),
+  last_started_at: timestamp(row.last_started_at), last_completed_at: timestamp(row.last_completed_at),
+  created_at: timestamp(row.created_at), updated_at: timestamp(row.updated_at)
+} : null;
 
 const recordFromRow = (row) => ({
   ...clone(row.payload || {}),
@@ -148,6 +154,7 @@ export class PostgresRepository {
   // The callback must only use records/users/audit methods on its repository;
   // it must not perform network calls or start another transaction.
   async withRecordTransaction(callback) {
+    if (this.recordTransactionActive) return callback(this);
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -155,6 +162,7 @@ export class PostgresRepository {
       await client.query("SET LOCAL statement_timeout = '10s'");
       await client.query("SELECT pg_advisory_xact_lock(1782451011)");
       const transaction = new PostgresRepository({ pool: client });
+      transaction.recordTransactionActive = true;
       const result = await callback(transaction);
       await client.query("COMMIT");
       return result;
@@ -251,14 +259,14 @@ export class PostgresRepository {
   }
 
   async updatePassword(id, passwordHash) {
-    const result = await this.pool.query(
-      `UPDATE iabt_users
-       SET password_hash = $2, updated_at = now()
-       WHERE id = $1
-       RETURNING *`,
-      [id, passwordHash]
-    );
-    return safeUser(result.rows[0]);
+    return this.withTransaction(async (client) => {
+      const result = await client.query(
+        "UPDATE iabt_users SET password_hash = $2, email_verified = true, updated_at = now() WHERE id = $1 RETURNING *",
+        [id, passwordHash]
+      );
+      await client.query("DELETE FROM iabt_auth_sessions WHERE user_id = $1", [id]);
+      return safeUser(result.rows[0]);
+    });
   }
 
   async createSession({ tokenHash, userId, expiresAt, expectedPasswordHash }) {
@@ -421,16 +429,19 @@ export class PostgresRepository {
     return result.rows[0] ? recordFromRow(result.rows[0]) : null;
   }
 
-  async createRecord(entityName, user, input) {
-    const id = createId();
+  async createRecord(entityName, user, input, { id = createId() } = {}) {
     const result = await this.pool.query(
       `INSERT INTO iabt_entity_records
         (entity_name, id, owner_id, payload)
        VALUES ($1, $2, $3, $4::jsonb)
+       ON CONFLICT (entity_name, id) DO NOTHING
        RETURNING entity_name, id, owner_id, payload, created_at, updated_at`,
       [entityName, id, user.id, JSON.stringify(sanitizeRecordInput(input))]
     );
-    return recordFromRow(result.rows[0]);
+    if (result.rows[0]) return recordFromRow(result.rows[0]);
+    const existing = await this.getRecord(entityName, id, { ...user, role: "user" });
+    if (!existing) throw Object.assign(new Error("Record identity conflict"), { code: "record_conflict", status: 409 });
+    return existing;
   }
 
   async updateRecord(entityName, id, user, input) {
@@ -533,7 +544,7 @@ export class PostgresRepository {
 
   async startStripeEvent({ eventId, eventType, livemode, payloadSha256 }) {
     const claimed = await this.pool.query(
-      "INSERT INTO iabt_stripe_events (event_id, event_type, livemode, status, payload_sha256) VALUES ($1,$2,$3,'processing',$4) ON CONFLICT (event_id) DO UPDATE SET event_type = EXCLUDED.event_type, livemode = EXCLUDED.livemode, status = 'processing', payload_sha256 = EXCLUDED.payload_sha256, error_code = NULL, updated_at = now(), completed_at = NULL WHERE iabt_stripe_events.status = 'failed' OR iabt_stripe_events.updated_at < now() - interval '15 minutes' RETURNING *",
+      "INSERT INTO iabt_stripe_events (event_id, event_type, livemode, status, payload_sha256) VALUES ($1,$2,$3,'processing',$4) ON CONFLICT (event_id) DO UPDATE SET event_type = EXCLUDED.event_type, livemode = EXCLUDED.livemode, status = 'processing', payload_sha256 = EXCLUDED.payload_sha256, error_code = NULL, updated_at = now(), completed_at = NULL WHERE iabt_stripe_events.status = 'failed' OR (iabt_stripe_events.status = 'processing' AND iabt_stripe_events.updated_at < now() - interval '15 minutes') RETURNING *, updated_at::text AS claim_token",
       [eventId, eventType, Boolean(livemode), payloadSha256]
     );
     if (claimed.rowCount) return { claimed: true, event: claimed.rows[0] };
@@ -544,18 +555,41 @@ export class PostgresRepository {
     return { claimed: false, event: existing.rows[0] || null };
   }
 
-  async finishStripeEvent(eventId) {
+  async finishStripeEvent(eventId, { claimToken } = {}) {
     const result = await this.pool.query(
-      "UPDATE iabt_stripe_events SET status = 'succeeded', error_code = NULL, updated_at = now(), completed_at = now() WHERE event_id = $1 RETURNING *",
-      [eventId]
+      "UPDATE iabt_stripe_events SET status = 'succeeded', error_code = NULL, updated_at = now(), completed_at = now() WHERE event_id = $1 AND ($2::timestamptz IS NULL OR (status = 'processing' AND updated_at = $2::timestamptz)) RETURNING *",
+      [eventId, claimToken || null]
     );
     return result.rows[0] || null;
   }
 
-  async failStripeEvent(eventId, errorCode) {
+  async failStripeEvent(eventId, errorCode, { claimToken } = {}) {
     const result = await this.pool.query(
-      "UPDATE iabt_stripe_events SET status = 'failed', error_code = $2, updated_at = now() WHERE event_id = $1 RETURNING *",
-      [eventId, String(errorCode || "stripe_event_failed")]
+      "UPDATE iabt_stripe_events SET status = 'failed', error_code = $2, updated_at = now() WHERE event_id = $1 AND ($3::timestamptz IS NULL OR (status = 'processing' AND updated_at = $3::timestamptz)) RETURNING *",
+      [eventId, String(errorCode || "stripe_event_failed"), claimToken || null]
+    );
+    return result.rows[0] || null;
+  }
+
+  async findLegacyStripeCreditGrants({ checkoutSessionId }) {
+    if (!/^cs_[a-zA-Z0-9_]+$/.test(String(checkoutSessionId || ""))) throw new Error("Invalid checkout session identity");
+    const result = await this.pool.query(
+      `SELECT id, owner_id, amount, idempotency_key, metadata FROM iabt_credit_entries
+       WHERE entry_type = 'grant' AND idempotency_key ~ '^stripe:evt_[a-zA-Z0-9_]+$'
+         AND metadata ->> 'checkout_session_id' = $1
+       LIMIT 2`,
+      [checkoutSessionId]
+    );
+    return result.rows;
+  }
+
+  async findStarterCreditGrant(ownerId) {
+    const result = await this.pool.query(
+      `SELECT id, owner_id, amount, idempotency_key FROM iabt_credit_entries
+       WHERE owner_id = $1 AND entry_type = 'grant'
+         AND (idempotency_key = 'signup:free:v1' OR metadata ->> 'source' = 'initial_free_allowance')
+       LIMIT 1`,
+      [ownerId]
     );
     return result.rows[0] || null;
   }
@@ -564,6 +598,9 @@ export class PostgresRepository {
     const value = Math.floor(Number(amount));
     if (!Number.isInteger(value) || value <= 0) throw new Error("Credit grant must be positive");
     return this.withTransaction(async (client) => {
+      // Distinct webhook deliveries can describe the same purchase. Serialize
+      // its grant before the existence check, including the initial account.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`grant:${ownerId}:${idempotencyKey}`]);
       const existing = await client.query(
         "SELECT id FROM iabt_credit_entries WHERE owner_id = $1 AND entry_type = 'grant' AND idempotency_key = $2",
         [ownerId, idempotencyKey]
@@ -595,6 +632,7 @@ export class PostgresRepository {
     maxAttempts = 3
   }) {
     return this.withTransaction(async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`job:${ownerId}:${idempotencyKey}`]);
       const existing = await client.query(
         "SELECT * FROM iabt_jobs WHERE owner_id = $1 AND idempotency_key = $2 LIMIT 1",
         [ownerId, idempotencyKey]
@@ -617,7 +655,7 @@ export class PostgresRepository {
       }
       const id = createId();
       const inserted = await client.query(
-        "INSERT INTO iabt_jobs (id, owner_id, job_type, input, approval, idempotency_key, credit_amount, max_attempts) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8) RETURNING *",
+        "INSERT INTO iabt_jobs (id, owner_id, job_type, status, input, approval, idempotency_key, credit_amount, max_attempts) VALUES ($1, $2, $3, 'queued', $4::jsonb, $5::jsonb, $6, $7, $8) RETURNING *",
         [
           id,
           ownerId,
@@ -657,6 +695,15 @@ export class PostgresRepository {
       [jobId, workerId]
     );
     return result.rowCount === 1;
+  }
+
+  async checkpointJob({ jobId, workerId, outputPatch = {} }) {
+    const result = await this.pool.query(
+      "UPDATE iabt_jobs SET output = output || $3::jsonb, updated_at = now() WHERE id = $1 AND status = 'running' AND locked_by = $2 RETURNING *",
+      [jobId, workerId, JSON.stringify(outputPatch)]
+    );
+    if (!result.rows[0]) throw Object.assign(new Error("Job lease is no longer owned by this worker"), { code: "job_lease_lost" });
+    return jobFromRow(result.rows[0]);
   }
 
   async createStoredObject({
@@ -730,6 +777,7 @@ export class PostgresRepository {
       }
       const stored = storedArtifacts[0] || null;
       const finalOutput = {
+        ...job.output,
         ...output,
         ...(stored
           ? {
@@ -860,6 +908,7 @@ export class PostgresRepository {
         [
           job.id,
           JSON.stringify({
+            ...job.output,
             incident_id: incident.id,
             recovery: "credit_release",
             released_credits: job.credit_amount
@@ -914,5 +963,87 @@ export class PostgresRepository {
       params
     );
     return result.rows.map(jobFromRow);
+  }
+
+  async ensureMaintenance({ ownerId, intervalMs = 900000 }) {
+    await this.pool.query(`INSERT INTO iabt_maintenance(owner_id, interval_ms)
+      SELECT id, $2 FROM iabt_users WHERE id = $1 AND email_verified
+      ON CONFLICT(owner_id) DO NOTHING`, [ownerId, intervalMs]);
+    return this.getMaintenance(ownerId);
+  }
+
+  async getMaintenance(ownerId) {
+    const result = await this.pool.query("SELECT * FROM iabt_maintenance WHERE owner_id = $1", [ownerId]);
+    return maintenanceFromRow(result.rows[0]);
+  }
+
+  async enrollVerifiedMaintenance({ intervalMs = 900000, limit = 100 } = {}) {
+    const result = await this.pool.query(`INSERT INTO iabt_maintenance(owner_id, interval_ms)
+      SELECT u.id, $1 FROM iabt_users u WHERE u.email_verified
+        AND NOT EXISTS (SELECT 1 FROM iabt_maintenance m WHERE m.owner_id = u.id)
+      ORDER BY u.created_at, u.id LIMIT $2 ON CONFLICT(owner_id) DO NOTHING`, [intervalMs, Math.max(1, Math.min(100, limit))]);
+    return result.rowCount;
+  }
+
+  async configureMaintenance({ ownerId, enabled, intervalMs }) {
+    const result = await this.pool.query(`UPDATE iabt_maintenance SET enabled = $2, interval_ms = $3,
+      next_run_at = now(), lease_token = NULL, locked_by = NULL, lease_expires_at = NULL, updated_at = now()
+      WHERE owner_id = $1 RETURNING *`, [ownerId, enabled, intervalMs]);
+    return maintenanceFromRow(result.rows[0]);
+  }
+
+  async claimDueMaintenance({ workerId, leaseMs }) {
+    const result = await this.pool.query(`WITH due AS (
+      SELECT m.owner_id FROM iabt_maintenance m JOIN iabt_users u ON u.id = m.owner_id
+      WHERE m.enabled AND u.email_verified AND m.next_run_at <= clock_timestamp()
+        AND (m.lease_token IS NULL OR m.lease_expires_at <= clock_timestamp())
+      ORDER BY m.next_run_at, m.owner_id FOR UPDATE OF m SKIP LOCKED LIMIT 1
+    ) UPDATE iabt_maintenance m SET lease_token = $1, locked_by = $2,
+      lease_expires_at = clock_timestamp() + $3 * interval '1 millisecond', last_started_at = clock_timestamp(), updated_at = clock_timestamp()
+      FROM due WHERE m.owner_id = due.owner_id RETURNING m.*`, [createId(), workerId, leaseMs]);
+    return maintenanceFromRow(result.rows[0]);
+  }
+
+  async withMaintenanceLease({ ownerId, leaseToken }, callback) {
+    return this.withRecordTransaction(async (tx) => {
+      const result = await tx.pool.query(`SELECT * FROM iabt_maintenance WHERE owner_id = $1
+        AND enabled AND lease_token = $2 AND lease_expires_at > clock_timestamp() FOR UPDATE`, [ownerId, leaseToken]);
+      if (!result.rows.length) throw Object.assign(new Error("Maintenance lease changed"), { code: "maintenance_lease_lost" });
+      return callback(tx, maintenanceFromRow(result.rows[0]));
+    });
+  }
+
+  async renewMaintenanceLease({ ownerId, leaseToken, leaseMs }) {
+    return this.withMaintenanceLease({ ownerId, leaseToken }, async (tx) => {
+      await tx.pool.query("UPDATE iabt_maintenance SET lease_expires_at = clock_timestamp() + $2 * interval '1 millisecond' WHERE owner_id = $1", [ownerId, leaseMs]);
+      return true;
+    });
+  }
+
+  async saveMaintenanceProgress({ ownerId, leaseToken, checkpoint, summary }) {
+    return this.withMaintenanceLease({ ownerId, leaseToken }, async (tx) => {
+      const result = await tx.pool.query(`UPDATE iabt_maintenance SET checkpoint = COALESCE($2::jsonb, checkpoint),
+        summary = COALESCE($3::jsonb, summary), updated_at = now() WHERE owner_id = $1 RETURNING *`,
+      [ownerId, checkpoint === undefined ? null : JSON.stringify(checkpoint), summary === undefined ? null : JSON.stringify(summary)]);
+      return maintenanceFromRow(result.rows[0]);
+    });
+  }
+
+  async finishMaintenance({ ownerId, leaseToken, checkpoint, summary, nextRunAt, failed = false }) {
+    return this.withMaintenanceLease({ ownerId, leaseToken }, async (tx) => {
+      const result = await tx.pool.query(`UPDATE iabt_maintenance SET checkpoint = $2::jsonb, summary = $3::jsonb,
+        next_run_at = $4, consecutive_failures = CASE WHEN $5 THEN consecutive_failures + 1 ELSE 0 END,
+        last_completed_at = now(), updated_at = now(), lease_token = NULL, locked_by = NULL, lease_expires_at = NULL
+        WHERE owner_id = $1 RETURNING *`, [ownerId, JSON.stringify(checkpoint), JSON.stringify(summary), nextRunAt, failed]);
+      return maintenanceFromRow(result.rows[0]);
+    });
+  }
+
+  async listMaintenanceJobs({ ownerId, cursor = null, limit = 25 }) {
+    const result = await this.pool.query(`SELECT *, to_char(completed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS maintenance_completed_at FROM iabt_jobs WHERE owner_id = $1
+      AND status IN ('succeeded', 'failed', 'needs_setup') AND completed_at IS NOT NULL
+      AND ($2::timestamptz IS NULL OR (completed_at, id) > ($2::timestamptz, $3::uuid))
+      ORDER BY completed_at, id LIMIT $4`, [ownerId, cursor?.completed_at || null, cursor?.job_id || null, Math.max(1, Math.min(25, limit))]);
+    return result.rows.map((row) => ({ ...jobFromRow(row), maintenance_cursor: { completed_at: row.maintenance_completed_at, job_id: row.id } }));
   }
 }

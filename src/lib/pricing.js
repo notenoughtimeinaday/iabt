@@ -5,13 +5,14 @@ export const IABT_PLANS = [
     eyebrow: "Explore",
     monthlyPrice: 0,
     projectLimit: 1,
-    monthlyAiCredits: 10,
+    monthlyAiCredits: 0,
+    starterAiCredits: 10,
     description: "Validate one app idea before committing.",
     features: [
       "1 cloud project",
-      "10 IABT credits each month",
+      "10 starter IABT credits",
       "Live preview, JSON and standalone HTML",
-      "Paid media available with purchased credits",
+      "Eligible paid media with credits and approval",
     ],
   },
   {
@@ -24,7 +25,7 @@ export const IABT_PLANS = [
     description: "For makers building and testing several applications.",
     features: [
       "5 cloud projects",
-      "100 IABT credits each month",
+      "100 credits per paid monthly billing cycle",
       "HTML and static ZIP exports",
       "Included credits cover eligible paid production",
     ],
@@ -36,10 +37,10 @@ export const IABT_PLANS = [
     monthlyPrice: 79,
     projectLimit: 25,
     monthlyAiCredits: 500,
-    description: "For founders shipping production-ready SaaS products.",
+    description: "For founders creating and testing commercial projects.",
     features: [
       "25 cloud projects",
-      "500 IABT credits each month",
+      "500 credits per paid monthly billing cycle",
       "React exports and commercial-use rights",
       "Included credits cover commercial production",
     ],
@@ -54,9 +55,9 @@ export const IABT_PLANS = [
     description: "For teams building a portfolio of client applications.",
     features: [
       "Unlimited cloud projects",
-      "2,000 IABT credits each month",
-      "White-label exports and up to 5 team seats",
-      "Included credits cover team production",
+      "2,000 credits per paid monthly billing cycle",
+      "React source exports for client projects",
+      "Included credits cover eligible production",
     ],
   },
 ];

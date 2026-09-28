@@ -89,6 +89,26 @@ export const loadConfig = (env = process.env) => {
       pollMs: asPositiveInteger(env.IABT_JOB_POLL_MS, 1500),
       leaseMs: asPositiveInteger(env.IABT_JOB_LEASE_MS, 5 * 60 * 1000)
     }),
+    maintenance: Object.freeze({
+      enabled: env.IABT_MAINTENANCE_ENABLED === undefined || asBoolean(env.IABT_MAINTENANCE_ENABLED),
+      remoteReadbackEnabled: asBoolean(env.IABT_MAINTENANCE_REMOTE_READBACK_ENABLED),
+      intervalMs: Math.max(300000, Math.min(asPositiveInteger(env.IABT_MAINTENANCE_INTERVAL_MS, 900000), 86400000)),
+      pollMs: Math.max(1000, Math.min(asPositiveInteger(env.IABT_MAINTENANCE_POLL_MS, 15000), 60000)),
+      leaseMs: Math.max(30000, Math.min(asPositiveInteger(env.IABT_MAINTENANCE_LEASE_MS, 120000), 600000)),
+      maxJobs: Math.min(asPositiveInteger(env.IABT_MAINTENANCE_MAX_JOBS, 25), 25),
+      maxPassMs: Math.max(1000, Math.min(asPositiveInteger(env.IABT_MAINTENANCE_MAX_PASS_MS, 30000), 60000)),
+      maxArtifactBytes: Math.min(asPositiveInteger(env.IABT_MAINTENANCE_MAX_ARTIFACT_BYTES, 2000000), 2000000),
+      maxPassBytes: Math.min(asPositiveInteger(env.IABT_MAINTENANCE_MAX_PASS_BYTES, 8000000), 8000000)
+    }),
+    orchestration: Object.freeze({
+      enabled: asBoolean(env.IABT_ENABLE_ORCHESTRATION),
+      budgetAccepted: asBoolean(env.IABT_ORCHESTRATION_BUDGET_ACCEPTED),
+      responseCostCents: asPositiveInteger(env.IABT_OPENAI_RESPONSE_COST_CENTS, 0),
+      budgetCents: asPositiveInteger(env.IABT_ORCHESTRATION_BUDGET_CENTS, 0),
+      maxTurns: Math.min(asPositiveInteger(env.IABT_ORCHESTRATION_MAX_TURNS, 8), 8),
+      maxPolls: Math.min(asPositiveInteger(env.IABT_ORCHESTRATION_MAX_POLLS, 120), 120),
+      maxOutputTokens: Math.min(asPositiveInteger(env.IABT_ORCHESTRATION_MAX_OUTPUT_TOKENS, 6000), 6000)
+    }),
     storage: Object.freeze({
       provider: storageProvider,
       localDirectory: env.IABT_LOCAL_STORAGE_DIR || ".iabt-storage",

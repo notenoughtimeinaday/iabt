@@ -233,7 +233,7 @@ test("JERICHO conversations and bounded autonomy health are independently persis
     {
       method: "POST",
       token: user.access_token,
-      body: { role: "user", content: "Create a browser piano" }
+      body: { role: "user", content: "Create a browser piano", quote_only: true }
     }
   );
   assert.equal(updated.response.status, 200);

@@ -8,7 +8,7 @@ const customerId = (entitlement) =>
 
 const currentEntitlement = async (repository, user) =>
   (
-    await repository.listRecords("AccountEntitlement", user, {
+    await repository.listRecordsExact("AccountEntitlement", { ...user, role: "user" }, {
       query: { user_id: user.id },
       sort: "-updated_date",
       limit: 1
@@ -68,32 +68,18 @@ export const createSubscriptionCheckout = async ({
   config,
   user,
   plan,
-  idempotencyKey
+  idempotencyKey,
+  now = Date.now
 }) => {
-  assertCheckoutReady(providers);
   if (!["builder", "pro", "agency"].includes(plan)) {
     throw billingError(400, "invalid_subscription_plan", "Plan must be builder, pro, or agency");
   }
   const entitlement = await currentEntitlement(repository, user);
   const customer = customerId(entitlement);
-  const hasSubscription =
-    customer.startsWith("cus_") &&
-    String(entitlement?.provider_subscription_id || "").startsWith("sub_") &&
-    ["active", "trialing", "past_due", "paused"].includes(String(entitlement?.status || ""));
+  const hasSubscription = hasManagedSubscription(entitlement);
 
   if (hasSubscription) {
-    const portal = await createStripeSession({
-      providers,
-      config,
-      user,
-      path: "/billing_portal/sessions",
-      params: {
-        customer,
-        return_url: config.publicOrigin + "/"
-      },
-      action: "portal-existing-subscription",
-      idempotencyKey
-    });
+    const portal = await createCustomerPortal({ repository, providers, config, user, idempotencyKey });
     return {
       ok: true,
       kind: "portal",
@@ -101,6 +87,8 @@ export const createSubscriptionCheckout = async ({
       message: "An existing subscription must be changed through the customer portal."
     };
   }
+
+  assertCheckoutReady(providers);
 
   const metadata = {
     iabt_app_id: config.providers.stripe.metadataAppId,
@@ -123,16 +111,19 @@ export const createSubscriptionCheckout = async ({
     params["metadata[" + key + "]"] = value;
     params["subscription_data[metadata][" + key + "]"] = value;
   }
-  const session = await createStripeSession({
-    providers,
-    config,
-    user,
-    path: "/checkout/sessions",
-    params,
-    action: "subscription-checkout-" + plan,
-    idempotencyKey
+  const pending = await subscriptionCheckoutAttempt({ repository, user, config, plan, params, now,
+    submit: async (frozenParams, providerKey) => {
+      const result = await providers.execute("stripe", "post", { path: "/checkout/sessions", params: frozenParams, estimated_cost_cents: 0 },
+        executionContext({ user, action: "subscription-checkout-" + plan, idempotencyKey: providerKey, live: config.providers.stripe.mode === "live" }));
+      return result?.data;
+    },
+    retrieve: (sessionId) => retrieveSubscriptionCheckout({ config, sessionId, fetchImpl: providers.fetch || globalThis.fetch })
   });
-  return { ok: true, kind: "checkout", url: session.url, session_id: session.id };
+  if (pending.kind === "portal_required") {
+    const portal = await createCustomerPortal({ repository, providers, config, user, idempotencyKey });
+    return { ...portal, message: "An existing subscription must be changed through the customer portal." };
+  }
+  return pending;
 };
 
 export const createCreditCheckout = async ({
@@ -208,3 +199,4 @@ export const createCustomerPortal = async ({
   });
   return { ok: true, kind: "portal", url: portal.url };
 };
+import { hasManagedSubscription, retrieveSubscriptionCheckout, subscriptionCheckoutAttempt } from "./checkout-attempt.js";
