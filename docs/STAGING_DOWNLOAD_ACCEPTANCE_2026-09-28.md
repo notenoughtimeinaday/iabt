@@ -33,9 +33,37 @@ Local `npm run verify` passed: 272 backend checks passed and 24 database checks
 were skipped because this runner has no disposable PostgreSQL instance. All 14
 file, 5 frontend and 8 readiness checks passed, as did lint, typecheck and the
 production build. The focused backend delivery/source checks passed 28/28 with
-no skips. GitHub Actions must run the PostgreSQL checks before staging deployment.
+no skips.
 
-CI results, the deployed repair commit, saved-file hashes, reopening, rendered
+GitHub Actions run `36461619177` passed full repository verification, including
+disposable PostgreSQL integration, for branch commit
+`0ee609729c5b5719474887e41bc0b1f8f22efcfd`. Its PR merge checkout was
+`bc901c3c3baf8b50655ee9d91dc58461adc31705`; both commits have identical tree
+`f251dafa1e6f0bfa270c059fe416d2610650b6e7`. The uploaded readiness report was
+inspected and reports all repository gates passed, with live acceptance separate.
+
+## Deployment continuation
+
+The repair has not been deployed. The Render connector can read the confirmed
+workspace, but its deployment operation cannot select a commit. Both services
+track `main` with automatic deployment off, so a generic deploy would select the
+wrong source. Dashboard access to the existing workspace is required to deploy
+the exact tested repair commit. Browser authentication has not established that
+access; the browser remains on Render's sign-in page.
+
+After account access is established:
+
+1. Verify the API's nonsecret `IABT_API_ORIGIN` equals its public staging origin.
+2. Deploy exact commit `0ee609729c5b5719474887e41bc0b1f8f22efcfd` to the existing
+   API and staging frontend using the dashboard's specific-commit deployment.
+3. Reuse the existing Markdown, DOCX and PDF source-review artifacts. Confirm
+   native browser download completion, saved bytes/hash, readable content and
+   layout, and repeat retrieval after reloading Deliverables.
+4. Confirm the observed 209-credit balance is unchanged by download-only checks.
+   Record hosted results separately; do not close the owner's correction without
+   its explicit acceptance, or imply generated-code/runtime acceptance.
+
+The deployed repair commit, saved-file hashes, reopening, rendered
 content and final balance must be recorded after verification. At this checkpoint,
 repaired hosted delivery remains **pending**. The earlier owner
 correction remains open until its separate explicit acceptance requirements pass.
