@@ -2,6 +2,8 @@
 
 IABT is a standalone creation and project-operations application. JERICHO Studio turns an authenticated objective into a server-owned plan, executes supported private work, and delivers saved artifacts. The independent stack is **Render + Neon PostgreSQL + Resend + GitHub**, with private S3-compatible file storage. Base44 is not required by the standalone runtime.
 
+Start release and payment work from the [current release status](docs/CURRENT_RELEASE_STATUS.md), which identifies the canonical isolated staging environment and separates completed checks from remaining acceptance gates. Refresh its recorded source/deployment identities before making changes; older staging records remain historical evidence.
+
 This branch advances bounded autonomy and learning from recorded evidence. It does **not** certify that every product feature is complete, that generated applications work, or that the release is ready for production. See the [completion and evidence matrix](docs/AUTONOMY_V1.md), [operational guide](JERICHO_OPERATIONS.md), and [staging acceptance runbook](STANDALONE_DEPLOYMENT.md).
 
 ## Implemented behavior
@@ -13,7 +15,7 @@ This branch advances bounded autonomy and learning from recorded evidence. It do
 - Optional OpenAI Responses background orchestration with registered tools, model-proposed dependency graphs, durable polling and checkpointed tool results.
 - Bounded retry and recovery, immutable artifact identity, storage readback checksums, and credit capture after durable delivery. Uncertain paid submissions are not silently submitted again.
 - A versioned JERICHO curriculum, account-owned execution observations, structured user corrections and evidence-linked improvement proposals. These records help future work avoid repetition; they do not train model weights or edit software autonomously.
-- Existing Exchange collaboration, integration records, entitlements, Stripe test/live separation, private media adapters, document exports and application/source packages. Each has separate acceptance requirements; presence in the repository is not proof of live readiness.
+- Existing Exchange collaboration, integration records, entitlements, Stripe mode validation and a persistent database mode binding, private media adapters, document exports and application/source packages. The mode binding prevents configuration from converting test-funded state into live state; production data and Stripe account identity still require separate reconciliation. Each feature has separate acceptance requirements; presence in the repository is not proof of live readiness.
 
 Paid providers, external communication, publication, destructive operations, account/security changes and other consequential actions retain their approval gates. The model cannot grant itself tools, credentials, spending authority or infrastructure access.
 

@@ -183,16 +183,16 @@ for (const adapter of ["memory", "postgres"]) {
     assert.equal(f.sessions.size, 2);
   });
 
-  regression("Checkout is isolated by owner and mode and a failed provider read cannot authorize replacement", async (t) => {
+  regression("Checkout is isolated by owner, database mode cannot flip, and failed reads cannot authorize replacement", async (t) => {
     const f = await fixture(t, adapter);
     const first = await f.create();
     const other = await f.repository.createUser({ email: "other-owner@example.test", role: "admin", passwordHash: "unused", emailVerified: true });
     const distinct = await f.create({ user: other });
     assert.notEqual(distinct.session_id, first.session_id);
     const live = structuredClone(f.config); live.providers.stripe.mode = "live"; live.providers.stripe.secretKey = "sk_live_synthetic_only";
-    const separateMode = await f.create({ config: live });
-    assert.notEqual(separateMode.session_id, first.session_id);
-    assert.equal(f.sessions.get(separateMode.session_id).livemode, true, "This is a synthetic provider fixture, not a real live-mode call");
+    const beforeModeSwitch = f.calls.length;
+    await assert.rejects(f.create({ config: live }), { code: "billing_environment_conflict" });
+    assert.equal(f.calls.length, beforeModeSwitch, "conflicting configuration must never reach Stripe");
     const prior = f.calls.length;
     f.advance(32 * 60000);
     f.providers.fetch = async () => ({ ok: false, json: async () => ({ private: "provider error body" }) });

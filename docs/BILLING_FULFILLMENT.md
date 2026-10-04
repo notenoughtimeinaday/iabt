@@ -128,6 +128,38 @@ with memory and disposable PostgreSQL repositories.
 
 ## Configuration and acceptance
 
+### Database billing-mode binding
+
+The new candidate adds migration `007_billing_environment.sql` and a private
+singleton binding for one Stripe mode per database. API and worker startup
+check the binding before initializing storage or providers. Checkout, portal and
+webhook entry points also check it before provider calls or event receipt
+writes. A conflicting mode fails closed; no environment variable or public
+entity endpoint resets or overrides the binding.
+
+On first initialization, the repository inspects durable Stripe receipts,
+fulfillment/Checkout records, grants and entitlements. Conflicting modes or
+unclassified Stripe-associated history require reconciliation. A legacy
+entitlement or subscription-sync row without an explicit mode needs durable
+allowance evidence for the **same owner and exact subscription ID**. An unrelated
+credit pack, another subscription, another owner's receipt or a newly prepared
+Checkout cannot classify it. A database without Stripe history binds to its
+first requested mode; ordinary starter credits do not imply Stripe provenance.
+New billing records preserve explicit mode provenance.
+
+Drain pre-binding API and worker binaries before first initialization. Older
+code does not honor this guard and must not keep writing while or after the
+initial history check. The binding protects test versus live mode; it does not
+verify which Stripe account owns the configured credentials, prices or webhook.
+That account-identity check remains a separate acceptance requirement.
+
+Owner-only entitlements and credit balances remain shared within that database.
+Live billing therefore requires separately reconciled data and a reviewed
+migration, not changing the test database's mode. Do not reinterpret test grants
+as live purchased credits or infer permission to reset balances. The deployed
+78d1c82 baseline has six migrations; this seventh-migration candidate still
+requires its own local, CI and isolated-deployment verification.
+
 Subscribe the same-mode Stripe webhook destination to:
 
 - `checkout.session.completed` and `checkout.session.async_payment_succeeded`.

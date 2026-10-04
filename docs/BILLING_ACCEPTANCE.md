@@ -5,21 +5,26 @@ the pending Checkout guard below was added during the follow-up audit.
 The added [local acceptance-contract tests](../server/test/billing-acceptance.test.js)
 use synthetic signed events, mocked Stripe responses and private local files.
 They do not establish a completed hosted Checkout, actual decline, recurring
-collection, portal cancellation, refund or staging delivery. Actual September
-20–22 browser, Stripe and Neon results are recorded separately in the
+collection, portal cancellation, refund or staging delivery. Historical September
+20–23 browser, Stripe and Neon results are recorded separately in the
 [dated staging payment and delivery report](STAGING_PAYMENT_DELIVERY_ACCEPTANCE_2026-09-22.md).
-The table distinguishes those observed passes from the work still required.
+The [October 4 continuation](STAGING_CONTINUATION_2026-10-04.md) adds actual
+isolated-staging file delivery and exact-candidate verification. Use
+[CURRENT_RELEASE_STATUS.md](CURRENT_RELEASE_STATUS.md) for the canonical
+candidate and isolated environment. Earlier payment results belong to the older
+Insured Spending test integration; they do not establish billing acceptance for
+the current isolated environment or another Stripe account.
 
 | Scenario | Existing local evidence | Remaining sandbox acceptance | Status |
 | --- | --- | --- | --- |
 | Hosted subscription Checkout | Server derives tier, price, owner metadata and redirects. A subscription label grants no credits by itself. | Verify fulfillment when the customer never visits the success page; keep renewal and cancellation acceptance separate. | **Initial hosted payment and one 100-credit allowance passed September 20.** [Evidence](STAGING_PAYMENT_DELIVERY_ACCEPTANCE_2026-09-22.md#september-20-hosted-subscription-payment) |
 | Hosted credit-pack Checkout | Server captures pack quantity; paid session identity grants once; unpaid completion waits for delayed success. | Exercise an enabled asynchronous method through pending then successful or failed settlement. No credits may appear while payment is unpaid or failed. | **Hosted card payment and one 100-credit pack grant passed September 22.** Asynchronous settlement unverified. [Evidence](STAGING_PAYMENT_DELIVERY_ACCEPTANCE_2026-09-22.md#september-22-hosted-credit-pack-and-replay) |
 | Signed delivery, replay and interrupted fulfillment | Memory and PostgreSQL tests cover signatures, same/different event IDs, concurrent instances, crash windows and restart. | Verify hosted different-event/same-payment delivery and an interrupted fulfillment in an isolated environment, with no duplicate grant. | **Actual signed delivery and same-event replay passed.** Invoice replay returned 200/reused with three grant entries unchanged; September 23 pack replay returned 200 with the reloaded balance unchanged. Hosted interruption and other-event cases remain open. [Evidence](STAGING_PAYMENT_DELIVERY_ACCEPTANCE_2026-09-22.md#september-22-hosted-credit-pack-and-replay) |
-| Purchased credit to private artifact | The local contract combines purchase fulfillment, automatic document creation, worker byte verification, credit capture and file readback. | Repair browser download handoff; download and inspect hosted artifacts, reload/restart and retrieve again. Verify second-account denial and terminal failure release. | **Partial:** hosted job succeeded once, recorded three verified formats and one reserve/capture; balance 210 to 209. Browser download did not start and is not passed. Local visual checks are separate. [Evidence](STAGING_PAYMENT_DELIVERY_ACCEPTANCE_2026-09-22.md#september-22-funded-private-studio-execution) |
+| Purchased credit to private artifact | The local contract combines purchase fulfillment, automatic document creation, worker byte verification, credit capture and file readback. | Complete the payment-to-delivery journey in the canonical isolated environment, hosted second-account denial, terminal failure release and actual storage recovery. Reuse the completed source-review job for file checks. | **File-delivery defect repaired:** October 4 isolated staging produced actual MD/DOCX/PDF downloads, repeated matching hashes and successful Word/PDF visual review. Starter-credit balance changed 10 to 9 once; this was not a fresh paid purchase. Saved state and matching PDF download also passed after deployment to 78d1c82. The older purchased-credit job (210 to 209) remains separate historical evidence. [October 4 evidence](STAGING_CONTINUATION_2026-10-04.md#hosted-evidence) |
 | Monthly renewal | Synthetic monthly invoices grant once per subscription period and preserve earlier credits. | Use an isolated sandbox subscription and [Stripe Billing simulation](https://docs.stripe.com/billing/testing/test-clocks) to advance to the next real monthly invoice. Observe its webhook and one additional tier allowance; replay it and confirm no increase. Keep this separate from the hosted Checkout evidence. | Unverified |
 | Decline and recovery | Synthetic `invoice.payment_failed` is ignored and cannot fund credits. Verified subscription states determine grace: `past_due` retains the tier, `unpaid` becomes Free. Recovery plus a paid invoice funds once. | Cause an actual renewal decline; inspect invoice/payment/subscription state and no new grant. Observe configured dunning, restore a successful test method and verify one allowance after actual settlement. | **Initial hosted decline and retry passed:** balance stayed 10 until successful payment. Recurring decline/recovery unverified. [Evidence](STAGING_PAYMENT_DELIVERY_ACCEPTANCE_2026-09-22.md#september-20-hosted-subscription-payment) |
-| Period-end and immediate cancellation | Local checks retain paid access while cancellation is scheduled, downgrade on verified canceled state, and retain credits. Follow-up projection tests cover provider `cancel_at` at the item period boundary while its period-end boolean is false. | Deploy/reconcile the projection repair, verify the future effective downgrade, immediate cancellation, later sign-in, project access and credit retention. Cancellation is not a cash refund. | **Partial:** portal and provider confirmed October 20 scheduling; the deployed app missed the schedule because it read only the false boolean. Effective and immediate cancellation unverified. [Evidence](STAGING_PAYMENT_DELIVERY_ACCEPTANCE_2026-09-22.md#september-22-scheduled-cancellation-and-projection-defect) |
-| Cash refund lifecycle | Immutable operator refund observations now retain bounded signed event evidence, mark reconciliation required and preserve replay/out-of-order evidence without changing money, credits or access. Memory tests pass; the optional PostgreSQL test still requires a disposable database. | Define full/partial refund treatment of unused, reserved and spent credits and subscription access. Associate the original payment/fulfillment, retrieve current provider state and apply the reviewed policy idempotently. Then exercise actual sandbox refunds and verify Stripe and application results. | **Observation ingestion implemented locally; application reconciliation and hosted acceptance remain unsupported/unverified** |
+| Period-end and immediate cancellation | Local checks retain paid access while cancellation is scheduled, downgrade on verified canceled state, and retain credits. Projection tests cover provider `cancel_at` at the item period boundary while its period-end boolean is false; the repair is included in the current isolated candidate. | Verify current isolated provider/app scheduling, effective downgrade, immediate cancellation, later sign-in, project access and credit retention. Cancellation is not a cash refund. | **Historical scheduling evidence; lifecycle acceptance incomplete.** The September 22 portal/provider scheduling and original display defect remain recorded in the dated report. Do not reuse that old deployed-state snapshot as the current candidate's status. Effective and immediate cancellation remain unverified. [Historical evidence](STAGING_PAYMENT_DELIVERY_ACCEPTANCE_2026-09-22.md#september-22-scheduled-cancellation-and-projection-defect) |
+| Cash refund lifecycle | Immutable operator refund observations retain bounded signed evidence, mark reconciliation required and preserve replay/out-of-order evidence without changing money, credits or access. Memory and disposable PostgreSQL tests passed; migration 006 is deployed on isolated staging. | Associate the original payment/fulfillment, retrieve current provider state, define full/partial treatment of unused/reserved/spent credits, and implement explicit operator approval for consequential adjustments. Then exercise actual sandbox refunds and verify provider and application results. | **Observation ingestion implemented, tested and deployed; payment association, financial reconciliation and actual hosted refund lifecycle remain incomplete** |
 | Concurrent first-time subscription purchase | A private pending-session record now reuses one session across concurrent instances and restart, retains exact retry parameters, and requires verified expiry before replacement. Completed-unreconciled sessions and changed terms fail closed. Existing subscribers use the portal. | Start subscription Checkout concurrently from two tabs before an entitlement exists. Verify one actual provider session, then test interrupted/retried creation, browser cancellation/reopen, changed-plan conflict, provider expiry and later purchase after verified cancellation. | Local regression passed; sandbox unverified |
 
 ## Refunds are a separate unfinished workflow
@@ -47,14 +52,19 @@ Missing persistence fails the webhook instead of discarding it. Older releases'
 successful-but-ignored receipts without an inbox entry return
 `stripe_refund_receipt_missing` on redelivery and need operator reconciliation;
 the change does not infer historical refunds from a prior HTTP 200 or perform
-an automatic historical backfill. PostgreSQL instance/restart regression is
-provided in `refund-postgres.test.js` but remains skipped until the required
-disposable local database is available. Hosted acceptance remains pending.
+an automatic historical backfill. `refund-postgres.test.js` passed against a
+disposable local database in the October 4 complete suite, including concurrent
+instances, interrupted completion, reopening and stale claims. Exact commit
+78d1c82 passed CI and deployed migration 006 to the isolated database. These
+supersede earlier skipped/local-only descriptions. Actual provider refund
+ingestion and lifecycle acceptance remain pending.
 
 Payment association, authoritative current-state reconciliation and an
 application refund policy are still not implemented. The inbox does not create
 owner billing records or alter credits, access or cash. Dispute reconciliation
-is also absent.
+is also absent. Cash refunds and credit adjustments must remain separate,
+explicitly approved operator actions; a signed event or learning record does
+not approve either action.
 
 Stripe documents asynchronous refund state and failure handling in
 [Refund and cancel payments](https://docs.stripe.com/refunds). Receipt of an event
@@ -68,6 +78,35 @@ returns that job's reserved IABT credits; it calls no cash-refund endpoint and
 cannot recover supplier charges. Cancellation likewise does not debit or refund
 the existing credit balance. There is no chosen automatic clawback policy in
 this implementation, especially for already-spent credits or partial refunds.
+
+## Environment and account boundaries
+
+Use the existing isolated staging services and database listed in
+[CURRENT_RELEASE_STATUS.md](CURRENT_RELEASE_STATUS.md). The older API/database
+pair is historical acceptance evidence, not the current target. On October 4
+the Stripe connector successfully read only test account
+`acct_1U6O5GDTeg6LQ8RA` (IABT-JERICHO), with no active prices and one legacy
+Base44 webhook. Historical paid-test evidence belongs to Insured Spending
+`acct_1TOYQhJQwCRZm16s`. Access to that existing account has been requested
+through the connector's account-selection flow and awaits the owner's selection.
+This is an account-selection and configuration boundary, not a generic Stripe
+authentication failure.
+
+The isolated Render API was observed with `IABT_STRIPE_MODE=test` and an empty
+`STRIPE_BUILDER_PRICE_ID`. Correct account access, price mapping and webhook
+wiring remain required before isolated payment tests. No real purchase or
+account funding is needed for sandbox acceptance. Do not create replacement
+accounts or copy prices/credentials across accounts to make an old test pass.
+
+The webhook mode check and mode-prefixed fulfillment identities do not partition
+`AccountEntitlement` or the execution credit balance, which remain keyed by
+account owner. Isolated staging protects the current test work; changing that
+database to live mode is not an accepted migration. A local candidate now adds
+the [persisted billing-mode binding](BILLING_FULFILLMENT.md#database-billing-mode-binding);
+candidate verification, CI and isolated deployment remain pending. The deployed
+78d1c82 baseline and its six applied migrations remain separate evidence.
+A reviewed production data/credit migration is still required. Test grants must
+not become live purchased credits.
 
 ## Evidence to retain
 

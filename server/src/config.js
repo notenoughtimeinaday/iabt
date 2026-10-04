@@ -64,6 +64,8 @@ export const loadConfig = (env = process.env) => {
   }
 
   const apiOrigin = env.IABT_API_ORIGIN || "http://localhost:8787";
+  const stripeMode = env.IABT_STRIPE_MODE || "test";
+  if (!["test", "live"].includes(stripeMode)) throw new Error("IABT_STRIPE_MODE must be test or live");
   const storageProvider = String(env.IABT_STORAGE_PROVIDER || "").trim().toLowerCase() ||
     (environment === "production" ? "s3" : "local");
   const costPerMinuteCents = Number(env.IABT_ELEVENLABS_COST_PER_MINUTE_CENTS);
@@ -161,7 +163,7 @@ export const loadConfig = (env = process.env) => {
       stripe: freezeProvider({
         secretKey: env.STRIPE_SECRET_KEY || "",
         webhookSecret: env.STRIPE_WEBHOOK_SECRET || "",
-        mode: env.IABT_STRIPE_MODE === "live" ? "live" : "test",
+        mode: stripeMode,
         metadataAppId: env.IABT_STRIPE_METADATA_APP_ID || "6a849bcd3e04d068553b4af7",
         creditPackSize: asPositiveInteger(env.IABT_CREDIT_PACK_SIZE, 100),
         creditPackPriceId: env.STRIPE_AI_CREDIT_PACK_PRICE_ID || "",

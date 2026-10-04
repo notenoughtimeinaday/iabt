@@ -5,6 +5,9 @@ private S3-compatible storage, Resend and GitHub. Read README.md,
 JERICHO_OPERATIONS.md and docs/JERICHO_LEARNING.md. Base44 is migration/history
 and an explicitly isolated legacy build only. Do not add runtime dependencies on it.
 
+Read docs/CURRENT_RELEASE_STATUS.md before continuing release or payment work.
+Refresh the remote branch and deployed revision before using an older checkout;
+preserve unfinished local changes and reuse the canonical isolated staging.
 Work toward the entire requested objective. Check existing jobs, branches,
 artifacts and acceptance evidence before repeating work. Keep capabilities
 extensible through registered tools with schemas, policy, validation and tests.

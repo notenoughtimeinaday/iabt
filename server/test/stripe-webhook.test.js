@@ -446,6 +446,8 @@ test("a different event for a previously fulfilled legacy Checkout session adopt
 test("legacy session conflicts fail closed for duplicate grants, changed amounts, foreign owners or malformed provenance", async () => {
   for (const variant of ["duplicate", "amount", "owner", "provenance"]) {
     const f = await makeFixture();
+    // These malformed-ledger cases exercise fulfillment after runtime binding.
+    await f.repository.ensureBillingEnvironment("test");
     const other = await f.repository.createUser({ email: "old-owner@example.test", passwordHash: "unused", emailVerified: true });
     const metadata = { event_id: "evt_legacy", checkout_session_id: f.session.id, product_type: "ai_credit_pack" };
     if (variant === "provenance") metadata.event_id = "evt_wrong";
@@ -462,6 +464,7 @@ test("legacy session conflicts fail closed for duplicate grants, changed amounts
 
 test("legacy lookup matches only the exact Checkout session and remains required for new pack fulfillment", async () => {
   const f = await makeFixture();
+  await f.repository.ensureBillingEnvironment("test");
   await f.repository.grantCredits({ ownerId: f.user.id, amount: 50, idempotencyKey: "stripe:evt_unrelated",
     metadata: { event_id: "evt_unrelated", checkout_session_id: f.session.id + "_other", product_type: "ai_credit_pack" } });
   assert.equal((await f.deliver("evt_current_session", "checkout.session.completed", f.session)).credits_granted, 100);

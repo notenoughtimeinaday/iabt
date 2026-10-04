@@ -1,6 +1,7 @@
 import pg from "pg";
 import { createId } from "./security.js";
 import { applyMigrations } from "./migrations.js";
+import { assertBillingBinding, assertBillingMode, BILLING_EVIDENCE_SQL, validateBillingEvidence } from "./billing/environment.js";
 
 const { Pool } = pg;
 const clone = (value) => structuredClone(value);
@@ -213,6 +214,25 @@ export class PostgresRepository {
   async health() {
     await this.pool.query("SELECT 1");
     return { ok: true, adapter: "postgres" };
+  }
+
+  async ensureBillingEnvironment(mode) {
+    assertBillingMode(mode);
+    // A binding is immutable through this application. Avoid the shared record
+    // lock on normal billing traffic; only first initialization needs admission.
+    const bound = await this.pool.query("SELECT mode, bound_from, bound_at FROM iabt_billing_environment WHERE singleton = true");
+    if (bound.rows[0]) return assertBillingBinding(bound.rows[0], mode);
+    return this.withRecordTransaction(async (transaction) => {
+      const existing = await transaction.pool.query("SELECT mode, bound_from, bound_at FROM iabt_billing_environment WHERE singleton = true");
+      if (existing.rows[0]) return assertBillingBinding(existing.rows[0], mode);
+      const evidence = await transaction.pool.query(BILLING_EVIDENCE_SQL);
+      const boundFrom = validateBillingEvidence(evidence.rows, mode);
+      const result = await transaction.pool.query(
+        "INSERT INTO iabt_billing_environment (singleton, mode, bound_from) VALUES (true, $1, $2) RETURNING mode, bound_from, bound_at",
+        [mode, boundFrom]
+      );
+      return result.rows[0];
+    });
   }
 
   async close() {

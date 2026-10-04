@@ -3,6 +3,7 @@ import { planDefaults, planForPrice } from "./plans.js";
 import { billingRecordId, fulfillCredits } from "./fulfillment.js";
 import { retrieveStripeSubscription } from "./stripe-read.js";
 import { isStripeRefundEvent, prepareStripeRefundObservation, recordStripeRefundObservation, replayStripeRefundObservation } from "./refund-events.js";
+import { ensureBillingEnvironment } from "./environment.js";
 
 const stripeError = (status, code, message) =>
   Object.assign(new Error(message), { status, code });
@@ -153,7 +154,7 @@ const upsertSubscription = async ({ repository, config, subscription: snapshot, 
     const existing = await tx.getRecord("BillingSubscriptionSync", id, owner);
     const revision = Number(existing?.revision || 0) + 1;
     if (existing) await tx.updateRecord("BillingSubscriptionSync", id, owner, { revision });
-    else await tx.createRecord("BillingSubscriptionSync", owner, { user_id: user.id, subscription_id: subscriptionId, revision }, { id });
+    else await tx.createRecord("BillingSubscriptionSync", owner, { user_id: user.id, subscription_id: subscriptionId, revision, billing_mode: config.providers.stripe.mode }, { id });
     return { id, revision };
   });
   const subscription = await retrieveStripeSubscription({ config, subscriptionId, fetchImpl });
@@ -195,6 +196,7 @@ const upsertSubscription = async ({ repository, config, subscription: snapshot, 
       plan,
       status,
       billing_provider: "stripe",
+      billing_mode: config.providers.stripe.mode,
       provider_customer_id: idOf(subscription.customer),
       provider_subscription_id: String(subscription.id || ""),
       current_period_end: currentPeriodEnd,
@@ -226,6 +228,7 @@ const grantCreditPack = async ({ repository, config, event, session }) => {
   const credits = await fulfillCredits({
     repository, user, amount, key: `stripe:${config.providers.stripe.mode}:checkout:${session.id}`,
     source: {
+      billing_mode: config.providers.stripe.mode,
       event_id: event.id,
       checkout_session_id: String(session.id || ""),
       product_type: "ai_credit_pack"
@@ -270,7 +273,7 @@ const grantSubscriptionCredits = async ({ repository, config, event, invoice }) 
   const credits = await fulfillCredits({
     repository, user, amount: planDefaults(plan).ai_monthly_limit,
     key: `stripe:${config.providers.stripe.mode}:cycle:${subscriptionId}:${start}`,
-    source: { event_id: event.id, invoice_id: invoice.id, subscription_id: subscriptionId, plan,
+    source: { billing_mode: config.providers.stripe.mode, event_id: event.id, invoice_id: invoice.id, subscription_id: subscriptionId, plan,
       period_start: start, period_end: end, product_type: "subscription_allowance" }
   });
   return { user, credits, action: "subscription_credits_granted" };
@@ -281,6 +284,7 @@ const recordBillingEvent = async ({ repository, result, event }) => {
   await repository.createRecord("BillingEvent", result.user, {
     event_id: String(event.id),
     event_type: String(event.type),
+    billing_mode: event.livemode ? "live" : "test",
     user_id: result.user.id,
     user_email: result.user.email,
     action: result.action,
@@ -315,6 +319,7 @@ export const processStripeWebhook = async ({
     );
   }
 
+  await ensureBillingEnvironment({ repository, config });
   const eventType = String(event.type || "");
   const refundObservation = isStripeRefundEvent(eventType) ? prepareStripeRefundObservation({ event, config }) : null;
   const started = await repository.startStripeEvent({

@@ -3,6 +3,12 @@
 Continue from the existing `jericho-autonomy-v1` branch and PR 4. The hosted
 file acceptance below tested a530f21557753731486ea3a4eaf3c2200a47e0c0 before
 the email-validation and refund-observation changes in this continuation.
+The accepted source/deployment baseline is now
+`78d1c82c2a9fbd5e999927c684bd9a8c5a063a2b`; see
+[CURRENT_RELEASE_STATUS.md](CURRENT_RELEASE_STATUS.md) for exact CI, deployment
+identities, environment and remaining launch gates. The checks below retain
+their tested-commit scope rather than attributing every workflow to the newer
+candidate.
 
 ## Hosted evidence
 
@@ -19,10 +25,32 @@ the email-validation and refund-observation changes in this continuation.
   Downloaded all three outputs again; each SHA-256 matched its initial download.
   The balance remained 9 and the conversation still showed one job.
 - Rendered both PDF pages and visually checked legibility and source evidence.
-  DOCX ZIP integrity and document XML content pass, but visual DOCX acceptance
-  remains open because the local renderer lacks LibreOffice.
-- Hosted anonymous and second-account denial, password recovery, and a real
-  storage restore are not established by this check.
+  DOCX ZIP integrity and document XML content passed. The later October 4 review
+  opened that same downloaded DOCX read-only in Microsoft Word, exported a PDF,
+  and inspected both rasterized pages: the marker and all three requirements
+  were legible, with no clipping or overlapping text. Original download bytes
+  were unchanged. This supersedes the earlier LibreOffice-related visual gate
+  for this sample; it does not establish arbitrary Office-input parsing.
+- Anonymous access to the source-file API returned 401. This proves that
+  unauthenticated source access was denied, not that a valid signed download
+  capability requires a session. Hosted second-account denial, password recovery
+  and a real storage restart/restore remain open.
+
+The saved hosted evidence records six downloads on a530f21 (all three formats
+before and after reopening) and one further PDF download on 78d1c82. On the newer
+candidate the authenticated session, conversation and job persisted, the balance
+remained 9, and the PDF hash still matched. One pointer activation timed out
+without a download event; keyboard activation succeeded. Its cause remains
+unestablished, so this evidence does not claim every activation path passed.
+
+| Download | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Markdown | 2032 | `c395c8455315f574c4ee6de0a2888e4e14677d9a0290beec418e3b79c22696fe` |
+| DOCX | 9729 | `d660782144add01040c52b8266bec1d58a8d63313b67226cffff4f72c0cfd0f1` |
+| PDF | 3986 | `5e8423422da34c84d94d2430bdada9becab3efd1aea78251366e46d4c4b18d35` |
+
+These results reuse one existing account and job. They do not justify generating
+a replacement output or spending another credit to repeat a passed check.
 
 ## Email delivery correction
 
@@ -54,5 +82,40 @@ remain incomplete. Do not describe the observation inbox as finished refunds.
 `npm run verify` passed with a disposable loopback PostgreSQL database:
 336 server tests, 16 file/email tests, 5 frontend-isolation tests and 8 readiness
 tests; zero skipped tests. Lint, type checking, Exchange/creation checks and the
-production build passed. This is separate from CI and hosted acceptance of the
-new candidate. Keep production and domain changes gated on release acceptance.
+production build passed. The refund PostgreSQL test was included; earlier
+documentation saying it was skipped is superseded.
+
+[GitHub verification run 674](https://github.com/notenoughtimeinaday/iabt/actions/runs/37215305665)
+passed on exact published commit 78d1c82. Both existing isolated Render services
+deployed that commit: API `dep-db17i5142hec73eddecg` and frontend
+`dep-db17i93ncjis73bi1nc0`. Readiness reported six applied migrations, none pending
+and no Base44 runtime requirement. Deployed email validation rejected copied
+list-marker addresses while preserving plus aliases. These local, CI,
+deployment and hosted facts are separate evidence scopes.
+
+## Evidence provenance and remaining acceptance
+
+This continuation consolidates the October 4 `IABT-completion-ledger.json` and
+`IABT-hosted-file-acceptance.json` from the existing completion workspace. The
+file record was updated at `2026-10-04T16:20:36.510Z` for the Word review; it
+preserves the original a530f21 hashes and the 78d1c82 post-deployment scope. The
+GitHub CI result and existing isolated services were independently rechecked
+during this continuation. No sensitive session links, credentials or inbox
+codes are retained here.
+
+The subsequent October 4 Stripe read succeeded but exposed only the existing
+IABT-JERICHO test account `acct_1U6O5GDTeg6LQ8RA`, with no active prices and one
+legacy Base44 webhook. The earlier Insured Spending test account
+`acct_1TOYQhJQwCRZm16s` still needs owner selection through connector consent.
+The isolated API's mode is `test`, with an empty Builder price ID. Correct
+account selection and isolated price/webhook configuration remain incomplete;
+this supersedes the earlier generic connector-reauthentication blocker. Test
+payments require no real purchase or account funding. Neither account's prices,
+credentials nor webhook configuration were changed by this documentation work.
+
+The sample delivery and observation inbox are completed only within those
+scopes. Hosted second-account denial, password recovery, provider billing
+lifecycle, refund/dispute financial reconciliation, hosted disaster recovery,
+pricing rollout and final launch acceptance remain open. Keep production and
+domain changes gated on release acceptance and retain the owner's free-hosting
+choice. Free hosting does not establish an always-running worker.

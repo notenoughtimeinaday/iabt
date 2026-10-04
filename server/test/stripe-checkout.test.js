@@ -107,6 +107,7 @@ test("an existing managed subscription routes to the customer portal", async () 
     plan: "pro",
     status: "active",
     billing_provider: "stripe",
+    billing_mode: "test",
     provider_customer_id: "cus_existing",
     provider_subscription_id: "sub_existing"
   });
@@ -139,7 +140,7 @@ test("payment-recovery subscriptions use the portal even when new checkout price
     const repository = new MemoryRepository();
     const user = await makeUser(repository, status + "@example.test");
     await repository.createRecord("AccountEntitlement", user, {
-      user_id: user.id, status, plan: "free", billing_provider: "stripe",
+      user_id: user.id, status, plan: "free", billing_provider: "stripe", billing_mode: "test",
       provider_customer_id: "cus_recovery", provider_subscription_id: "sub_recovery"
     });
     const providers = mockProviders();
@@ -154,7 +155,7 @@ test("payment-recovery subscriptions use the portal even when new checkout price
 test("canceled subscriptions may restart checkout while unconfigured checkout never calls Stripe", async () => {
   const repository = new MemoryRepository();
   const user = await makeUser(repository, "restart@example.test");
-  await repository.createRecord("AccountEntitlement", user, { user_id: user.id, status: "canceled", billing_provider: "stripe", provider_customer_id: "cus_restart", provider_subscription_id: "sub_canceled" });
+  await repository.createRecord("AccountEntitlement", user, { user_id: user.id, status: "canceled", billing_provider: "stripe", billing_mode: "test", provider_customer_id: "cus_restart", provider_subscription_id: "sub_canceled" });
   const providers = mockProviders();
   assert.equal((await createSubscriptionCheckout({ repository, providers, config, user, plan: "builder", idempotencyKey: "restart" })).kind, "checkout");
   providers.readiness = () => ({ stripe: { configured: false, checkout_ready: false } });

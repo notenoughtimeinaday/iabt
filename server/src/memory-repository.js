@@ -1,4 +1,5 @@
 import { createId } from "./security.js";
+import { assertBillingBinding, assertBillingMode, memoryBillingEvidence, validateBillingEvidence } from "./billing/environment.js";
 
 const clone = (value) => structuredClone(value);
 const nowIso = () => new Date().toISOString();
@@ -67,6 +68,15 @@ export class MemoryRepository {
 
   async health() {
     return { ok: true, adapter: "memory" };
+  }
+
+  async ensureBillingEnvironment(mode) {
+    assertBillingMode(mode);
+    if (this.billingEnvironment) return clone(assertBillingBinding(this.billingEnvironment, mode));
+    // No await between inspection and claim: opposing calls cannot both win.
+    const boundFrom = validateBillingEvidence(memoryBillingEvidence(this), mode);
+    this.billingEnvironment = { mode, bound_from: boundFrom, bound_at: nowIso() };
+    return clone(this.billingEnvironment);
   }
 
   async createUser({ email, passwordHash, name = "", role = "user", emailVerified = false }) {

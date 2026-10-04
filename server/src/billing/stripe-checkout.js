@@ -1,3 +1,5 @@
+import { ensureBillingEnvironment } from "./environment.js";
+
 const billingError = (status, code, message) =>
   Object.assign(new Error(message), { status, code });
 
@@ -74,6 +76,7 @@ export const createSubscriptionCheckout = async ({
   if (!["builder", "pro", "agency"].includes(plan)) {
     throw billingError(400, "invalid_subscription_plan", "Plan must be builder, pro, or agency");
   }
+  await ensureBillingEnvironment({ repository, config });
   const entitlement = await currentEntitlement(repository, user);
   const customer = customerId(entitlement);
   const hasSubscription = hasManagedSubscription(entitlement);
@@ -133,6 +136,7 @@ export const createCreditCheckout = async ({
   user,
   idempotencyKey
 }) => {
+  await ensureBillingEnvironment({ repository, config });
   assertCheckoutReady(providers);
   const entitlement = await currentEntitlement(repository, user);
   const customer = customerId(entitlement);
@@ -176,6 +180,7 @@ export const createCustomerPortal = async ({
   user,
   idempotencyKey
 }) => {
+  await ensureBillingEnvironment({ repository, config });
   const readiness = providers?.readiness?.().stripe;
   if (!readiness?.configured) {
     throw billingError(503, "stripe_portal_not_ready", "Stripe customer portal is not configured");
