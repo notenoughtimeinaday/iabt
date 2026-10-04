@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { normalizeFileIds, readTextSources, referenceBinding, sourceReferences } from "../files/text-sources.js";
 
 export const CREATION_PRICING_VERSION = "iabt-standalone-2026-09-04.4";
 const QUOTE_TTL_MS = 30 * 60 * 1000;
@@ -59,7 +60,8 @@ const quoteFields = (plan) => [
   plan.total_estimated_cost_cents,
   plan.currency,
   plan.pricing_version,
-  plan.quote_expires_at
+  plan.quote_expires_at,
+  ...(plan.file_references ? [referenceBinding(plan.file_references)] : [])
 ];
 
 const signQuote = (config, plan) =>
@@ -342,10 +344,12 @@ export const createCreationPlan = async ({
   repository,
   config,
   providers,
+  storage,
   user,
   requestText,
   conversationId = "",
-  projectId = ""
+  projectId = "",
+  fileIds = []
 }) => {
   const request = normalize(requestText);
   if (request.length < 3) {
@@ -354,8 +358,29 @@ export const createCreationPlan = async ({
       code: "request_too_short"
     });
   }
-  const intent = inferCreationIntent(request);
+  const ids = normalizeFileIds(fileIds);
+  // The requested output wins over its subject: a report about software is
+  // still a report. An actual "build an app" request remains unsupported here.
+  const explicitSourceReview = /^(?:(?:please|can you|could you|would you)\s+)?(?:(?:create|write|generate|produce|make|prepare)\s+(?:me\s+)?(?:(?:an?|the)\s+)?(?:(?:brief|short|detailed|source|file|review)\s+){0,3}(?:report|document|checklist|summary|review)\b|(?:review|summari[sz]e)\b)/i.test(request);
+  const intent = ids.length && explicitSourceReview ? "document" : inferCreationIntent(request);
   const capability = capabilityFor(intent, user, providers, request);
+  if (ids.length && intent !== "document") {
+    throw Object.assign(new Error("Attached files currently support source-review documents only. Ask for a report or document; uploaded code is never executed or modified."), {
+      status: 422, code: "source_intent_unsupported"
+    });
+  }
+  const sources = await readTextSources({ repository, storage, user, fileIds: ids });
+  const references = sourceReferences(sources);
+  if (references.length) {
+    for (const [entity, id] of [["AgentConversation", conversationId], ["Project", projectId]]) {
+      if (id && !await repository.getRecord(entity, id, { ...user, role: "user" })) {
+        throw Object.assign(new Error("The source-review context was not found in your account."), { status: 404, code: "source_context_not_found" });
+      }
+    }
+    capability.id = "iabt-source-review-v1";
+    capability.deliverables = ["Source inventory and candidate requirement checklist in Markdown", "Microsoft Word-compatible DOCX source review", "Portable PDF source review"];
+    capability.warnings = ["Deterministic UTF-8 source review only: no general semantic analysis, uploaded-code execution, or repository changes."];
+  }
   const now = new Date();
   const expires = new Date(now.getTime() + QUOTE_TTL_MS).toISOString();
   const total = capability.providerCostCents;
@@ -371,7 +396,7 @@ export const createCreationPlan = async ({
     ...(conversationId ? { conversation_id: conversationId } : {}),
     ...(projectId ? { project_id: projectId } : {}),
     request_text: request,
-    title: titleFor(request, intent),
+    title: references.length ? "JERICHO Source Review" : titleFor(request, intent),
     intent,
     status: "quoted",
     capability_id: capability.id,
@@ -379,8 +404,10 @@ export const createCreationPlan = async ({
     provider_ready: capability.providerReady,
     render_ready: capability.renderReady,
     fallback_available: true,
-    assistant_summary:
-      "JERICHO inferred " + intent + " from your request and prepared an exact server-owned plan.",
+    assistant_summary: references.length
+      ? "JERICHO verified " + references.length + " private text source(s) and will create a source inventory, candidate requirement checklist, and complete source evidence. Uploaded code will not run or change."
+      : "JERICHO inferred " + intent + " from your request and prepared an exact server-owned plan.",
+    ...(references.length ? { file_references: references } : {}),
     normalized_spec: {
       creative_prompt: request,
       ...(intent === "audio"
@@ -475,10 +502,11 @@ export const createCreationPlan = async ({
 export const executeCreationPlan = async ({
   repository,
   config,
+  storage,
   user,
   body
 }) => {
-  const plan = await repository.getRecord("CreationPlan", normalize(body.plan_id, 200), user);
+  const plan = await repository.getRecord("CreationPlan", normalize(body.plan_id, 200), { ...user, role: "user" });
   if (!plan) {
     throw Object.assign(new Error("Creation plan was not found"), {
       status: 404,
@@ -519,6 +547,14 @@ export const executeCreationPlan = async ({
     });
   }
 
+  if (plan.file_references?.length) {
+    await readTextSources({
+      repository, storage, user,
+      fileIds: plan.file_references.map((reference) => reference.file_id),
+      expectedReferences: plan.file_references
+    });
+  }
+
   const idempotencyKey =
     normalize(body.idempotency_key, 200) ||
     "plan:" + plan.id + ":" + plan.pricing_version;
@@ -534,6 +570,7 @@ export const executeCreationPlan = async ({
       plan_id: plan.id,
       conversation_id: plan.conversation_id || "",
       project_id: plan.project_id || "",
+      ...(plan.file_references?.length ? { file_references: plan.file_references } : {}),
       render_ready: Boolean(plan.render_ready)
     },
     approval: {

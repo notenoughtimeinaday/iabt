@@ -2,8 +2,9 @@ import React, { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { UploadCloud, Loader2, RotateCcw, TriangleAlert } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { base44 } from "@/api/iabtClient";
+import { base44, platformRuntime } from "@/api/iabtClient";
 import { useAuth } from "@/lib/AuthContext";
+import { uploadBatch } from "@/lib/upload-batch";
 
 function uploadFailureMessage(error) {
   const raw = String(error?.response?.data?.message || error?.message || "Upload failed.");
@@ -35,8 +36,11 @@ export default function FileUploader({
   assetScope = "project",
   compact = false,
   onUploaded,
+  onStatusChange,
+  disabled = false,
 }) {
   const inputRef = useRef(null);
+  const uploadingRef = useRef(false);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [pendingFiles, setPendingFiles] = useState([]);
@@ -44,46 +48,63 @@ export default function FileUploader({
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const handleFiles = async (files) => {
-    if (!files || files.length === 0) return;
+  const handleFiles = async (files, retry = false) => {
+    if (!files?.length || uploadingRef.current || disabled || (!retry && pendingFiles.length)) return;
+    const entries = retry ? files : Array.from(files, (file) => ({ file }));
+    uploadingRef.current = true;
     setUploading(true);
     setUploadIssue(null);
-    try {
-      const uploaded = [];
-      for (const file of files) {
-        const { file_url } = await base44.integrations.Core.UploadFile({ file });
-        const created = await base44.entities.Asset.create({
-          user_id: user?.id || "",
-          user_email: user?.email || "",
-          name: file.name,
-          project_id: projectId,
-          ...(conversationId ? { conversation_id: conversationId } : {}),
-          source: assetScope === "conversation" ? "jericho_conversation_upload" : "project_upload",
-          file_url,
-          file_type: file.name.split(".").pop()?.toLowerCase() || "",
-          mime_type: file.type || "application/octet-stream",
-          size_bytes: file.size,
-          kind: classifyKind(file.type, file.name),
-          notes: assetScope === "conversation" ? "Attached to a JERICHO Studio conversation." : "",
-          metadata: {
-            asset_scope: assetScope,
-            uploaded_from: "jericho_studio",
-          },
-        });
-        uploaded.push(created);
-      }
-      setPendingFiles([]);
-      toast({ title: `${files.length} file${files.length > 1 ? "s" : ""} uploaded` });
-      onUploaded?.(uploaded);
-      if (inputRef.current) inputRef.current.value = "";
-    } catch (err) {
-      const issue = uploadFailureMessage(err);
+    onStatusChange?.({ busy: true, pending: entries.length });
+    const result = await uploadBatch(entries, {
+      upload: async (file) => {
+        const uploaded = await base44.integrations.Core.UploadFile({ file });
+        if (platformRuntime.backend === "standalone" && !uploaded.file_id) {
+          throw new Error("The upload did not return a permanent file reference. Please retry.");
+        }
+        return uploaded;
+      },
+      createAsset: (file, { file_url, file_id, sha256 }) => base44.entities.Asset.create({
+        user_id: user?.id || "",
+        user_email: user?.email || "",
+        name: file.name,
+        project_id: projectId,
+        ...(conversationId ? { conversation_id: conversationId } : {}),
+        source: assetScope === "conversation" ? "jericho_conversation_upload" : "project_upload",
+        file_url,
+        ...(file_id ? { file_id, file_uri: "iabt-file:" + file_id, sha256 } : {}),
+        file_type: file.name.split(".").pop()?.toLowerCase() || "",
+        mime_type: file.type || "application/octet-stream",
+        size_bytes: file.size,
+        kind: classifyKind(file.type, file.name),
+        notes: assetScope === "conversation" ? "Attached to a JERICHO Studio conversation." : "",
+        metadata: {
+          asset_scope: assetScope,
+          uploaded_from: "jericho_studio",
+          ...(file_id ? { file_id, sha256 } : {}),
+        },
+      }),
+      onUploaded,
+    });
+    setPendingFiles(result.pending);
+    if (result.error) {
+      const issue = uploadFailureMessage(result.error);
       setUploadIssue(issue);
-      setPendingFiles(Array.from(files));
       toast({ title: issue.title, description: issue.description, variant: "destructive" });
-    } finally {
-      setUploading(false);
+    } else {
+      toast({ title: `${result.uploaded.length} file${result.uploaded.length > 1 ? "s" : ""} saved` });
+      if (inputRef.current) inputRef.current.value = "";
     }
+    uploadingRef.current = false;
+    setUploading(false);
+    onStatusChange?.({ busy: false, pending: result.pending.length });
+  };
+
+  const discardPending = () => {
+    if (uploadingRef.current) return;
+    setPendingFiles([]);
+    setUploadIssue(null);
+    if (inputRef.current) inputRef.current.value = "";
+    onStatusChange?.({ busy: false, pending: 0 });
   };
 
   return (
@@ -97,6 +118,7 @@ export default function FileUploader({
         ref={inputRef}
         type="file"
         multiple
+        disabled={disabled || uploading || pendingFiles.length > 0}
         className="hidden"
         onChange={(e) => handleFiles(Array.from(e.target.files))}
       />
@@ -108,9 +130,11 @@ export default function FileUploader({
           <p className="text-sm font-medium">
             {uploading ? "Uploading..." : compact ? "Attach files for JERICHO" : "Drag & drop files or browse"}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">{compact ? "Docs, images, code, data, audio, or video" : "Any file type — documents, images, code, audio, video"}</p>
+          <p className="text-xs text-muted-foreground mt-1">{platformRuntime.backend === "standalone"
+            ? "Reports can read UTF-8 text, Markdown, JSON, CSV and source code: up to 12 files, 128 KiB each, 256 KiB total. Other formats are storage only."
+            : compact ? "Docs, images, code, data, audio, or video" : "Any file type — documents, images, code, audio, video"}</p>
         </div>
-        <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()}>
+        <Button type="button" variant="outline" size="sm" disabled={disabled || uploading || pendingFiles.length > 0} onClick={() => inputRef.current?.click()}>
           {compact ? "Attach" : "Browse Files"}
         </Button>
       </div>
@@ -129,11 +153,16 @@ export default function FileUploader({
               variant="outline"
               size="sm"
               className="mt-3"
-              disabled={uploading}
-              onClick={() => handleFiles(pendingFiles)}
+              disabled={disabled || uploading}
+              onClick={() => handleFiles(pendingFiles, true)}
             >
               <RotateCcw className="mr-2 h-3.5 w-3.5" />
-              Retry {pendingFiles.length > 1 ? "files" : "file"}
+              Retry {pendingFiles.length} unfinished {pendingFiles.length > 1 ? "files" : "file"}
+            </Button>
+          )}
+          {pendingFiles.length > 0 && (
+            <Button type="button" variant="ghost" size="sm" className="mt-3" disabled={uploading} onClick={discardPending}>
+              Discard unfinished attachments
             </Button>
           )}
         </div>

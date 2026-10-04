@@ -94,7 +94,7 @@ export const buildJerichoKnowledge = async ({ repository, user, providers, stora
       design: "tokens_and_svg_review_boards",
       gcode: "simulation_only_no_machine_execution",
       automation: "disabled_dry_run_runbooks_no_scheduler",
-      files: "private_upload_and_authorized_download",
+      files: "private_upload_authorized_download_and_bounded_utf8_source_review",
       exchange: "authenticated_profiles_matching_mutual_introductions_and_private_rooms",
       integrations: "route_preferences_and_configuration_discovery_no_external_account_authorization",
       support: "read_only_capability_and_account_incident_diagnostics"
@@ -125,7 +125,7 @@ export const buildJerichoKnowledge = async ({ repository, user, providers, stora
       "Paid production requires a valid quote, explicit approval, credits, and provider gates; chat cannot bypass them.",
       "Provider outcomes must be reconciled before repeating an ambiguous paid submission.",
       "Credit restoration is reported only when the job records it; IABT credit restoration is not a supplier or cash refund.",
-      "Uploaded file storage does not imply document parsing or incorporation into a model context.",
+      "Attached UTF-8 text, Markdown, JSON, CSV, and common code files support deterministic document source reviews (128 KiB / 2,000 lines per file, 256 KiB / 4,000 lines total, up to 12 files). PDF, Office, archives, media, general semantic analysis, and uploaded-code execution are unsupported. No uploaded file is sent to a model by this workflow.",
       "External AI-client consent is unavailable. Exchange changes use authenticated Exchange workflows; this support responder does not perform them."
     ]
   };
