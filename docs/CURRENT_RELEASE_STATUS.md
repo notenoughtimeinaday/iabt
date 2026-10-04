@@ -1,7 +1,8 @@
 # Current IABT release status — October 4, 2026
 
-The standalone candidate has verified sample file delivery and a deployed refund
-observation inbox. **Full paid launch is not accepted.** Reuse the existing
+The standalone candidate has verified sample file delivery, a deployed refund
+observation inbox, durable billing-mode protection and bounded storage reads.
+**Full paid launch is not accepted.** Reuse the existing
 candidate and isolated environment; do not restart completed upload, download,
 email-validation or refund-observation implementation.
 
@@ -11,14 +12,20 @@ email-validation or refund-observation implementation.
 | --- | --- |
 | Repository | [notenoughtimeinaday/iabt](https://github.com/notenoughtimeinaday/iabt) |
 | Branch / review | `jericho-autonomy-v1`, [draft PR 4](https://github.com/notenoughtimeinaday/iabt/pull/4) |
-| Candidate | `78d1c82c2a9fbd5e999927c684bd9a8c5a063a2b` |
-| CI | [Run 674 — passed](https://github.com/notenoughtimeinaday/iabt/actions/runs/37215305665) on that exact commit |
+| Runtime candidate | `286b99da93ae7a0dda580d2d5d762824fa679b84` |
+| Published tree | `a74c0920322e5793a31bb5a59cb523e019e27bde` |
+| CI | [Run 675 — passed](https://github.com/notenoughtimeinaday/iabt/actions/runs/37219964688) on that exact commit |
 | Isolated frontend | [iabt-isolated-staging-web](https://iabt-isolated-staging-web.onrender.com/#/login) |
 | Isolated API | [iabt-isolated-staging-api](https://iabt-isolated-staging-api.onrender.com) |
-| API deployment | `dep-db17i5142hec73eddecg` |
-| Frontend deployment | `dep-db17i93ncjis73bi1nc0` |
+| API deployment | `dep-db18lm1mgk9c73d5c1pg` |
+| Frontend deployment | `dep-db18lmvr12us739rm4a0` |
 | Neon | Project `noisy-bread-33052649`, branch `br-mute-heart-b517gyel`, database `iabt_staging_isolated` |
-| Schema | Six applied migrations; none pending |
+| Schema | Seven applied migrations; none pending |
+
+Both isolated deployments are Live on the exact runtime candidate. Later
+documentation-only commits record these results and do not imply another
+runtime deployment. The previous 78d1c82 baseline remains historical evidence
+in the dated continuation.
 
 This is the current acceptance environment. The older
 `iabt-api-insured-spending` / `iabt-staging-web` pair and its shared database are
@@ -30,15 +37,20 @@ configuration unchanged until release acceptance.
 
 ## Verified, with scope
 
-- **Complete existing local verification:** 336 server, 16 file/email, five
-  frontend-isolation and eight readiness tests, with zero skipped; lint,
+- **Complete existing local verification:** 352 server, 16 file/email, five
+  frontend-isolation and eight readiness tests (**381 total, zero failed or
+  skipped**), including 56 observed PostgreSQL checks; lint,
   type checking, Exchange/creation checks and production build passed. Exact
   published candidate CI and both isolated deployments passed separately.
 - **Hosted sample delivery:** one source-review job used one starter credit
   (10 to 9), produced actual Markdown/DOCX/PDF downloads, and retained matching
   hashes after reopening. Word and PDF pages were visually inspected. Those
   six downloads used a530f21; saved state and one matching PDF download also
-  passed on 78d1c82. The recorded pointer-activation timeout remains unexplained.
+  passed on 78d1c82. After deployment to 286b99d, browser reload preserved the
+  same conversation, source, one completed job, three artifacts and nine credits.
+  A native PDF download again saved 3986 bytes with the original SHA-256. No
+  new generation or credit spending occurred. The earlier pointer-activation
+  timeout remains unexplained; no hosted timeout fault injection was performed.
 - **Account usability:** verification email delivery and authenticated Studio
   access were observed, saved sessions survived reopening/deployment, malformed
   copied email text now receives a validation error, and plus aliases remain
@@ -49,7 +61,14 @@ configuration unchanged until release acceptance.
   change credits or prove an actual provider refund lifecycle.
 - **Learning:** the existing sample job has an artifact-delivery observation;
   email validation and refund-observation boundaries are in the curriculum.
-  These records do not grant permissions or establish functional correctness.
+  The deployed learning endpoint returned 200 with the new
+  `billing.database_mode_binding` and `files.bounded_storage_read_timeout`
+  entries; its curriculum digest matched the local candidate. These records do
+  not grant permissions or establish functional correctness.
+- **Runtime health:** readiness reported healthy database and S3 access,
+  configured Resend, seven migrations and none pending. The queried API error-log
+  window since October 4 at 17:20 UTC returned no entries. This does not establish
+  uninterrupted worker availability on free hosting or inbox delivery.
 
 Details and file hashes are in the
 [October 4 continuation](STAGING_CONTINUATION_2026-10-04.md). Historical Stripe
@@ -58,23 +77,13 @@ test results and remaining scenarios are in
 
 ## Next acceptance gates
 
-The subsequent billing-mode and storage-timeout candidate passed the complete
-existing suite on October 4: 352 server, 16 file/email, five frontend-isolation
-and eight readiness tests (**381 total, zero failed or skipped**), including 56
-observed PostgreSQL checks. Lint, type checking, Exchange/creation checks and
-the production build passed. This is working-copy evidence; publication, CI
-and deployment of these additions are separate from the 78d1c82 baseline above.
-The first local run rejected an older disposable database's migration checksum
-after Windows line-ending conversion; the passing run used a fresh disposable
-database. Migration checksum validation was preserved.
-
 | Area | Remaining work |
 | --- | --- |
 | Identity and private files | Reuse existing accounts/job to verify password recovery and second-account denial. Anonymous source access already returned 401. |
-| Stripe identity/configuration | October 4 connector reads work but expose only test account `acct_1U6O5GDTeg6LQ8RA` (IABT-JERICHO), with no active prices and one legacy Base44 webhook. Prior paid tests used Insured Spending `acct_1TOYQhJQwCRZm16s`; its connector selection awaits the owner. Isolated Render mode is `test` and `STRIPE_BUILDER_PRICE_ID` is empty. Select the existing correct account and verify price/webhook wiring before provider tests. No replacement account, real purchase or funding is needed. |
+| Stripe identity/configuration | October 4 connector reads work but expose only test account `acct_1U6O5GDTeg6LQ8RA` (IABT-JERICHO), with no active prices and one legacy Base44 webhook. Prior paid tests used Insured Spending `acct_1TOYQhJQwCRZm16s`. The owner reported reconnecting it, but a fresh listing still exposed only the legacy account; correct-account access remains unverified. Isolated Render mode is `test` and `STRIPE_BUILDER_PRICE_ID` is empty. Verify correct-account access and price/webhook wiring before provider tests. No replacement account, real purchase or funding is needed. |
 | Payment lifecycle | Verify isolated renewal, recurring decline/recovery, asynchronous settlement, effective/immediate cancellation, concurrent initial Checkout and interrupted fulfillment. Historical initial card payments/replays are separate evidence. |
 | Refunds/disputes | Extend the existing inbox with verified payment association, current provider state and operator review. Cash refunds and credit adjustments require explicit approval; no automatic clawback or access change. |
-| Test/live state | A local candidate implements migration 007 and a private database mode binding, with exact owner/subscription provenance for legacy inference and guards before provider calls/receipt writes. Review found and corrected overly broad owner-only inference. Complete candidate verification, CI and isolated deployment; 78d1c82 remains the deployed baseline. Drain older binaries before first initialization. Mode binding does not prove Stripe-account identity or replace a reviewed production data/credit migration. [Contract](BILLING_FULFILLMENT.md#database-billing-mode-binding) |
+| Test/live state | Migration 007 and the database mode binding passed local verification/CI and are deployed on isolated staging at 286b99d. Exact owner/subscription provenance governs legacy inference; guards precede provider calls/receipt writes. Mode binding does not prove Stripe-account identity or replace a reviewed production data/credit migration. Drain older binaries before initializing another database. [Contract](BILLING_FULFILLMENT.md#database-billing-mode-binding) |
 | Pricing | October 4 approved catalog remains unimplemented: Meet Jericho first month $4.99/100 credits then Starter $12/100; Builder $29/300; Pro $59/650; top-up $10/100. Version prices/allowances, disclose renewal, enforce introductory eligibility and preserve existing purchases. Approval of customer prices is not authorization for infrastructure/provider spending. |
 | Recovery/migration | A synthetic local database restore passed. Verify hosted database and object-storage recovery and reconcile legacy data without changing protected production. |
 | Product expansion | Customer connector workflows and isolated execution/testing of generated software remain incomplete. Existing maintenance cannot finish unrestricted software development or certify launch autonomously. |
@@ -85,3 +94,11 @@ object IDs and hashes. Before implementing a fix, inspect the current branch and
 these records for completed work. Advance the curriculum alongside future
 implemented changes, while keeping local tests, CI, deployment and hosted
 customer acceptance distinct.
+
+The first local verification attempt rejected an older disposable database's
+migration checksum after Windows line-ending conversion. The passing run used
+a fresh disposable database; checksum validation was preserved. Render also
+started a deployment after an environment update despite auto-deploy being off.
+After future environment changes, inspect active/recent deployment IDs and
+commits before manually triggering another deployment. Documentation-only
+updates do not require redeploying the unchanged runtime.

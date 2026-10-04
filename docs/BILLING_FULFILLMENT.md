@@ -130,7 +130,7 @@ with memory and disposable PostgreSQL repositories.
 
 ### Database billing-mode binding
 
-The new candidate adds migration `007_billing_environment.sql` and a private
+Candidate 286b99d adds migration `007_billing_environment.sql` and a private
 singleton binding for one Stripe mode per database. API and worker startup
 check the binding before initializing storage or providers. Checkout, portal and
 webhook entry points also check it before provider calls or event receipt
@@ -156,9 +156,12 @@ That account-identity check remains a separate acceptance requirement.
 Owner-only entitlements and credit balances remain shared within that database.
 Live billing therefore requires separately reconciled data and a reviewed
 migration, not changing the test database's mode. Do not reinterpret test grants
-as live purchased credits or infer permission to reset balances. The deployed
-78d1c82 baseline has six migrations; this seventh-migration candidate still
-requires its own local, CI and isolated-deployment verification.
+as live purchased credits or infer permission to reset balances. Complete local
+verification (381 checks, zero failed/skipped), exact-commit CI run 675 and both
+isolated deployments passed for 286b99d. Isolated readiness reports seven applied
+migrations and none pending. This replaces the earlier 78d1c82/six-migration
+baseline; it does not certify correct Stripe account wiring, hosted refund
+reconciliation, live billing or production migration.
 
 Subscribe the same-mode Stripe webhook destination to:
 

@@ -3,8 +3,8 @@
 Continue from the existing `jericho-autonomy-v1` branch and PR 4. The hosted
 file acceptance below tested a530f21557753731486ea3a4eaf3c2200a47e0c0 before
 the email-validation and refund-observation changes in this continuation.
-The accepted source/deployment baseline is now
-`78d1c82c2a9fbd5e999927c684bd9a8c5a063a2b`; see
+The current verified runtime/deployment baseline is now
+`286b99da93ae7a0dda580d2d5d762824fa679b84`; see
 [CURRENT_RELEASE_STATUS.md](CURRENT_RELEASE_STATUS.md) for exact CI, deployment
 identities, environment and remaining launch gates. The checks below retain
 their tested-commit scope rather than attributing every workflow to the newer
@@ -93,6 +93,49 @@ and no Base44 runtime requirement. Deployed email validation rejected copied
 list-marker addresses while preserving plus aliases. These local, CI,
 deployment and hosted facts are separate evidence scopes.
 
+## Billing-mode and storage-read follow-up
+
+The next code candidate, `286b99da93ae7a0dda580d2d5d762824fa679b84`, published
+tree `a74c0920322e5793a31bb5a59cb523e019e27bde`. It adds the private database
+billing-mode binding and bounded storage-read timeouts, with matching curriculum
+entries. The complete existing suite passed: 352 server, 16 file/email, five
+frontend-isolation and eight readiness tests (**381 total, zero failed or
+skipped**), including 56 observed PostgreSQL checks. Lint, type checking,
+Exchange/creation checks and the production build passed.
+
+[GitHub verification run 675](https://github.com/notenoughtimeinaday/iabt/actions/runs/37219964688)
+passed on exact commit 286b99d. Both isolated Render deployments are Live on that
+commit: API `dep-db18lm1mgk9c73d5c1pg` and frontend
+`dep-db18lmvr12us739rm4a0`. Readiness reported healthy database and S3 access,
+configured Resend, seven applied migrations and none pending. The queried API
+error-log window since October 4 at 17:20 UTC returned no entries.
+
+After browser reload, the saved conversation, source, one completed job and its
+three artifacts remained, with nine credits. A native browser download saved
+the existing 3986-byte PDF; SHA-256
+`5e8423422da34c84d94d2430bdada9becab3efd1aea78251366e46d4c4b18d35`
+matched the originally accepted file. No replacement job, generation or credit
+spending occurred. The earlier MD/DOCX checks and Word/PDF visual review remain
+at their original scope; this follow-up verifies persistence and renewed PDF
+delivery on 286b99d, not a fresh review of all formats or a hosted timeout fault
+injection.
+
+The deployed learning endpoint returned 200 and included
+`billing.database_mode_binding` and `files.bounded_storage_read_timeout`.
+Curriculum digest
+`9e41f7c8ec1540d2400de82981b631ab2c8b487bf28a583c4fa9990b5452d8c7`
+matched the local candidate. This proves the published instructions were loaded,
+not that learning grants financial authority or that every future repair works.
+
+The first local verification attempt failed safely on a migration-checksum
+mismatch in an older disposable database after Windows line-ending conversion.
+The passing run used a fresh disposable database, without weakening checksum
+validation. During deployment, an environment update triggered a Render deploy
+despite auto-deploy being disabled. Inspect recent/current deployment IDs and
+commits after future environment changes before manually triggering another
+deploy. The later documentation-only evidence update does not require a new
+runtime deployment; 286b99d remains the runtime baseline.
+
 ## Evidence provenance and remaining acceptance
 
 This continuation consolidates the October 4 `IABT-completion-ledger.json` and
@@ -105,8 +148,10 @@ codes are retained here.
 
 The subsequent October 4 Stripe read succeeded but exposed only the existing
 IABT-JERICHO test account `acct_1U6O5GDTeg6LQ8RA`, with no active prices and one
-legacy Base44 webhook. The earlier Insured Spending test account
-`acct_1TOYQhJQwCRZm16s` still needs owner selection through connector consent.
+legacy Base44 webhook. The owner later reported reconnecting the earlier Insured
+Spending test account `acct_1TOYQhJQwCRZm16s`, but a fresh connector account
+listing still exposed only the legacy account. Correct-account access remains
+unverified; this does not establish that the owner failed to reconnect it.
 The isolated API's mode is `test`, with an empty Builder price ID. Correct
 account selection and isolated price/webhook configuration remain incomplete;
 this supersedes the earlier generic connector-reauthentication blocker. Test
