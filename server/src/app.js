@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isValidAccountEmail } from "../../shared/auth-email.js";
 import {
   createId,
   createOpaqueToken,
@@ -212,13 +213,13 @@ const handleAuth = async ({
   const action = segments[2];
   if (req.method === "POST" && ["register", "login", "verify-otp", "resend-otp", "reset-request", "reset"].includes(action)) {
     await limitAuthRequest(req, action, normalizeEmail(body.email), repository, config);
+    if (["register", "resend-otp", "reset-request"].includes(action) && !isValidAccountEmail(body.email)) {
+      throw new HttpError(400, "invalid_email", "Enter a valid email address without list markers or spaces.");
+    }
   }
 
   if (req.method === "POST" && action === "register") {
     const email = normalizeEmail(body.email);
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
-      throw new HttpError(400, "invalid_email", "A valid email address is required");
-    }
     requireEmailDelivery(config, emailSender);
     const existing = await repository.findUserByEmail(email, { includeSecret: true });
     let user;

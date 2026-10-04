@@ -74,6 +74,29 @@ const fixture = async (t, adapter, { delivery = "development" } = {}) => {
 };
 
 for (const adapter of adapters) {
+  test(`${adapter}: malformed delivery addresses fail clearly without replacing a valid challenge`, async (t) => {
+    const f = await fixture(t, adapter, { delivery: "mock" });
+    assert.equal((await f.register()).status, 201);
+    const originalCode = f.messages.at(-1).code;
+    for (const action of ["register", "resend-otp", "reset-request"]) {
+      const invalid = await f.request(`/v1/auth/${action}`, { email: `- ${f.email}`, password: f.password });
+      assert.equal(invalid.status, 400);
+      assert.equal(invalid.body.error, "invalid_email");
+    }
+    assert.equal(f.messages.length, 1);
+    assert.equal((await f.verify(originalCode)).status, 200);
+  });
+
+  test(`${adapter}: plus-address verification preserves the account and normalizes surrounding whitespace`, async (t) => {
+    const f = await fixture(t, adapter, { delivery: "mock" });
+    const email = f.email.replace("owner@", "owner+stage-b@");
+    assert.equal((await f.request("/v1/auth/register", { email, password: f.password })).status, 201);
+    assert.equal((await f.request("/v1/auth/resend-otp", { email: `  ${email.toUpperCase()}  ` })).status, 200);
+    assert.equal(f.messages.at(-1).to, email);
+    assert.equal((await f.request("/v1/auth/verify-otp", { email, code: f.messages.at(-1).code })).status, 200);
+    assert.equal(await f.repository.findUserByEmail(f.email), null);
+  });
+
   test(`${adapter}: missing email blocks readiness and registration before account creation`, async (t) => {
     const f = await fixture(t, adapter, { delivery: "missing" });
     assert.equal((await f.request("/healthz")).status, 200);

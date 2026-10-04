@@ -61,6 +61,7 @@ export class MemoryRepository {
     this.incidents = new Map();
     this.storedObjects = new Map();
     this.stripeEvents = new Map();
+    this.stripeRefundObservations = new Map();
     this.maintenanceSchedules = new Map();
   }
 
@@ -323,6 +324,22 @@ export class MemoryRepository {
     event.updated_date = nowIso();
     event.completed_date = event.updated_date;
     return clone(event);
+  }
+
+  async recordStripeRefundObservation({ observation, claimToken }) {
+    const event = this.stripeEvents.get(observation.event_id);
+    if (!claimToken || event?.status !== "processing" || event.claim_token !== claimToken ||
+        event.event_type !== observation.event_type || event.livemode !== observation.livemode) return null;
+    if (!this.stripeRefundObservations.has(observation.event_id)) {
+      this.stripeRefundObservations.set(observation.event_id, {
+        event_id: observation.event_id, observation: clone(observation), reconciliation_status: "required", received_at: nowIso()
+      });
+    }
+    return clone(this.stripeRefundObservations.get(observation.event_id));
+  }
+
+  async getStripeRefundObservation(eventId) {
+    return clone(this.stripeRefundObservations.get(eventId) || null);
   }
 
   async failStripeEvent(eventId, errorCode, { claimToken } = {}) {

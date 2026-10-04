@@ -12,7 +12,7 @@
     "verify:exchange": "node scripts/verify-exchange.mjs",
     "verify:creation": "node scripts/verify-creation.mjs",
     "verify:standalone": "node --test server/test/*.test.js",
-    "verify:files": "node --test scripts/stored-files.test.mjs scripts/upload-batch.test.mjs",
+    "verify:files": "node --test scripts/stored-files.test.mjs scripts/upload-batch.test.mjs scripts/auth-email.test.mjs",
     "verify:base44-export": "node scripts/verify-base44-export.mjs",
     "verify:staging": "node scripts/verify-staging.mjs",
     "verify:frontend": "node --test scripts/verify-frontend.mjs",

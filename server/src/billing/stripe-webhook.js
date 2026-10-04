@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { planDefaults, planForPrice } from "./plans.js";
 import { billingRecordId, fulfillCredits } from "./fulfillment.js";
 import { retrieveStripeSubscription } from "./stripe-read.js";
+import { isStripeRefundEvent, prepareStripeRefundObservation, recordStripeRefundObservation, replayStripeRefundObservation } from "./refund-events.js";
 
 const stripeError = (status, code, message) =>
   Object.assign(new Error(message), { status, code });
@@ -315,6 +316,7 @@ export const processStripeWebhook = async ({
   }
 
   const eventType = String(event.type || "");
+  const refundObservation = isStripeRefundEvent(eventType) ? prepareStripeRefundObservation({ event, config }) : null;
   const started = await repository.startStripeEvent({
     eventId: event.id,
     eventType,
@@ -331,14 +333,17 @@ export const processStripeWebhook = async ({
       received: true,
       reused: true,
       type: eventType,
-      action: started.event?.status || "already_received"
+      action: started.event?.status || "already_received",
+      ...(refundObservation ? await replayStripeRefundObservation({ repository, observation: refundObservation }) : {})
     };
   }
 
   try {
     const object = event?.data?.object || {};
     let result = { action: "ignored" };
-    if (
+    if (refundObservation) {
+      result = await recordStripeRefundObservation({ repository, observation: refundObservation, claimToken: started.event.claim_token });
+    } else if (
       ["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(eventType) &&
       metadataFor(object).product_type === "ai_credit_pack"
     ) {
@@ -362,7 +367,8 @@ export const processStripeWebhook = async ({
       reused: false,
       type: eventType,
       action: result.action,
-      credits_granted: Number(result.credits || 0)
+      credits_granted: Number(result.credits || 0),
+      ...(result.reconciliation_required ? { reconciliation_required: true } : {})
     };
   } catch (error) {
     await repository.failStripeEvent(event.id, error.code || "stripe_event_failed", { claimToken: started.event.claim_token });

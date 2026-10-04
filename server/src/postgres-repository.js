@@ -563,6 +563,38 @@ export class PostgresRepository {
     return result.rows[0] || null;
   }
 
+  async recordStripeRefundObservation({ observation, claimToken }) {
+    if (!claimToken) return null;
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL lock_timeout = '5s'");
+      await client.query("SET LOCAL statement_timeout = '10s'");
+      const claim = await client.query(
+        `SELECT event_id FROM iabt_stripe_events WHERE event_id = $1
+         AND status = 'processing' AND updated_at = $2::timestamptz
+         AND event_type = $3 AND livemode = $4 FOR UPDATE`,
+        [observation.event_id, claimToken, observation.event_type, observation.livemode]
+      );
+      if (!claim.rowCount) { await client.query("ROLLBACK"); return null; }
+      await client.query(
+        `INSERT INTO iabt_stripe_refund_observations (event_id, observation) VALUES ($1, $2::jsonb)
+         ON CONFLICT (event_id) DO NOTHING`, [observation.event_id, JSON.stringify(observation)]
+      );
+      const result = await client.query("SELECT * FROM iabt_stripe_refund_observations WHERE event_id = $1", [observation.event_id]);
+      await client.query("COMMIT");
+      return result.rows[0];
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally { client.release(); }
+  }
+
+  async getStripeRefundObservation(eventId) {
+    const result = await this.pool.query("SELECT * FROM iabt_stripe_refund_observations WHERE event_id = $1", [eventId]);
+    return result.rows[0] || null;
+  }
+
   async failStripeEvent(eventId, errorCode, { claimToken } = {}) {
     const result = await this.pool.query(
       "UPDATE iabt_stripe_events SET status = 'failed', error_code = $2, updated_at = now() WHERE event_id = $1 AND ($3::timestamptz IS NULL OR (status = 'processing' AND updated_at = $3::timestamptz)) RETURNING *",

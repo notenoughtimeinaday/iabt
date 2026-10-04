@@ -129,7 +129,7 @@ test("local billing contract: period-end cancellation preserves paid access unti
   assert.equal(f.repository.creditEntries.filter((item) => item.entry_type !== "grant").length, 0);
 });
 
-test("known unsupported behavior: refund events are acknowledged but do not reconcile cash refunds or credit clawback", async (t) => {
+test("local refund inbox retains pending reconciliation without changing cash, credits or access", async (t) => {
   const f = await fixture(t);
   await f.deliver("evt_refund_subscription", "customer.subscription.created", f.subscription);
   await f.deliver("evt_refund_funding", "invoice.paid", f.invoice);
@@ -138,10 +138,12 @@ test("known unsupported behavior: refund events are acknowledged but do not reco
   const billingEvents = await f.repository.listRecordsExact("BillingEvent", f.user);
   const receipt = await f.repository.listRecordsExact("BillingFulfillment", f.user);
   for (const [index, type] of ["refund.created", "refund.updated", "refund.failed", "charge.refunded"].entries()) {
-    const result = await f.deliver("evt_refund_unhandled_" + index, type, { id: "re_synthetic", payment_intent: "pi_synthetic", charge: "ch_synthetic", status: ["pending", "succeeded", "failed", "succeeded"][index], amount: index ? 7900 : 3950, currency: "usd", metadata: f.metadata });
-    assert.equal(result.action, "ignored");
+    const result = await f.deliver("evt_refund_inbox_" + index, type, { id: type === "charge.refunded" ? "ch_synthetic" : "re_synthetic", payment_intent: "pi_synthetic", charge: "ch_synthetic", status: ["pending", "succeeded", "failed", "succeeded"][index], amount: index ? 7900 : 3950, amount_refunded: 7900, currency: "usd", metadata: f.metadata });
+    assert.equal(result.action, "refund_reconciliation_required");
+    assert.equal(result.reconciliation_required, true);
     assert.equal(result.credits_granted, 0);
-    assert.equal(f.repository.stripeEvents.get("evt_refund_unhandled_" + index).status, "succeeded", "Transport success is not refund reconciliation");
+    assert.equal(f.repository.stripeEvents.get("evt_refund_inbox_" + index).status, "succeeded", "Transport success is not refund reconciliation");
+    assert.equal((await f.repository.getStripeRefundObservation("evt_refund_inbox_" + index)).reconciliation_status, "required");
   }
   assert.deepEqual(await f.repository.getCreditAccount(f.user.id), before);
   assert.deepEqual(await f.entitlement(), entitlement);

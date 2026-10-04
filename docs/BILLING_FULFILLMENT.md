@@ -133,6 +133,20 @@ Subscribe the same-mode Stripe webhook destination to:
 - `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
 - `invoice.paid`.
 - `customer.subscription.created`, `.updated`, `.deleted`, `.paused`, `.resumed`.
+- `refund.created`, `.updated`, `.failed` and `charge.refunded` for the operator
+  refund inbox. The older `charge.refund.updated` is also handled when delivered.
+
+The refund inbox requires migration `006_refund_observations.sql`. It preserves
+immutable, bounded provider observations and responds with explicit
+`refund_reconciliation_required`, including on duplicate delivery. Its receipt
+does not associate an account, revoke access, adjust IABT credits or return cash.
+Reconciliation and the full/partial/spent-credit policy remain unfinished; see
+the [refund acceptance boundary](BILLING_ACCEPTANCE.md#refunds-are-a-separate-unfinished-workflow).
+An operator can inspect `iabt_stripe_refund_observations` joined to
+`iabt_stripe_events` by event ID, using authorized database access. It is not an
+application-user or generic administrator entity and has no public read/write
+route. No dashboard configuration, webhook subscriptions or live data were
+changed by the local implementation.
 
 Configure one monthly, single-quantity price per paid plan. The bounded invoice
 handler supports old `subscription_details`/`price` fields and current
