@@ -13,6 +13,17 @@ This source change does not create Stripe objects, update environments or
 establish hosted offer acceptance. The deployed runtime evidence below remains
 separate; no new deployment is implied.
 
+Pricing verification checkpoint: initial candidate `95eaa13` passed local lint,
+type checking, build and 341 tests (46 database tests skipped). CI run
+[681](https://github.com/notenoughtimeinaday/iabt/actions/runs/37482233381)
+ran PostgreSQL and exposed two retry failures. Fix `aff4b88` canonicalizes only
+new-offer request fingerprints so PostgreSQL JSONB key ordering cannot change
+accepted terms; legacy fingerprints stay unchanged. The added regression fails
+on the preceding code and passes with the fix. Focused local offer, checkout and
+price-contract checks pass (30 passed, 22 database tests skipped), as do lint
+and type checking. The complete PostgreSQL rerun is pending. Interactive browser
+verification is also pending because the local browser download failed.
+
 ## Previously deployed acceptance baseline
 
 The standalone candidate has verified sample file delivery, a deployed refund
