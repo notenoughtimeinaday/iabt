@@ -99,6 +99,42 @@ Generic entity writes cannot create `PolicyAcceptance`. The authenticated `accep
 
 ## Verification boundaries and release
 
+Read [the current release record](docs/CURRENT_RELEASE_STATUS.md) before acting
+on historical acceptance. API candidate d06894d is published, passed CI run 677
+and deployed to isolated staging; the unchanged frontend remains at 286b99d.
+Final complete verification after the curriculum change passed all 393 tests
+with zero failures/skips and the lint, type and build checks. The final run used
+the correct isolated API origin after an earlier missing-origin build failure.
+Readiness reports eight applied migrations and none pending, and a fresh app
+reload preserved Builder with 200 available credits and zero reserved credits.
+The payment/replay evidence belongs to the earlier 286b99d runtime. Separate
+fresh d06894d subscription events scheduled period-end cancellation and then
+restored renewal, preserving active Builder and 200/0 credits while resolving
+the legacy 100-credit monthly contract. Those events establish hosted
+subscription contract lookup; they do not establish a renewal grant or effective
+cancellation. Direct hosted registry enumeration and new-offer acceptance
+remain open. A deployed registry does not authorize changed historical
+allowances or activate the future offers. The hosted learning endpoint also
+returned the versioned-price capability and TreeBay benchmark rule with the
+current curriculum digest recorded in the release record; serving a lesson
+does not implement a missing tool or grant authority.
+
+A later hosted Studio request on d06894d attached the TreeBay benchmark and
+automatically completed the supported source-review workflow with zero external
+provider cost. One test-purchased IABT credit was captured, changing available
+credits from 200 to the latest observed **199**. All three native browser
+MD/PDF/DOCX downloads matched persisted sizes/hashes; four PDF pages were
+visually legible without overlap. Markdown preserved every nonempty source
+line, and DOCX ZIP/XML validation passed; the new DOCX still needs visual review.
+The fresh hosted account-scoped learning observation recorded verified delivery
+with three matching hashes, one attempt and functional correctness not
+established.
+Literal source wrapping and line-based candidate extraction limit the report
+to input inventory/preservation; this is not semantic TreeBay diagnosis, a
+complete release checklist or evidence of source repair, builds or Play
+submission. See [the delivery evidence](docs/BILLING_ACCEPTANCE.md#paid-credit-source-delivery-on-d06894d)
+before repeating the job.
+
 `npm run verify` is the complete existing repository suite. Run PostgreSQL integration tests with a disposable database, not production credentials. Focused suites include `orchestration.test.js`, `execution-graph.test.js`, `autonomy-policy.test.js`, `durable-autonomy.test.js`, `learning.test.js`, `learning-http.test.js`, `source-review.test.js` and existing account, billing, provider, Exchange and worker tests.
 
 Paid-provider tests use mocked network transports. Local storage and S3 transport doubles do not establish live file durability. Passing tests do not establish live inbox delivery, Stripe revenue, arbitrary code execution, backup recovery or release readiness.
