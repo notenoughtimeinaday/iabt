@@ -25,7 +25,7 @@ email-validation or refund-observation implementation.
 | CI | [Run 677 — passed](https://github.com/notenoughtimeinaday/iabt/actions/runs/37402441778) on that exact commit |
 | Isolated frontend | [iabt-isolated-staging-web](https://iabt-isolated-staging-web.onrender.com/#/login) |
 | Isolated API | [iabt-isolated-staging-api](https://iabt-isolated-staging-api.onrender.com) |
-| API deployment | `dep-db25i03bc2fs73faso5g` — Live October 6, 2026 at 02:12:47 UTC |
+| API deployment | `dep-db25okss728c73b6pl7g` — same d06894d runtime, maintenance enabled; Live October 6, 2026 at 02:26:58 UTC |
 | Frontend deployment | `dep-db18lmvr12us739rm4a0` — unchanged at `286b99da93ae7a0dda580d2d5d762824fa679b84` |
 | Neon | Project `noisy-bread-33052649`, branch `br-mute-heart-b517gyel`, database `iabt_staging_isolated` |
 | Schema | Eight applied migrations; none pending |
@@ -47,6 +47,16 @@ configuration unchanged until release acceptance.
 
 ## Verified, with scope
 
+- **Maintenance continuation:** the account had a durable enabled schedule but
+  staging's server switch was disabled. `IABT_MAINTENANCE_ENABLED=true` was saved
+  and the same d06894d runtime redeployed; the existing job worker was already
+  enabled. Its first automatic pass ran 02:26:52–02:26:55 UTC, checked 11 jobs,
+  ensured 11 outcome lessons, and required no plan repairs. The next check was
+  scheduled for 02:41:55 UTC. No credits or external generation were used.
+  Remote storage readback remains disabled: all 40 artifact findings explicitly
+  report `remote_readback_disabled_unverified`, so the completed pass is marked
+  `needs_attention`, not file-integrity success. Free hosting can still suspend.
+  This maintenance does not modify source or complete launch work autonomously.
 - **Earlier 286b99d baseline verification:** 352 server, 16 file/email, five
   frontend-isolation and eight readiness tests (**381 total, zero failed or
   skipped**), including 56 observed PostgreSQL checks; lint,
