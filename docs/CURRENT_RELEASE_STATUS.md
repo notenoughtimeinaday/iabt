@@ -58,23 +58,58 @@ The versioned price-contract implementation is now published and deployed to
 the isolated API; the frontend remains on the unchanged 286b99d build.
 A subsequent Studio source-review job used one test-purchased credit and
 delivered three matching downloads and left **199 credits** at that checkpoint.
-The October 6 database check below subsequently observed **198 credits**;
-earlier 200-credit observations belong to the preceding payment tests.
+The early October 6 database check below subsequently observed **198 credits**.
+The later immediate-cancellation and resubscription check retained those credits
+through cancellation and added one legacy allowance, ending at **298 credits**.
+Earlier 200-credit observations belong to the preceding payment tests.
 **Full paid launch is not accepted.** Reuse the existing
 candidate and isolated environment; do not restart completed upload, download,
 email-validation or refund-observation implementation.
 
+## October 6 immediate cancellation and resubscription
+
+At 15:38–15:42 UTC, the connector exposed the correct existing standalone Stripe
+account in test mode, resolving the earlier account-access gate. The isolated
+API remained on d06894d and the frontend on 286b99d. Repository source was
+d3a8f71; its disabled future-pricing candidate was not deployed or activated.
+
+The existing legacy Builder test subscription was canceled immediately with
+`invoice_now=false` and `prorate=false`. Its signed
+`customer.subscription.deleted` event processed as
+`subscription_entitlement_updated` with zero credits granted. The database
+showed Free/canceled with **198 available and zero reserved credits**, and a
+fresh Studio browser view showed Free and 198 credits.
+
+The same account then used **Plans & billing → Test Builder** to complete a
+legacy $29/100-credit Stripe sandbox Checkout. The replacement subscription was
+active under the same customer while the old subscription remained canceled.
+The signed `invoice.paid` event granted **100 credits once**; the subscription
+creation event granted zero. Database state was Builder/active with **298
+available and zero reserved credits**, and a fresh browser billing dialog
+showed Builder as the current plan and 298 credits.
+
+This closes effective immediate cancellation with credit retention and later
+resubscription for this isolated runtime. It is a distinct lifecycle scenario;
+the October 5 initial-purchase baseline remains separate. A later independent
+sign-in, project access after downgrade, natural period-end cancellation,
+monthly renewal and recurring decline/recovery remain unverified. No refunds,
+new prices, live/production changes or runtime deployment occurred. Exact
+provider and user identities belong in the private acceptance evidence.
+See [billing acceptance](BILLING_ACCEPTANCE.md#october-6-immediate-cancellation-and-resubscription).
+
 ## October 6 connection and database reconciliation
 
-Stripe connector authentication is working again, but its authorized test
-account is the legacy Base44 setup. Complete read-only lists returned no prices,
-customers or subscriptions, and its only webhook points to Base44. The existing
-standalone account recorded in the private October 5 billing evidence is a
+During the earlier October 6 check, Stripe connector authentication worked, but
+its authorized test account was the legacy Base44 setup. Complete read-only
+lists returned no prices, customers or subscriptions, and its only webhook
+pointed to Base44. The existing standalone account recorded in the private
+October 5 billing evidence was a
 different account. The owner was given Stripe's account-access link to authorize
 that existing account in test mode. Do not create replacement accounts or prices,
 change staging credentials, or repeat successful payments to work around this
 authorization boundary. No Stripe write or payment test was performed in this
-reconciliation.
+earlier reconciliation. The later account connection and lifecycle acceptance
+above supersede this access gate.
 
 Direct read-only queries against the canonical isolated Neon database confirmed:
 
@@ -84,8 +119,8 @@ Direct read-only queries against the canonical isolated Neon database confirmed:
   Pro 500 and Agency 2000 credits, registered October 6 at 02:12:36.172 UTC.
   This closes the previous direct-registry-enumeration evidence gap. It does not
   establish new-offer acceptance or a renewal credit grant.
-- Account B retains Builder with 198 available and zero reserved test credits;
-  account A has zero available and zero reserved credits. Earlier balances
+- Account B then retained Builder with 198 available and zero reserved test
+  credits; account A had zero available and zero reserved credits. Earlier balances
   remain evidence for their individual scenarios.
 
 Render's deployment records still show API d06894d and unchanged frontend
@@ -101,6 +136,7 @@ purchase, decline/recovery, replay and file-delivery evidence.
 | --- | --- |
 | Repository | [notenoughtimeinaday/iabt](https://github.com/notenoughtimeinaday/iabt) |
 | Branch / review | `jericho-autonomy-v1`, [draft PR 4](https://github.com/notenoughtimeinaday/iabt/pull/4) |
+| Source at October 6 lifecycle check | `d3a8f71fc65709c800d202fc81aa200bf8f2e213` — includes the disabled pricing candidate; distinct from deployed runtime |
 | API runtime candidate | `d06894d30200afcebbd6d15f0bc3f9fe05e1f12a` |
 | Published tree | `752287f054d86a102d106e520c4a42973464fc5a` |
 | CI | [Run 677 — passed](https://github.com/notenoughtimeinaday/iabt/actions/runs/37402441778) on that exact commit |
@@ -204,8 +240,9 @@ configuration unchanged until release acceptance.
   from zero to 100 with none reserved. Other October 5 jobs had consumed the
   earlier starter balance. Manual redelivery returned HTTP 200 with
   `reused: true` and no balance increase. The portal opened and showed the paid
-  invoice. Renewal, recurring failure/recovery, effective/immediate
-  cancellation, asynchronous packs and refund reconciliation remain open.
+  invoice. Renewal, recurring failure/recovery, asynchronous packs and refund
+  reconciliation remain open. The separate October 6 check above now establishes
+  effective immediate cancellation and resubscription on d06894d.
 - **Isolated card-pack decline/recovery:** the $10/100-credit pack Checkout
   showed an insufficient-funds decline; a fresh app read remained at 100
   credits. Retrying the same Checkout successfully produced a signed
@@ -246,8 +283,8 @@ credit delivery hashes, Stripe test results and remaining scenarios are in
 | Area | Remaining work |
 | --- | --- |
 | Identity and private files | Reuse existing accounts/jobs to verify password recovery and second-account denial, and visually review the new TreeBay-source DOCX. Native MD/PDF/DOCX delivery and four-page PDF visual review passed for that new report. Anonymous source access already returned 401. |
-| Stripe identity/configuration | October 5 isolated dashboard setup and actual signed fulfillment supersede the earlier absent-key/empty-price gate. The restricted test key, four legacy prices, dedicated active test webhook and unique `iabt-isolated-staging-v1` marker are installed. Webhook API version is `2026-08-26.dahlia`. October 6 connector authentication works but authorizes only the legacy Base44 account; add the existing standalone account before further connector payment tests. Preserve the working staging configuration and historical endpoint/customer state. No real purchase or funding is needed. |
-| Payment lifecycle | Initial isolated subscription payment, observed concurrent UI session reuse, cancellation/reopen, changed-plan conflict, same-invoice replay and card-pack decline/recovery/replay passed on 286b99d. Fresh period-end cancellation scheduling and restoration of renewal passed on d06894d with no credit change. Still verify fulfillment without returning from Checkout, renewal-credit granting, recurring decline/recovery, asynchronous packs, effective/immediate cancellation, provider expiry, later resubscription and interrupted/different-event fulfillment. Historical September payments/replays remain separate evidence. |
+| Stripe identity/configuration | The existing standalone test account connection was verified before the October 6 15:38–15:42 UTC lifecycle check, resolving the earlier legacy-only connector gate. The restricted test key, four legacy prices, dedicated active test webhook and unique `iabt-isolated-staging-v1` marker remain installed; webhook API version is `2026-08-26.dahlia`. Preserve the working isolated configuration and historical endpoint/customer state. No real purchase or funding is needed. |
+| Payment lifecycle | Initial isolated subscription payment, observed concurrent UI session reuse, cancellation/reopen, changed-plan conflict, same-invoice replay and card-pack decline/recovery/replay passed on 286b99d. Scheduling/restoration and effective immediate cancellation with credit retention followed by same-customer resubscription passed on d06894d. Still verify fulfillment without returning from Checkout, renewal-credit granting, recurring decline/recovery, asynchronous packs, natural period-end cancellation, later independent sign-in and project access after downgrade, provider expiry and interrupted/different-event fulfillment. Historical September payments/replays remain separate evidence. |
 | Refunds/disputes | Extend the existing inbox with verified payment association, current provider state and operator review. Cash refunds and credit adjustments require explicit approval; no automatic clawback or access change. |
 | Test/live state | Migration 007 and the database mode binding first deployed at 286b99d and remain included in d06894d. Exact owner/subscription provenance governs legacy inference; guards precede provider calls/receipt writes. Mode binding does not prove Stripe-account identity or replace a reviewed production data/credit migration. Drain older binaries before initializing another database. [Contract](BILLING_FULFILLMENT.md#database-billing-mode-binding) |
 | Pricing | Versioned price contracts are published, CI-verified and deployed to the API at d06894d with migration 008. Fresh hosted subscription events resolved the legacy Builder contract correctly; October 6 direct SQL enumeration confirmed all three legacy monthly contracts. Renewal-credit granting and new-offer acceptance remain open. The approved offer remains Meet Jericho first month $4.99/100 credits then Starter $12/100; Builder $29/300; Pro $59/650; top-up $10/100. Finish the offer rollout, renewal disclosure and introductory eligibility while preserving existing purchases. October 5 payment acceptance used 286b99d's legacy $29/100-credit Builder contract and $10/100-credit pack. Approval of customer prices is not authorization for infrastructure/provider spending. |

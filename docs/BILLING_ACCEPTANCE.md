@@ -21,6 +21,11 @@ API candidate d06894d is now published and deployed with versioned price
 contracts. Fresh hosted cancellation-scheduling and renewal-restoration events
 verified its subscription contract lookup. That evidence is separate from the
 earlier 286b99d payment and replay tests.
+On October 6 at 15:38–15:42 UTC, the correctly connected standalone test account
+also passed effective immediate cancellation with credit retention and
+same-customer resubscription on d06894d, ending at 298 available and zero
+reserved credits. This does not establish monthly renewal or the disabled
+future-pricing candidate's hosted acceptance.
 
 | Scenario | Existing local evidence | Remaining sandbox acceptance | Status |
 | --- | --- | --- | --- |
@@ -30,9 +35,50 @@ earlier 286b99d payment and replay tests.
 | Purchased credit to private artifact | The local contract combines purchase fulfillment, automatic document creation, worker byte verification, credit capture and file readback. | Visually review the new DOCX, and verify hosted second-account denial, terminal failure release and actual storage recovery. Reuse the completed source-review jobs for file checks. | **Test-purchased-credit delivery passed on d06894d:** a real Studio attachment request automatically completed one source-review job, captured one credit (200 to 199), and delivered MD/PDF/DOCX through native browser downloads matching stored byte counts/hashes. Four PDF pages were legible with no overlap; new DOCX visual review remains pending. The report inventories/preserves literal input and extracts candidates by line; it is not semantic TreeBay diagnosis or a complete release checklist. [Current evidence](#paid-credit-source-delivery-on-d06894d) Earlier starter-credit and September purchased-credit journeys remain separate history. |
 | Monthly renewal | Synthetic monthly invoices grant once per subscription period and preserve earlier credits. | Use an isolated sandbox subscription and [Stripe Billing simulation](https://docs.stripe.com/billing/testing/test-clocks) to advance to the next real monthly invoice. Observe its webhook and one additional tier allowance; replay it and confirm no increase. Keep this separate from the hosted Checkout evidence. | Unverified |
 | Decline and recovery | Synthetic `invoice.payment_failed` is ignored and cannot fund credits. Verified subscription states determine grace: `past_due` retains the tier, `unpaid` becomes Free. Recovery plus a paid invoice funds once. | Cause an actual renewal decline; inspect invoice/payment/subscription state and no new grant. Observe configured dunning, restore a successful test method and verify one allowance after actual settlement. | **October 5 isolated pack decline/retry passed:** balance stayed 100 after the decline and became 200 only after successful settlement. This is not recurring invoice recovery. September 20 initial subscription decline/retry remains [historical evidence](STAGING_PAYMENT_DELIVERY_ACCEPTANCE_2026-09-22.md#september-20-hosted-subscription-payment); recurring decline/recovery is unverified. |
-| Period-end and immediate cancellation | Local checks retain paid access while cancellation is scheduled, downgrade on verified canceled state, and retain credits. Projection tests cover provider `cancel_at` at the item period boundary while its period-end boolean is false; the repair is included in the current isolated candidate. | Verify effective downgrade, immediate cancellation, later sign-in, project access and credit retention. Cancellation is not a cash refund. | **Fresh isolated scheduling and renewal restoration passed on d06894d:** the portal scheduled period-end cancellation, then restored renewal of the same subscription. Both real events updated entitlement with zero grants; Builder remained active with 200 available and zero reserved credits. The app correctly projected period-end cancellation from `cancel_at` despite the provider boolean being false. Effective and immediate cancellation remain unverified. [Current evidence](#price-contract-deployment--october-6-utc) September 22 results remain historical. |
+| Period-end and immediate cancellation | Local checks retain paid access while cancellation is scheduled, downgrade on verified canceled state, and retain credits. Projection tests cover provider `cancel_at` at the item period boundary while its period-end boolean is false; the repair is included in the current isolated candidate. | Verify natural period-end cancellation, later independent sign-in and project access after downgrade. Cancellation is not a cash refund. | **October 6 effective immediate cancellation passed on d06894d:** a signed deletion event granted zero credits; the database showed Free/canceled with 198 available and zero reserved credits, and fresh Studio showed Free/198. [Lifecycle evidence](#october-6-immediate-cancellation-and-resubscription) Earlier scheduling/restoration also passed with 200/0 credits and correct period-end projection from `cancel_at`; those dated observations remain separate. [Earlier evidence](#price-contract-deployment--october-6-utc) September 22 results remain historical. |
 | Cash refund lifecycle | Immutable operator refund observations retain bounded signed evidence, mark reconciliation required and preserve replay/out-of-order evidence without changing money, credits or access. Memory and disposable PostgreSQL tests passed; migration 006 is deployed on isolated staging. | Associate the original payment/fulfillment, retrieve current provider state, define full/partial treatment of unused/reserved/spent credits, and implement explicit operator approval for consequential adjustments. Then exercise actual sandbox refunds and verify provider and application results. | **Observation ingestion implemented, tested and deployed; payment association, financial reconciliation and actual hosted refund lifecycle remain incomplete** |
-| Concurrent first-time subscription purchase | A private pending-session record now reuses one session across concurrent instances and restart, retains exact retry parameters, and requires verified expiry before replacement. Completed-unreconciled sessions and changed terms fail closed. Existing subscribers use the portal. | Verify interrupted/retried creation, actual provider expiry and later purchase after verified cancellation. The observed concurrent UI requests do not establish multiple-server or restart acceptance. | **October 5 isolated UI checks passed:** two concurrent Builder clicks returned the same Checkout session; cancellation/reopen reused it; selecting Pro while it remained pending returned HTTP 409 `stripe_checkout_terms_conflict`. [Current evidence](#october-5-isolated-hosted-acceptance) |
+| Subscription admission and later resubscription | A private pending-session record now reuses one session across concurrent instances and restart, retains exact retry parameters, and requires verified expiry before replacement. Completed-unreconciled sessions and changed terms fail closed. Existing subscribers use the portal. | Verify interrupted/retried creation and actual provider expiry. The observed concurrent UI requests do not establish multiple-server or restart acceptance. | **October 5 isolated UI checks passed:** two concurrent Builder clicks returned the same Checkout session; cancellation/reopen reused it; selecting Pro while it remained pending returned HTTP 409 `stripe_checkout_terms_conflict`. [Earlier evidence](#october-5-isolated-hosted-acceptance) **October 6 same-customer resubscription passed on d06894d:** after effective cancellation, app-generated legacy Builder Checkout produced a new active subscription, one 100-credit invoice grant and Builder/298 available/zero reserved in database and fresh billing UI. [Lifecycle evidence](#october-6-immediate-cancellation-and-resubscription) |
+
+## October 6 immediate cancellation and resubscription
+
+At 15:38–15:42 UTC, the connector's correct existing standalone Stripe test
+account was verified and used for the existing isolated subscription. This
+resolved the earlier legacy-only connector authorization gate. The tested API
+remained d06894d and frontend 286b99d. Source head was d3a8f71, which includes
+the disabled future-pricing implementation; that candidate was not deployed
+or activated for this check.
+
+The existing legacy Builder subscription was immediately canceled with
+`invoice_now=false` and `prorate=false`. Its signed
+`customer.subscription.deleted` event processed as
+`subscription_entitlement_updated` with `credits_granted: 0`. The persisted
+entitlement became Free/canceled while the ledger retained **198 available and
+zero reserved credits**. A fresh Studio browser view independently showed
+Free and 198 credits.
+
+The same app account then selected **Plans & billing → Test Builder** and
+completed the app-generated $29 legacy Builder Checkout using a public Stripe
+sandbox test card. Stripe recorded a new active subscription under the same
+customer, with the prior subscription still canceled. The signed `invoice.paid`
+event granted **100 credits once**; `customer.subscription.created` updated
+the entitlement and granted zero. The persisted account showed Builder/active
+with **298 available and zero reserved credits**. A fresh actual billing dialog
+showed Builder as the current plan and 298 credits.
+
+The paid USD 29 invoice used `billing_reason: subscription_create` and the
+same legacy monthly price. Its one 100-credit ledger grant retained the
+`legacy-v1` price contract and original contract hash. The existing customer
+had no test clock; this scenario must not be labeled a monthly renewal.
+
+This establishes effective immediate cancellation with credit retention and a
+later same-customer purchase through the application. It is a distinct
+resubscription scenario, not a repetition or reinterpretation of the October 5
+initial-purchase baseline. It does not establish a natural period-end downgrade,
+a later independent sign-in, project access after downgrade, renewal-credit
+granting, recurring decline/recovery, fulfillment without returning from
+Checkout, or new-offer acceptance. No refunds, new prices, live/production
+changes or runtime deployment occurred. Exact provider, user, event and
+fulfillment identities remain in private acceptance evidence.
 
 ## October 5 isolated hosted acceptance
 
@@ -234,15 +280,16 @@ webhook, legacy price mapping and actual payment now supersede the claim that
 isolated payment wiring is still absent. They do not establish which accounts
 a later connector listing will expose.
 
-On October 6, reconnection restored connector authentication, but the authorized
-test account was still the legacy Base44 account. Complete read-only customer,
-price and subscription lists were empty; its only webhook destination was
+During the earlier October 6 check, reconnection restored connector authentication,
+but the authorized test account was still the legacy Base44 account. Complete
+read-only customer, price and subscription lists were empty; its only webhook destination was
 Base44. The standalone account identity is retained in the private October 5
 acceptance record. The owner received Stripe's account-access link to add that
 existing account in test mode. No provider writes, replacement accounts, new
-prices, payment attempts or runtime changes were made during this check.
-Resume the unverified lifecycle scenarios only after the authorized account
-matches the existing staging subscription and price contracts. The isolated
+prices, payment attempts or runtime changes were made during that earlier check.
+The correct existing standalone test account was subsequently authorized and
+verified for the [15:38–15:42 UTC lifecycle check](#october-6-immediate-cancellation-and-resubscription),
+resolving that connection gate. The isolated
 database's two verified original users and three immutable legacy monthly
 contracts were confirmed independently; those reads do not replace hosted
 password recovery, cross-account request tests or provider lifecycle evidence.
