@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { billingRecordId } from "./fulfillment.js";
+import { normalizePriceContract } from "./price-catalog.js";
 
 const error = (code, message, status = 409) => Object.assign(new Error(message), { code, status });
 const digest = (value) => createHash("sha256").update(value).digest("hex");
@@ -44,13 +45,15 @@ function validateSession(session, row) {
 // The transaction owns admission, not network I/O. Ambiguous requests retain
 // the exact parameters and provider key. A caller-supplied request key cannot
 // create another payable subscription while this account has a pending one.
-export async function subscriptionCheckoutAttempt({ repository, user, config, plan, params, submit, retrieve, now = Date.now }) {
+export async function subscriptionCheckoutAttempt({ repository, user, config, plan, params, priceContract, submit, retrieve, now = Date.now }) {
   const owner = { ...user, role: "user" };
   const mode = config.providers.stripe.mode === "live" ? "live" : "test";
   const appId = config.providers.stripe.metadataAppId;
   const recordId = billingRecordId(`subscription-checkout:${mode}:${owner.id}`);
   const credential = digest(config.providers.stripe.secretKey);
   const terms = digest(JSON.stringify({ mode, appId, plan, params }));
+  const contract = normalizePriceContract(priceContract);
+  if (contract.plan !== plan || contract.price_id !== params["line_items[0][price]"]) throw reconcile();
   let waiting = 0;
   for (let transitions = 0; transitions < 50; transitions += 1) {
     const claim = await repository.withRecordTransaction(async (tx) => {
@@ -68,6 +71,7 @@ export async function subscriptionCheckoutAttempt({ repository, user, config, pl
           integration_identifier: "iabt-subscription-" + [...attemptId.replaceAll("-", "").slice(0, 8)].map((character) => String.fromCharCode(97 + parseInt(character, 16))).join(""),
           "metadata[checkout_attempt_id]": attemptId, "subscription_data[metadata][checkout_attempt_id]": attemptId };
         const fields = { user_id: owner.id, mode, app_id: appId, plan, price_id: params["line_items[0][price]"],
+          price_contract: contract,
           terms_sha256: terms, credential_sha256: credential, attempt_id: attemptId, started_at_ms: now(),
           idempotency_key: "iabt:subscription-checkout:" + attemptId, params: frozen, status: "creating",
           lease_token: randomUUID(), lease_expires_at_ms: now() + leaseMs, session_id: null, url: null,
@@ -80,6 +84,12 @@ export async function subscriptionCheckoutAttempt({ repository, user, config, pl
           typeof row.idempotency_key !== "string" || !row.idempotency_key.startsWith("iabt:subscription-checkout:") ||
           typeof row.attempt_id !== "string" || !["creating", "open", "uncertain"].includes(row.status)) throw reconcile();
       const sameTerms = row.terms_sha256 === terms && row.plan === plan && row.price_id === params["line_items[0][price]"];
+      if (sameTerms && !row.price_contract && contract.catalog_version === "legacy-v1") {
+        // Pre-registry attempts retain identical parameters and provider keys;
+        // their original legacy price/plan can be attributed without a new POST.
+        row = await tx.updateRecord(entity, row.id, owner, { price_contract: contract });
+      }
+      if (sameTerms && (!row.price_contract || normalizePriceContract(row.price_contract).contract_sha256 !== contract.contract_sha256)) throw reconcile();
       if (row.session_id && row.status === "open" && row.expires_at * 1000 > now() && sameTerms && row.credential_sha256 === credential &&
           !["canceled", "incomplete_expired"].includes(entitlement?.status)) {
         return { kind: "reuse", row };

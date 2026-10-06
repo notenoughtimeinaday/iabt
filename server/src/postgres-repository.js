@@ -2,6 +2,7 @@ import pg from "pg";
 import { createId } from "./security.js";
 import { applyMigrations } from "./migrations.js";
 import { assertBillingBinding, assertBillingMode, BILLING_EVIDENCE_SQL, validateBillingEvidence } from "./billing/environment.js";
+import { assertSamePriceContract, normalizePriceContract, validatePriceContracts } from "./billing/price-catalog.js";
 
 const { Pool } = pg;
 const clone = (value) => structuredClone(value);
@@ -233,6 +234,41 @@ export class PostgresRepository {
       );
       return result.rows[0];
     });
+  }
+
+  async registerBillingPriceContracts({ mode, contracts }) {
+    await this.ensureBillingEnvironment(mode);
+    const normalized = validatePriceContracts(contracts);
+    if (!normalized.length) return;
+    const read = (connection) => connection.query(
+      "SELECT price_id, plan, catalog_version, monthly_credits, interval, contract_sha256 FROM iabt_billing_price_contracts WHERE mode = $1 AND price_id = ANY($2::text[])",
+      [mode, normalized.map((contract) => contract.price_id)]
+    );
+    const check = (rows) => {
+      for (const row of rows) assertSamePriceContract(row, normalized.find((contract) => contract.price_id === row.price_id));
+      return new Set(rows.map((row) => row.price_id));
+    };
+    // Existing immutable contracts require no cross-feature transaction lock.
+    if (check((await read(this.pool)).rows).size === normalized.length) return;
+    await this.withRecordTransaction(async (transaction) => {
+      const existing = check((await read(transaction.pool)).rows);
+      for (const contract of normalized) {
+        if (existing.has(contract.price_id)) continue;
+        await transaction.pool.query(
+          "INSERT INTO iabt_billing_price_contracts (mode, price_id, plan, catalog_version, monthly_credits, interval, contract_sha256) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+          [mode, contract.price_id, contract.plan, contract.catalog_version, contract.monthly_credits, contract.interval, contract.contract_sha256]
+        );
+      }
+    });
+  }
+
+  async getBillingPriceContract({ mode, priceId }) {
+    assertBillingMode(mode);
+    const result = await this.pool.query(
+      "SELECT price_id, plan, catalog_version, monthly_credits, interval, contract_sha256 FROM iabt_billing_price_contracts WHERE mode = $1 AND price_id = $2",
+      [mode, priceId]
+    );
+    return result.rows[0] ? normalizePriceContract(result.rows[0]) : null;
   }
 
   async close() {

@@ -1,4 +1,4 @@
-import { ensureBillingEnvironment } from "./environment.js";
+import { ensureBillingPriceCatalog, resolvePriceContract } from "./price-catalog.js";
 
 const billingError = (status, code, message) =>
   Object.assign(new Error(message), { status, code });
@@ -76,7 +76,7 @@ export const createSubscriptionCheckout = async ({
   if (!["builder", "pro", "agency"].includes(plan)) {
     throw billingError(400, "invalid_subscription_plan", "Plan must be builder, pro, or agency");
   }
-  await ensureBillingEnvironment({ repository, config });
+  await ensureBillingPriceCatalog({ repository, config });
   const entitlement = await currentEntitlement(repository, user);
   const customer = customerId(entitlement);
   const hasSubscription = hasManagedSubscription(entitlement);
@@ -93,12 +93,22 @@ export const createSubscriptionCheckout = async ({
 
   assertCheckoutReady(providers);
 
+  const priceContract = await resolvePriceContract({ repository, config, priceId: config.providers.stripe.prices[plan] });
+  if (!priceContract || priceContract.plan !== plan) {
+    throw billingError(503, "stripe_price_not_configured", "The selected Stripe price has no verified billing contract");
+  }
+
   const metadata = {
     iabt_app_id: config.providers.stripe.metadataAppId,
     base44_app_id: config.providers.stripe.metadataAppId,
     plan,
     user_id: user.id,
-    user_email: user.email
+    user_email: user.email,
+    // Keep legacy provider parameters stable for existing pending attempts.
+    ...(priceContract.catalog_version !== "legacy-v1" ? {
+      billing_catalog_version: priceContract.catalog_version,
+      billing_contract_sha256: priceContract.contract_sha256
+    } : {})
   };
   const params = {
     mode: "subscription",
@@ -114,7 +124,7 @@ export const createSubscriptionCheckout = async ({
     params["metadata[" + key + "]"] = value;
     params["subscription_data[metadata][" + key + "]"] = value;
   }
-  const pending = await subscriptionCheckoutAttempt({ repository, user, config, plan, params, now,
+  const pending = await subscriptionCheckoutAttempt({ repository, user, config, plan, params, priceContract, now,
     submit: async (frozenParams, providerKey) => {
       const result = await providers.execute("stripe", "post", { path: "/checkout/sessions", params: frozenParams, estimated_cost_cents: 0 },
         executionContext({ user, action: "subscription-checkout-" + plan, idempotencyKey: providerKey, live: config.providers.stripe.mode === "live" }));
@@ -136,7 +146,7 @@ export const createCreditCheckout = async ({
   user,
   idempotencyKey
 }) => {
-  await ensureBillingEnvironment({ repository, config });
+  await ensureBillingPriceCatalog({ repository, config });
   assertCheckoutReady(providers);
   const entitlement = await currentEntitlement(repository, user);
   const customer = customerId(entitlement);
@@ -180,7 +190,7 @@ export const createCustomerPortal = async ({
   user,
   idempotencyKey
 }) => {
-  await ensureBillingEnvironment({ repository, config });
+  await ensureBillingPriceCatalog({ repository, config });
   const readiness = providers?.readiness?.().stripe;
   if (!readiness?.configured) {
     throw billingError(503, "stripe_portal_not_ready", "Stripe customer portal is not configured");

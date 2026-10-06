@@ -32,7 +32,7 @@ preserved during such a migration to prevent duplication. No live account is
 changed by these code tests, and IABT credits are not cash or a funded supplier
 account.
 
-Paid monthly plans grant Builder 100, Pro 500 or Agency 2,000 credits after a
+The legacy monthly offers grant Builder 100, Pro 500 or Agency 2,000 credits after a
 verified `invoice.paid` for subscription creation or a regular monthly renewal.
 Credits accumulate in the execution ledger and are not erased by cancellation.
 Trial invoices, failed or incomplete payments and mid-cycle proration invoices
@@ -127,6 +127,79 @@ bypass rejection, concurrent instances, atomic failure and migration preservatio
 with memory and disposable PostgreSQL repositories.
 
 ## Configuration and acceptance
+
+### Versioned monthly allowance contracts
+
+Migration `008_billing_price_contracts.sql` adds a private append-only registry
+keyed by Stripe mode and price ID. Each contract fixes a version, tier and monthly
+credit allowance. API/worker startup and billing entry points register configured
+contracts before provider calls or webhook receipt writes. Conflicting first
+definitions serialize in PostgreSQL; a later redefinition fails closed. There
+is no application reset or overwrite endpoint. Unchanged definitions use a
+read-only lookup instead of taking the shared record lock.
+
+With `IABT_STRIPE_PRICE_CATALOG_JSON` unset, the existing
+`STRIPE_BUILDER_PRICE_ID`, `STRIPE_PRO_PRICE_ID` and `STRIPE_AGENCY_PRICE_ID`
+retain their original `legacy-v1` allowances of 100, 500 and 2,000. Existing
+Checkout parameters and UI behavior remain unchanged. New offers require
+explicit server configuration; for example, this **illustrative fixture only**
+adds a different Builder price and selects it for future Checkout:
+
+```json
+{
+  "version": "offer-v2",
+  "prices": [
+    { "price_id": "price_example_builder_v2", "plan": "builder", "monthly_credits": 150 }
+  ],
+  "checkout": { "builder": "price_example_builder_v2" }
+}
+```
+
+Serialize that object into the environment variable only as part of a separately
+reviewed offer rollout. `checkout` is optional: adding a definition alone does
+not select it. Each selector must match a declared contract's tier. Duplicate
+IDs, legacy redefinitions, credit-pack/subscription price collisions, unknown
+fields, unsupported tiers, non-string IDs/versions and invalid quantities are
+rejected. Credits must be an integer from 1 to 1,000,000; this catalog supports
+monthly single-quantity subscriptions only. The top-level version defaults each
+new definition. To evolve another tier while retaining an earlier active offer,
+preserve that offer's explicit `catalog_version`:
+
+```json
+{
+  "version": "offer-v3",
+  "prices": [
+    { "price_id": "price_example_builder_v2", "plan": "builder", "monthly_credits": 150, "catalog_version": "offer-v2" },
+    { "price_id": "price_example_pro_v3", "plan": "pro", "monthly_credits": 700 }
+  ],
+  "checkout": { "builder": "price_example_builder_v2", "pro": "price_example_pro_v3" }
+}
+```
+
+New Checkout attempts freeze the selected contract alongside the existing frozen
+provider parameters. Pre-registry legacy attempts can adopt their unchanged
+legacy contract without issuing another provider POST. Invoice grants resolve
+the signed invoice line's actual price against the persisted registry; paid
+entitlement allowances use the current verified subscription price. Tier or
+credit claims in metadata cannot replace those terms. A removed configuration
+entry remains in the registry, so a retired price's renewal keeps its original
+allowance. Other plan capabilities still come from the canonical tier defaults.
+
+Before initial registration, retain reviewed legacy price IDs and explicitly
+reconcile any older price IDs absent from configuration. The registry cannot
+reconstruct unknown historical terms; an unregistered paid price fails for
+reconciliation instead of borrowing the current tier allowance. Drain older
+API/worker writers before migration, as they do not honor the new contract.
+Verify the Stripe account, product, amount, currency and monthly interval
+separately: mode plus an opaque price ID does not bind account identity or
+validate the provider's price setup. UI pricing and customer disclosures need
+their own coordinated rollout before selecting new offers.
+
+`server/test/price-catalog.test.js` covers configuration validation, concurrent
+first definitions, atomic rejection, restart, independent tier versions,
+retired-price renewals, metadata tampering and frozen Checkout attribution with
+memory and disposable PostgreSQL repositories. This implementation does not
+activate the example offers or establish hosted billing acceptance.
 
 ### Database billing-mode binding
 

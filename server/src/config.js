@@ -1,3 +1,5 @@
+import { loadStripePriceCatalog } from "./billing/price-catalog.js";
+
 export const SERVER_MANAGED_ENTITIES = Object.freeze([
   "AccountEntitlement",
   "AiUsage",
@@ -66,6 +68,10 @@ export const loadConfig = (env = process.env) => {
   const apiOrigin = env.IABT_API_ORIGIN || "http://localhost:8787";
   const stripeMode = env.IABT_STRIPE_MODE || "test";
   if (!["test", "live"].includes(stripeMode)) throw new Error("IABT_STRIPE_MODE must be test or live");
+  const stripeCatalog = loadStripePriceCatalog({
+    legacyPrices: { builder: env.STRIPE_BUILDER_PRICE_ID || "", pro: env.STRIPE_PRO_PRICE_ID || "", agency: env.STRIPE_AGENCY_PRICE_ID || "" },
+    creditPackPriceId: env.STRIPE_AI_CREDIT_PACK_PRICE_ID || "", json: env.IABT_STRIPE_PRICE_CATALOG_JSON
+  });
   const storageProvider = String(env.IABT_STORAGE_PROVIDER || "").trim().toLowerCase() ||
     (environment === "production" ? "s3" : "local");
   const costPerMinuteCents = Number(env.IABT_ELEVENLABS_COST_PER_MINUTE_CENTS);
@@ -167,11 +173,8 @@ export const loadConfig = (env = process.env) => {
         metadataAppId: env.IABT_STRIPE_METADATA_APP_ID || "6a849bcd3e04d068553b4af7",
         creditPackSize: asPositiveInteger(env.IABT_CREDIT_PACK_SIZE, 100),
         creditPackPriceId: env.STRIPE_AI_CREDIT_PACK_PRICE_ID || "",
-        prices: freezeProvider({
-          builder: env.STRIPE_BUILDER_PRICE_ID || "",
-          pro: env.STRIPE_PRO_PRICE_ID || "",
-          agency: env.STRIPE_AGENCY_PRICE_ID || ""
-        })
+        prices: stripeCatalog.prices,
+        priceContracts: stripeCatalog.contracts
       })
     }),
     allowedEntities: new Set(ALLOWED_ENTITIES),

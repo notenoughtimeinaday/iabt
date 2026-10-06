@@ -1,5 +1,7 @@
 # JERICHO standalone operational support
 
+The owner's selected software benchmark is [TreeBay end-to-end release acceptance](docs/TREEBAY_ACCEPTANCE_BENCHMARK.md). It defines the future proof required for diagnosis, isolated repairs, Android builds and Play submission; it does not enable or certify those capabilities.
+
 JERICHO reads implemented capability facts, current non-secret configuration and the signed-in account's jobs, incidents and learning records. It distinguishes available configuration, recorded delivery and live operational evidence. Read-only support questions such as “What can you do?”, “Check system health” and “Why did my audio fail?” do not submit paid generation or contact other people.
 
 Ordinary objectives use server-owned planning. Supported reversible internal routes with zero external provider cost can queue automatically; the response discloses the IABT credit reservation. Quote-only requests remain available. Paid Responses or media work and consequential external actions require the applicable approval. Unknown capabilities fail closed instead of inheriting authority from a prompt, attachment or past lesson.

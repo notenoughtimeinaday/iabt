@@ -1,9 +1,9 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { planDefaults, planForPrice } from "./plans.js";
+import { planDefaults } from "./plans.js";
 import { billingRecordId, fulfillCredits } from "./fulfillment.js";
 import { retrieveStripeSubscription } from "./stripe-read.js";
 import { isStripeRefundEvent, prepareStripeRefundObservation, recordStripeRefundObservation, replayStripeRefundObservation } from "./refund-events.js";
-import { ensureBillingEnvironment } from "./environment.js";
+import { ensureBillingPriceCatalog, resolvePriceContract } from "./price-catalog.js";
 
 const stripeError = (status, code, message) =>
   Object.assign(new Error(message), { status, code });
@@ -122,9 +122,6 @@ const cancellationSchedule = (subscription, status, currentPeriodEnd) => {
   };
 };
 
-const subscriptionPrice = (subscription) =>
-  String(subscription?.items?.data?.[0]?.price?.id || "");
-
 const entitlementStatus = (status) => {
   const value = String(status || "").toLowerCase();
   if (["active", "trialing", "past_due", "paused", "unpaid", "incomplete", "canceled"].includes(value)) {
@@ -164,7 +161,10 @@ const upsertSubscription = async ({ repository, config, subscription: snapshot, 
   }
   const reconciledUser = await resolveUser(repository, subscription);
   if (reconciledUser.id !== user.id) throw stripeError(409, "stripe_user_mismatch", "Stripe subscription owner changed during verification");
-  const paidPlan = planForPrice(config.providers.stripe, subscriptionPrice(subscription));
+  const subscriptionItems = subscription?.items?.data || [];
+  const priceContract = !subscription?.items?.has_more && subscriptionItems.length === 1
+    ? await resolvePriceContract({ repository, config, priceId: idOf(subscriptionItems[0].price) }) : null;
+  const paidPlan = priceContract?.plan;
   const status = entitlementStatus(subscription.status);
   const grantsPlan = ["active", "trialing", "past_due"].includes(status);
   if (!paidPlan && grantsPlan) {
@@ -175,7 +175,7 @@ const upsertSubscription = async ({ repository, config, subscription: snapshot, 
     );
   }
   const plan = grantsPlan ? paidPlan : "free";
-  const defaults = planDefaults(plan);
+  const defaults = { ...planDefaults(plan), ...(grantsPlan ? { ai_monthly_limit: priceContract.monthly_credits } : {}) };
   return repository.withRecordTransaction(async (tx) => {
     const sync = await tx.getRecord("BillingSubscriptionSync", claim.id, owner);
     if (sync.revision !== claim.revision) return { user, action: "subscription_sync_superseded" };
@@ -199,6 +199,7 @@ const upsertSubscription = async ({ repository, config, subscription: snapshot, 
       billing_mode: config.providers.stripe.mode,
       provider_customer_id: idOf(subscription.customer),
       provider_subscription_id: String(subscription.id || ""),
+      billing_price_contract: priceContract,
       current_period_end: currentPeriodEnd,
       ...cancellationSchedule(subscription, status, currentPeriodEnd),
       ...defaults,
@@ -256,7 +257,8 @@ const grantSubscriptionCredits = async ({ repository, config, event, invoice }) 
   if (!eligible.length && lines.length) return { action: "subscription_invoice_no_allowance" }; // trial
   if (eligible.length !== 1) throw stripeError(422, "stripe_invoice_plan_ambiguous", "Stripe invoice must identify one monthly plan");
   const line = eligible[0];
-  const plan = planForPrice(config.providers.stripe, idOf(line.price || line.pricing?.price_details?.price));
+  const priceContract = await resolvePriceContract({ repository, config, priceId: idOf(line.price || line.pricing?.price_details?.price) });
+  const plan = priceContract?.plan;
   const start = Number(line.period?.start);
   const end = Number(line.period?.end);
   const days = (end - start) / 86400;
@@ -271,9 +273,10 @@ const grantSubscriptionCredits = async ({ repository, config, event, invoice }) 
     throw stripeError(409, "stripe_customer_mismatch", "Stripe invoice customer does not match this account");
   }
   const credits = await fulfillCredits({
-    repository, user, amount: planDefaults(plan).ai_monthly_limit,
+    repository, user, amount: priceContract.monthly_credits,
     key: `stripe:${config.providers.stripe.mode}:cycle:${subscriptionId}:${start}`,
-    source: { billing_mode: config.providers.stripe.mode, event_id: event.id, invoice_id: invoice.id, subscription_id: subscriptionId, plan,
+    source: { billing_mode: config.providers.stripe.mode, billing_price_contract: priceContract,
+      event_id: event.id, invoice_id: invoice.id, subscription_id: subscriptionId, plan,
       period_start: start, period_end: end, product_type: "subscription_allowance" }
   });
   return { user, credits, action: "subscription_credits_granted" };
@@ -319,7 +322,7 @@ export const processStripeWebhook = async ({
     );
   }
 
-  await ensureBillingEnvironment({ repository, config });
+  await ensureBillingPriceCatalog({ repository, config });
   const eventType = String(event.type || "");
   const refundObservation = isStripeRefundEvent(eventType) ? prepareStripeRefundObservation({ event, config }) : null;
   const started = await repository.startStripeEvent({

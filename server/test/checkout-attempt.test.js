@@ -7,6 +7,7 @@ import { MemoryRepository } from "../src/memory-repository.js";
 import { PostgresRepository } from "../src/postgres-repository.js";
 import { loadConfig } from "../src/config.js";
 import { createSubscriptionCheckout } from "../src/billing/stripe-checkout.js";
+import { normalizePriceContract } from "../src/billing/price-catalog.js";
 
 const databaseUrl = process.env.IABT_AUTH_TEST_DATABASE_URL;
 const deferred = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
@@ -148,6 +149,7 @@ for (const adapter of ["memory", "postgres"]) {
     await f.create();
     await assert.rejects(f.create({ plan: "builder" }), { code: "stripe_checkout_terms_conflict" });
     const changed = structuredClone(f.config); changed.providers.stripe.prices.pro = "price_replaced";
+    changed.providers.stripe.priceContracts.push(normalizePriceContract({ price_id: "price_replaced", plan: "pro", catalog_version: "legacy-v1", monthly_credits: 500, interval: "month" }));
     await assert.rejects(f.create({ config: changed }), { code: "stripe_checkout_terms_conflict" });
     changed.providers.stripe.metadataAppId = "another-app";
     await assert.rejects(f.create({ config: changed }), { code: "stripe_checkout_reconciliation_required" });
@@ -206,6 +208,7 @@ for (const adapter of ["memory", "postgres"]) {
     await assert.rejects(f.create(), { code: "stripe_checkout_reconciliation_required" });
     assert.equal((await f.row()).session_id, null);
     const changed = structuredClone(f.config); changed.providers.stripe.prices.pro = "price_corrected";
+    changed.providers.stripe.priceContracts.push(normalizePriceContract({ price_id: "price_corrected", plan: "pro", catalog_version: "legacy-v1", monthly_credits: 500, interval: "month" }));
     await assert.rejects(f.create({ config: changed }), { code: "stripe_checkout_reconciliation_required" });
     assert.equal(f.sessions.size, 1);
 

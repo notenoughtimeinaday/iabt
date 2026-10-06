@@ -1,5 +1,6 @@
 import { createId } from "./security.js";
 import { assertBillingBinding, assertBillingMode, memoryBillingEvidence, validateBillingEvidence } from "./billing/environment.js";
+import { assertSamePriceContract, normalizePriceContract, validatePriceContracts } from "./billing/price-catalog.js";
 
 const clone = (value) => structuredClone(value);
 const nowIso = () => new Date().toISOString();
@@ -63,6 +64,7 @@ export class MemoryRepository {
     this.storedObjects = new Map();
     this.stripeEvents = new Map();
     this.stripeRefundObservations = new Map();
+    this.billingPriceContracts = new Map();
     this.maintenanceSchedules = new Map();
   }
 
@@ -77,6 +79,24 @@ export class MemoryRepository {
     const boundFrom = validateBillingEvidence(memoryBillingEvidence(this), mode);
     this.billingEnvironment = { mode, bound_from: boundFrom, bound_at: nowIso() };
     return clone(this.billingEnvironment);
+  }
+
+  async registerBillingPriceContracts({ mode, contracts }) {
+    await this.ensureBillingEnvironment(mode);
+    const normalized = validatePriceContracts(contracts);
+    // Validate the whole batch before publishing any definition. The remaining
+    // synchronous section serializes competing first definitions in memory.
+    for (const contract of normalized) {
+      const existing = this.billingPriceContracts.get(mode + ":" + contract.price_id);
+      if (existing) assertSamePriceContract(existing, contract);
+    }
+    for (const contract of normalized) this.billingPriceContracts.set(mode + ":" + contract.price_id, contract);
+  }
+
+  async getBillingPriceContract({ mode, priceId }) {
+    assertBillingMode(mode);
+    const contract = this.billingPriceContracts.get(mode + ":" + priceId);
+    return contract ? clone(normalizePriceContract(contract)) : null;
   }
 
   async createUser({ email, passwordHash, name = "", role = "user", emailVerified = false }) {
