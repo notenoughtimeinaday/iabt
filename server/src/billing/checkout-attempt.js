@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { billingRecordId } from "./fulfillment.js";
 import { normalizePriceContract } from "./price-catalog.js";
+import { admitOfferAttempt, releaseExpiredIntro } from "./intro-eligibility.js";
 
 const error = (code, message, status = 409) => Object.assign(new Error(message), { code, status });
 const digest = (value) => createHash("sha256").update(value).digest("hex");
@@ -45,7 +46,7 @@ function validateSession(session, row) {
 // The transaction owns admission, not network I/O. Ambiguous requests retain
 // the exact parameters and provider key. A caller-supplied request key cannot
 // create another payable subscription while this account has a pending one.
-export async function subscriptionCheckoutAttempt({ repository, user, config, plan, params, priceContract, submit, retrieve, now = Date.now }) {
+export async function subscriptionCheckoutAttempt({ repository, user, config, plan, params, priceContract, offerTerms = null, submit, retrieve, now = Date.now }) {
   const owner = { ...user, role: "user" };
   const mode = config.providers.stripe.mode === "live" ? "live" : "test";
   const appId = config.providers.stripe.metadataAppId;
@@ -65,6 +66,7 @@ export async function subscriptionCheckoutAttempt({ repository, user, config, pl
         entitlement?.provider_subscription_id === row.subscription_id && ["canceled", "incomplete_expired"].includes(entitlement.status);
       if (!row || ["expired", "rejected"].includes(row.status) || canceled) {
         const attemptId = randomUUID();
+        await admitOfferAttempt({ tx, config, user, attemptId, offerTerms, now });
         // One minute of transmission margin above Stripe's 30 minute minimum.
         // This timestamp is frozen even if the POST must be retried.
         const frozen = { ...params, expires_at: String(Math.floor(now() / 1000) + 31 * 60),
@@ -72,6 +74,8 @@ export async function subscriptionCheckoutAttempt({ repository, user, config, pl
           "metadata[checkout_attempt_id]": attemptId, "subscription_data[metadata][checkout_attempt_id]": attemptId };
         const fields = { user_id: owner.id, mode, app_id: appId, plan, price_id: params["line_items[0][price]"],
           price_contract: contract,
+          offer_terms: offerTerms,
+          request_params: offerTerms ? params : null,
           terms_sha256: terms, credential_sha256: credential, attempt_id: attemptId, started_at_ms: now(),
           idempotency_key: "iabt:subscription-checkout:" + attemptId, params: frozen, status: "creating",
           lease_token: randomUUID(), lease_expires_at_ms: now() + leaseMs, session_id: null, url: null,
@@ -113,6 +117,7 @@ export async function subscriptionCheckoutAttempt({ repository, user, config, pl
       const saved = await repository.withRecordTransaction(async (tx) => {
         const row = await tx.getRecord(entity, recordId, owner);
         if (row?.attempt_id !== claim.row.attempt_id || row.lease_token !== claim.row.lease_token || row.lease_expires_at_ms <= now()) throw pending();
+        await releaseExpiredIntro({ tx, config, user, row, session: validated });
         return tx.updateRecord(entity, row.id, owner, { ...validated, credential_sha256: credential, lease_token: null, lease_expires_at_ms: null });
       });
       if (saved.status === "expired") continue;
@@ -128,6 +133,7 @@ export async function subscriptionCheckoutAttempt({ repository, user, config, pl
         // Transport errors, 5xx, parse failures and missing fields are ambiguous.
         const rejected = claim.kind === "submit" && !session &&
           ["stripe_invalid_request", "stripe_authentication_failed", "stripe_access_denied"].includes(failure.code) && [400, 401, 403].includes(failure.status);
+        if (rejected) await releaseExpiredIntro({ tx, config, user, row, rejected: true });
         await tx.updateRecord(entity, row.id, owner, { ...(rejected ? { status: "rejected" } : row.session_id ? { status: "uncertain" } : {}), lease_token: null, lease_expires_at_ms: null });
       });
       if (["stripe_checkout_terms_conflict", "stripe_checkout_reconciliation_required", "stripe_checkout_pending"].includes(failure.code)) throw failure;

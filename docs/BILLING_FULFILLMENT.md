@@ -130,6 +130,11 @@ with memory and disposable PostgreSQL repositories.
 
 ### Versioned monthly allowance contracts
 
+The disabled future-offer implementation, proposed policy, exact configuration
+and rollback are in [PRICING_OFFER_ROLLOUT.md](PRICING_OFFER_ROLLOUT.md). Migration
+009 adds Starter to the allowed registry tiers without rewriting legacy hashes
+or allowances. It does not activate any price or change existing subscriptions.
+
 Migration `008_billing_price_contracts.sql` adds a private append-only registry
 keyed by Stripe mode and price ID. Each contract fixes a version, tier and monthly
 credit allowance. API/worker startup and billing entry points register configured

@@ -4,6 +4,7 @@ import { billingRecordId, fulfillCredits } from "./fulfillment.js";
 import { retrieveStripeSubscription } from "./stripe-read.js";
 import { isStripeRefundEvent, prepareStripeRefundObservation, recordStripeRefundObservation, replayStripeRefundObservation } from "./refund-events.js";
 import { ensureBillingPriceCatalog, resolvePriceContract } from "./price-catalog.js";
+import { redeemIntroInvoice } from "./intro-eligibility.js";
 
 const stripeError = (status, code, message) =>
   Object.assign(new Error(message), { status, code });
@@ -272,6 +273,7 @@ const grantSubscriptionCredits = async ({ repository, config, event, invoice }) 
   if (existing?.provider_customer_id && existing.provider_customer_id !== idOf(invoice.customer)) {
     throw stripeError(409, "stripe_customer_mismatch", "Stripe invoice customer does not match this account");
   }
+  await redeemIntroInvoice({ repository, config, user, invoice, metadata, priceContract });
   const credits = await fulfillCredits({
     repository, user, amount: priceContract.monthly_credits,
     key: `stripe:${config.providers.stripe.mode}:cycle:${subscriptionId}:${start}`,

@@ -1,4 +1,5 @@
 import { loadStripePriceCatalog } from "./billing/price-catalog.js";
+import { loadOfferConfig } from "./billing/offers.js";
 
 export const SERVER_MANAGED_ENTITIES = Object.freeze([
   "AccountEntitlement",
@@ -174,7 +175,8 @@ export const loadConfig = (env = process.env) => {
         creditPackSize: asPositiveInteger(env.IABT_CREDIT_PACK_SIZE, 100),
         creditPackPriceId: env.STRIPE_AI_CREDIT_PACK_PRICE_ID || "",
         prices: stripeCatalog.prices,
-        priceContracts: stripeCatalog.contracts
+        priceContracts: stripeCatalog.contracts,
+        offers: loadOfferConfig(env)
       })
     }),
     allowedEntities: new Set(ALLOWED_ENTITIES),

@@ -9,6 +9,18 @@ export const PLAN_DEFAULTS = Object.freeze({
     white_label_exports_enabled: false,
     team_seat_limit: 1
   }),
+  // Proposed Starter capabilities. Sale remains gated on acceptance of the
+  // versioned offer terms; existing tier defaults must never be repurposed.
+  starter: Object.freeze({
+    ai_hourly_limit: 5,
+    ai_monthly_limit: 100,
+    project_limit: 1,
+    static_zip_export_enabled: true,
+    react_export_enabled: false,
+    commercial_use_enabled: false,
+    white_label_exports_enabled: false,
+    team_seat_limit: 1
+  }),
   builder: Object.freeze({
     ai_hourly_limit: 30,
     ai_monthly_limit: 100,

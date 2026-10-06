@@ -80,7 +80,7 @@ test("catalog validation rejects ambiguous prices, changed legacy definitions, i
     catalog({ prices: [offer({ price_id: ["price_builder_new"] })], checkout: {} }),
     ...[2, ["offer-v2"], null].map((version) => catalog({ version })),
     ...[2, ["offer-v2"], null, "", "legacy-v1"].map((catalog_version) => catalog({ prices: [offer({ catalog_version })] })),
-    catalog({ prices: [offer({ plan: "starter" })] }),
+    catalog({ prices: [offer({ plan: "unknown-tier" })] }),
     catalog({ prices: [offer({ interval: "year" })] }),
     catalog({ checkout: { pro: "price_builder_new" } }), catalog({ checkout: { builder: "price_unknown" } }),
     catalog({ checkout: { free: "price_builder_new" } }),

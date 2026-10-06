@@ -1322,6 +1322,32 @@
   gap: 14px;
 }
 
+.iabt-offer-disclosure {
+  display: block;
+  margin: 12px 0;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.iabt-offer-disclosure input {
+  width: 18px;
+  height: 18px;
+  margin-right: 5px;
+  vertical-align: middle;
+  accent-color: #6d28d9;
+}
+
+.iabt-offer-disclosure input:focus-visible {
+  outline: 2px solid #6d28d9;
+  outline-offset: 3px;
+}
+
+.iabt-plan-price {
+  flex-wrap: wrap;
+}
+
 .iabt-plan-card {
   min-height: 340px;
   display: flex;
@@ -6646,4 +6672,3 @@ input, textarea, select { color-scheme: dark; caret-color: var(--jericho-cyan); 
   .iabt-support-expectations { grid-template-columns: 1fr; }
   .iabt-support-grid article { min-height: 0; grid-template-columns: 1fr; }
 }
-

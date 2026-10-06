@@ -11,14 +11,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
-import { IABT_PLANS } from "@/lib/pricing";
+import { billingPlanCards, purchasedPlanSummary } from "@/lib/pricing";
 import { billingViewState } from "@/lib/billing-state";
 
 export default function BillingDialog({ open, onOpenChange, entitlement, billingStatus }) {
   const { toast } = useToast();
   const [busyPlan, setBusyPlan] = useState("");
+  const [acceptedOffers, setAcceptedOffers] = useState({});
   const currentPlan = String(entitlement?.plan || "free").toLowerCase();
   const billing = billingViewState(entitlement, billingStatus);
+  const offerStatus = billingStatus || entitlement?.billing;
+  const planCards = billingPlanCards(offerStatus);
+  const purchased = purchasedPlanSummary(entitlement);
+  const pendingOffer = offerStatus?.pending_offer;
   const billingMode = billing.mode;
   const billingReady = billing.checkoutReady;
   const hasStripeSubscription = billing.hasSubscription;
@@ -34,9 +39,12 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
   const remainingCredits = billing.credits;
 
   async function startCheckout(plan) {
-    setBusyPlan(plan);
+    setBusyPlan(plan.id);
     try {
-      const response = await base44.functions.invoke("stripe-create-checkout", { plan, idempotency_key: retryKey(plan) });
+      const request = plan.offerId ? { offer_id: plan.offerId,
+        disclosure_acceptance: { accepted: acceptedOffers[plan.id] === plan.disclosureVersion, version: plan.disclosureVersion }
+      } : { plan: plan.id };
+      const response = await base44.functions.invoke("stripe-create-checkout", { ...request, idempotency_key: retryKey(plan.id) });
       const payload = response?.data || response;
       if (payload?.error) throw new Error(payload.error);
       if (!payload?.url) throw new Error("Stripe did not return a checkout link.");
@@ -128,11 +136,30 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
 
         {billing.needsPaymentAttention && <p role="status" className="iabt-billing-note">Your subscription needs attention ({billing.subscriptionStatus.replaceAll("_", " ")}). Open billing management to review payment or resume your subscription.</p>}
         {entitlement?.cancel_at_period_end && <p role="status" className="iabt-billing-note">Cancellation is scheduled at the end of your billing period. Purchased credits remain available.</p>}
+        {entitlement?.billing_price_contract && <p role="status" className="iabt-billing-note">
+          Your current plan: <strong>{purchased.plan}{purchased.legacy ? " (legacy terms)" : ""}</strong>.
+          {purchased.monthlyCredits > 0 && ` ${purchased.monthlyCredits.toLocaleString()} credits per successful monthly payment.`}
+          {hasStripeSubscription && !entitlement?.cancellation_scheduled && purchased.nextRenewal && Number.isFinite(Date.parse(purchased.nextRenewal)) &&
+            ` Next billing period begins ${new Date(purchased.nextRenewal).toLocaleDateString()}.`}
+          {" Your existing purchased credits remain available."}
+        </p>}
+        {pendingOffer && !hasStripeSubscription && <div className="iabt-billing-economics">
+          <label className="iabt-offer-disclosure"><input type="checkbox" checked={acceptedOffers[pendingOffer.id] === pendingOffer.disclosure_version}
+            onChange={(event) => setAcceptedOffers((current) => ({ ...current, [pendingOffer.id]: event.target.checked ? pendingOffer.disclosure_version : "" }))} />
+            {" "}{pendingOffer.disclosure}</label>
+          <Button onClick={() => startCheckout({ id: pendingOffer.id, offerId: pendingOffer.id, disclosureVersion: pendingOffer.disclosure_version })}
+            disabled={Boolean(busyPlan) || acceptedOffers[pendingOffer.id] !== pendingOffer.disclosure_version}>
+            Resume existing purchase
+          </Button>
+        </div>}
 
         <div className="iabt-plan-grid">
-          {IABT_PLANS.map((plan) => {
-            const isCurrent = currentPlan === plan.id;
-            const isFeatured = plan.id === "builder";
+          {planCards.map((plan) => {
+            const isCurrent = plan.offerId
+              ? !plan.introductory && currentPlan === plan.planKey && entitlement?.billing_price_contract?.catalog_version === "jericho-2026-10-v1"
+              : currentPlan === plan.id;
+            const isFeatured = plan.planKey === "builder" || plan.id === "builder";
+            const introUnavailable = plan.introductory && !offerStatus?.intro_eligibility?.eligible && offerStatus?.intro_eligibility?.reason !== "purchase_pending";
             const cardClassName =
               "iabt-plan-card" +
               (isFeatured ? " is-featured" : "") +
@@ -145,8 +172,8 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
                 </div>
                 <h3>{plan.name}</h3>
                 <div className="iabt-plan-price">
-                  <strong>{plan.id === "free" ? "$0" : "Monthly plan"}</strong>
-                  <span>{plan.id === "free" ? "to start" : "price confirmed in Stripe"}</span>
+                  <strong>{plan.offerId ? `$${plan.monthlyPrice.toFixed(2)}` : plan.id === "free" ? "$0" : "Monthly plan"}</strong>
+                  <span>{plan.offerId ? plan.introductory ? `first month; then $${plan.renewalPrice.toFixed(2)}/month` : "/month" : plan.id === "free" ? "to start" : "price confirmed in Stripe"}</span>
                 </div>
                 <p>{plan.description}</p>
                 <ul>
@@ -154,6 +181,12 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
                     <li key={feature}><Check /> {feature}</li>
                   ))}
                 </ul>
+                {plan.offerId && !hasStripeSubscription && <label className="iabt-offer-disclosure">
+                  <input type="checkbox" checked={acceptedOffers[plan.id] === plan.disclosureVersion}
+                    onChange={(event) => setAcceptedOffers((current) => ({ ...current, [plan.id]: event.target.checked ? plan.disclosureVersion : "" }))} />
+                  {" "}{plan.disclosure}
+                </label>}
+                {introUnavailable && !hasStripeSubscription && <p className="iabt-billing-note">This introductory offer is unavailable for your account. You can select Starter.</p>}
 
                 {hasStripeSubscription ? (
                   <Button
@@ -179,8 +212,8 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
                   <Button
                     className="w-full"
                     variant={isFeatured ? "default" : "outline"}
-                    onClick={() => startCheckout(plan.id)}
-                    disabled={Boolean(busyPlan) || !billingReady}
+                    onClick={() => startCheckout(plan)}
+                    disabled={Boolean(busyPlan) || !billingReady || introUnavailable || (plan.offerId && acceptedOffers[plan.id] !== plan.disclosureVersion)}
                   >
                     {busyPlan === plan.id && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     {billingMode === "live" ? `Choose ${plan.name}` : `Test ${plan.name} checkout`}

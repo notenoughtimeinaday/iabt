@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
-import { planDefaults } from "./plans.js";
 import { ensureBillingEnvironment } from "./environment.js";
 
-const tiers = ["builder", "pro", "agency"];
+const tiers = ["starter", "builder", "pro", "agency"];
+// Purchased legacy allowances cannot follow future tier defaults.
+const legacyAllowances = Object.freeze({ builder: 100, pro: 500, agency: 2000 });
 const fail = (code, message) => { throw Object.assign(new Error(message), { code, status: 503 }); };
 const invalid = () => fail("billing_catalog_invalid", "Stripe price catalog is invalid or ambiguous. Each monthly price must have one immutable version, tier and credit allowance.");
 const plain = (value) => value && typeof value === "object" && !Array.isArray(value);
@@ -34,8 +35,8 @@ export const assertSamePriceContract = (existing, proposed) => {
 // Existing environment price IDs always retain their original allowances. A new
 // offer is additive and explicit; it cannot replace a legacy price's contract.
 export const loadStripePriceCatalog = ({ legacyPrices, creditPackPriceId, json }) => {
-  const contracts = tiers.filter((plan) => legacyPrices[plan]).map((plan) => normalizePriceContract({
-    price_id: legacyPrices[plan], plan, catalog_version: "legacy-v1", monthly_credits: planDefaults(plan).ai_monthly_limit, interval: "month"
+  const contracts = Object.keys(legacyAllowances).filter((plan) => legacyPrices[plan]).map((plan) => normalizePriceContract({
+    price_id: legacyPrices[plan], plan, catalog_version: "legacy-v1", monthly_credits: legacyAllowances[plan], interval: "month"
   }));
   const prices = { ...legacyPrices };
   if (json) {

@@ -1,5 +1,20 @@
 # Current IABT release status — October 6, 2026
 
+## Disabled pricing implementation candidate
+
+The draft branch now contains a test-only implementation of the approved future
+price/credit offer, including Starter schema support, versioned offer IDs,
+renewal-disclosure acceptance and durable introductory eligibility. New offers
+default off and this candidate cannot activate them in live mode. Existing
+legacy contracts, balances and tier capabilities remain unchanged. Proposed
+Starter feature rights and introductory eligibility still require acceptance.
+See [the configuration, policy, tests and rollback map](PRICING_OFFER_ROLLOUT.md).
+This source change does not create Stripe objects, update environments or
+establish hosted offer acceptance. The deployed runtime evidence below remains
+separate; no new deployment is implied.
+
+## Previously deployed acceptance baseline
+
 The standalone candidate has verified sample file delivery, a deployed refund
 observation inbox, durable billing-mode protection and bounded storage reads.
 An actual isolated test subscription payment, pending Checkout reuse and

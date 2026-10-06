@@ -19,11 +19,14 @@ import {
 } from "./creation/planner.js";
 import { processStripeWebhook } from "./billing/stripe-webhook.js";
 import { planDefaults } from "./billing/plans.js";
+import { newOffersAvailable, publicBillingOffers } from "./billing/offers.js";
+import { introEligibility } from "./billing/intro-eligibility.js";
 import { createProjectsWithinQuota } from "./billing/project-quota.js";
 import {
   createCreditCheckout,
   createCustomerPortal,
-  createSubscriptionCheckout
+  createSubscriptionCheckout,
+  pendingOfferSummary
 } from "./billing/stripe-checkout.js";
 import { createTransactionalEmailSender } from "./email/resend.js";
 import { ensureStarterCredits, withStarterCredits } from "./auth/starter-credits.js";
@@ -948,6 +951,8 @@ const handleFunction = async ({
           config,
           user,
           plan: String(body.plan || ""),
+          offerId: String(body.offer_id || ""),
+          acceptance: body.disclosure_acceptance,
           idempotencyKey
         })
       : name === "stripe-create-credit-checkout"
@@ -997,7 +1002,10 @@ const handleFunction = async ({
           total_remaining: account.available_credits,
           total_iabt_credits_remaining: account.available_credits,
           base44_required: false,
-          billing: { ...(providers?.readiness?.().stripe || {}), credit_pack_size: config.providers.stripe.creditPackSize }
+          billing: { ...(providers?.readiness?.().stripe || {}), credit_pack_size: config.providers.stripe.creditPackSize,
+            offers: publicBillingOffers(config), new_offers_enabled: newOffersAvailable(config),
+            pending_offer: await pendingOfferSummary({ repository, config, user }),
+            intro_eligibility: newOffersAvailable(config) ? await introEligibility({ repository, config, user }) : null }
         }
       }
     };
