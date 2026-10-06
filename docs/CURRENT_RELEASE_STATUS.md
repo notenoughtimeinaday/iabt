@@ -13,16 +13,39 @@ This source change does not create Stripe objects, update environments or
 establish hosted offer acceptance. The deployed runtime evidence below remains
 separate; no new deployment is implied.
 
-Pricing verification checkpoint: initial candidate `95eaa13` passed local lint,
-type checking, build and 341 tests (46 database tests skipped). CI run
-[681](https://github.com/notenoughtimeinaday/iabt/actions/runs/37482233381)
-ran PostgreSQL and exposed two retry failures. Fix `aff4b88` canonicalizes only
-new-offer request fingerprints so PostgreSQL JSONB key ordering cannot change
-accepted terms; legacy fingerprints stay unchanged. The added regression fails
-on the preceding code and passes with the fix. Focused local offer, checkout and
-price-contract checks pass (30 passed, 22 database tests skipped), as do lint
-and type checking. The complete PostgreSQL rerun is pending. Interactive browser
-verification is also pending because the local browser download failed.
+Pricing repository verification passed in
+[CI run 682](https://github.com/notenoughtimeinaday/iabt/actions/runs/37483576318):
+**418 tests, zero failures/skips**, plus lint, type checking, Exchange/creation
+checks and the production build. This includes disposable PostgreSQL integration.
+The run targets branch head `07c7c239b37fa1c3a1fa4f146e73dff44ee9bbd2` and
+checks out GitHub's PR test-merge revision
+`e68939a1eb07e0464f4dc206a185a5fe3d356c1c`; it does not merge the PR or deploy.
+Its structured readiness artifact records a clean, stable tested snapshot.
+Runtime/test source matches the branch candidate. The test-merge additionally
+includes the base branch's Base44 package-version updates in `package.json` and
+`package-lock.json`; those two manifests are the only tree differences.
+
+The first CI attempt (run 681) exposed two PostgreSQL retry failures. Fix
+`aff4b88` canonicalizes only new-offer request fingerprints so JSONB key ordering
+cannot change accepted terms; legacy fingerprints stay unchanged. A regression
+reproduces the prior failure and now passes. Local database skips are superseded
+by run 682's database evidence, not by inference from memory tests. Interactive
+desktop/mobile verification remains pending because the local browser download
+failed. Actual Stripe offer checkout, renewal, policy/disclosure acceptance and
+activation remain unaccepted.
+
+The smallest implementation changes are grouped as follows:
+
+| Path | Purpose / preservation boundary |
+| --- | --- |
+| `src/lib/pricing.js`, `src/components/BillingDialog.jsx`, `src/index.css` | Server-supplied offer cards, explicit renewal consent and pending-purchase resume; legacy purchased allowances remain distinct. |
+| `server/src/billing/plans.js`, `offers.js` | Add proposed Starter rights and versioned offer facts; retain all legacy defaults and require exact test-account/price/coupon terms. |
+| `server/src/billing/price-catalog.js`, `server/migrations/009_starter_price_contracts.sql` | Add Starter to the registry without rewriting old price IDs, hashes, allowances or migration 008. |
+| `server/src/billing/stripe-checkout.js`, `checkout-attempt.js`, `intro-eligibility.js` | Persist accepted terms and introductory claims with existing transaction/lease admission; preserve frozen retries and require provider-confirmed release. |
+| `server/src/billing/stripe-webhook.js`, `server/src/app.js` | Consume introduction once on signed paid fulfillment and expose an owner-scoped offer/disclosure view; reuse normal invoice credit grants. |
+| `server/src/config.js`, `standalone.env.example` | Add disabled switches and empty configuration placeholders; no service environment changes. |
+| `server/test/billing-offers.test.js`, `billing-view.test.js`, `price-catalog.test.js` | Cover eligibility, disclosure, concurrency/restart, JSONB retries, failure/replay, additive contracts and legacy display/capacity. |
+| `docs/PRICING_OFFER_ROLLOUT.md`, `docs/BILLING_FULFILLMENT.md`, `server/src/learning/curriculum.js` | Record proposed policy, exact configuration, remaining acceptance and rollback with fulfillment preserved. |
 
 ## Previously deployed acceptance baseline
 
