@@ -410,6 +410,11 @@ export class MemoryRepository {
       (entry.idempotency_key === "signup:free:v1" || entry.metadata?.source === "initial_free_allowance")) || null);
   }
 
+  async findBillingCreditGrant({ ownerId, idempotencyKey }) {
+    return clone(this.creditEntries.find((entry) => entry.owner_id === ownerId &&
+      entry.entry_type === "grant" && entry.idempotency_key === idempotencyKey) || null);
+  }
+
   async grantCredits({ ownerId, amount, idempotencyKey, metadata = {} }) {
     const existing = this.creditEntries.find(
       (entry) =>

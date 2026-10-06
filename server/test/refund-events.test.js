@@ -125,13 +125,15 @@ test("operator refund evidence has no generic entity read/write path, including 
     const user = await repository.createUser({ email: `${role}@example.test`, role, passwordHash: "unused", emailVerified: true });
     const token = createOpaqueToken();
     await repository.createSession({ tokenHash: hashToken(token), userId: user.id, expiresAt: new Date(Date.now() + 60000).toISOString() });
-    for (const method of ["GET", "POST"]) {
-      const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/entities/StripeRefundObservation`, {
-        method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        ...(method === "POST" ? { body: JSON.stringify({ status: "resolved" }) } : {})
-      });
-      assert.equal(response.status, 404);
-      assert.doesNotMatch(await response.text(), /evt_private_inbox|re_fixture|pi_fixture/);
+    for (const entity of ["StripeRefundObservation", "BillingRefundReview", "BillingRefundDecision"]) {
+      for (const method of ["GET", "POST"]) {
+        const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/entities/${entity}`, {
+          method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          ...(method === "POST" ? { body: JSON.stringify({ status: "resolved" }) } : {})
+        });
+        assert.equal(response.status, 404);
+        assert.doesNotMatch(await response.text(), /evt_private_inbox|re_fixture|pi_fixture/);
+      }
     }
   }
 });

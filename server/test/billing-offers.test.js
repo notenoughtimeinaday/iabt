@@ -117,6 +117,7 @@ test("new offers require explicit test activation and accepted terms; no live ac
   assert.equal(f.calls.length, 0); assert.equal(f.reads.length, 0);
   assert.deepEqual(publicBillingOffers(f.config).map((x) => [x.name, x.amount_cents, x.monthly_credits]),
     [["Meet Jericho", 499, 100], ["Starter", 1200, 100], ["Builder", 2900, 300], ["Pro", 5900, 650]]);
+  assert.ok(publicBillingOffers(f.config).every((offer) => offer.commercial_use_enabled));
 });
 
 test("missing or stale disclosure fails before provider calls; wrong prices, accounts and coupons fail before Checkout", async (t) => {
@@ -147,6 +148,38 @@ test("legacy plan requests cannot bypass versioned offer acceptance through a ch
 
 for (const adapter of ["memory", "postgres"]) {
   const regression = (name, fn) => test(`${adapter}: new offers ${name}`, { skip: adapter === "postgres" && !databaseUrl, timeout: 30000 }, fn);
+
+  regression("grant commercial rights by purchased version without changing legacy rights or cancellation", async (t) => {
+    const f = await fixture(t, adapter);
+    for (const [price, commercial, react, credits] of [
+      ["price_old_builder", false, false, 100], ["price_new_starter", true, false, 100],
+      ["price_new_builder", true, false, 300], ["price_new_pro", true, true, 650]
+    ]) {
+      const user = await f.repository.createUser({ email: price + "@example.test", passwordHash: "unused", emailVerified: true });
+      const subscription = { id: "sub_" + price, customer: "cus_" + price, status: "active", livemode: false,
+        metadata: { iabt_app_id: f.config.providers.stripe.metadataAppId, user_id: user.id, user_email: user.email },
+        items: { data: [{ price: { id: price } }] } };
+      const deliver = async (status) => {
+        subscription.status = status;
+        const seconds = Math.floor(Date.now() / 1000);
+        const rawBody = JSON.stringify({ id: "evt_" + price + "_" + status, type: "customer.subscription.updated", livemode: false, data: { object: subscription } });
+        const signature = createHmac("sha256", f.config.providers.stripe.webhookSecret).update(seconds + "." + rawBody).digest("hex");
+        return processStripeWebhook({ repository: f.repository, config: f.config, rawBody, signatureHeader: `t=${seconds},v1=${signature}`,
+          nowSeconds: seconds, fetchImpl: async () => ({ ok: true, json: async () => subscription }) });
+      };
+      assert.equal((await deliver("active")).credits_granted, 0);
+      const [entitlement] = await f.reopen().listRecordsExact("AccountEntitlement", user, { limit: 1 });
+      assert.equal(entitlement.commercial_use_enabled, commercial);
+      assert.equal(entitlement.react_export_enabled, react);
+      assert.equal(entitlement.white_label_exports_enabled, false);
+      assert.equal(entitlement.ai_monthly_limit, credits);
+      await deliver("canceled");
+      const [canceled] = await f.reopen().listRecordsExact("AccountEntitlement", user, { limit: 1 });
+      assert.equal(canceled.plan, "free");
+      assert.equal(canceled.commercial_use_enabled, false);
+    }
+    assert.equal(PLAN_DEFAULTS.builder.commercial_use_enabled, false);
+  });
 
   regression("preserve all legacy contracts, capabilities and balances while adding monthly allowances", async (t) => {
     const f = await fixture(t, adapter);
@@ -183,6 +216,8 @@ for (const adapter of ["memory", "postgres"]) {
     assert.equal((await f.repository.listRecords("BillingIntroClaim", f.user)).length, 1);
     const acceptances = await f.repository.listRecords("BillingOfferAcceptance", f.user);
     assert.equal(acceptances.length, 1); assert.equal(acceptances[0].amount_cents, 499);
+    assert.equal(acceptances[0].entitlements.commercial_use_enabled, true);
+    assert.equal(acceptances[0].entitlements.react_export_enabled, false);
     assert.equal(acceptances[0].renewal_amount_cents, 1200); assert.ok(acceptances[0].accepted_at);
     assert.equal((await f.create({ repository: f.reopen(), config: configFor({ IABT_NEW_OFFERS_ENABLED: "false" }) })).session_id, results[0].session_id);
     assert.equal(f.calls.length, 1);

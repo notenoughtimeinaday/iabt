@@ -4564,6 +4564,22 @@ input, textarea, select { color-scheme: dark; caret-color: var(--jericho-cyan); 
   box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
 }
 
+.iabt-plan-card.is-featured {
+  border-color: #8974e5;
+  background: linear-gradient(145deg, #1b2442, #161b34);
+}
+
+.iabt-plan-price strong { color: #f7fbff; }
+.iabt-plan-card li,
+.iabt-plan-card-top,
+.iabt-plan-price span { color: #becce0; }
+.iabt-plan-card-top strong {
+  background: #243554;
+  color: #b9eaff;
+}
+.iabt-plan-card li svg { color: #b69cff; }
+.iabt-billing-note { background: #121e34; }
+
 .iabt-hero-card { border-color: rgba(34,199,255,.30); box-shadow: 0 0 42px rgba(34,199,255,.18), 0 28px 70px rgba(0,0,0,.40); }
 .iabt-hero-card svg,
 .iabt-ai-icon { background: linear-gradient(145deg, var(--jericho-blue), var(--jericho-violet)); color: #fff; box-shadow: 0 0 24px rgba(45,140,255,.28); }

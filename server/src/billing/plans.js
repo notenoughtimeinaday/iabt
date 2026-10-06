@@ -55,6 +55,19 @@ export const PLAN_DEFAULTS = Object.freeze({
 
 export const planDefaults = (plan) => PLAN_DEFAULTS[plan] || PLAN_DEFAULTS.free;
 
+export const JERICHO_OFFER_CATALOG_VERSION = "jericho-2026-10-v1";
+
+// Purchased price versions own their rights as well as their credit allowance.
+// Never broaden a legacy tier merely because a new offer shares its name.
+export const planEntitlementsForContract = (plan, contract) => ({
+  ...planDefaults(plan),
+  ...(contract?.plan === plan ? {
+    ai_monthly_limit: contract.monthly_credits,
+    ...(contract.catalog_version === JERICHO_OFFER_CATALOG_VERSION && ["starter", "builder", "pro"].includes(plan)
+      ? { commercial_use_enabled: true } : {})
+  } : {})
+});
+
 export const planForPrice = (stripeConfig, priceId) => {
   const candidate = String(priceId || "");
   for (const [plan, configured] of Object.entries(stripeConfig.prices || {})) {

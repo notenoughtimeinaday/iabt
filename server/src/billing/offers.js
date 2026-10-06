@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { planDefaults } from "./plans.js";
+import { JERICHO_OFFER_CATALOG_VERSION, planEntitlementsForContract } from "./plans.js";
 
-export const OFFER_CATALOG_VERSION = "jericho-2026-10-v1";
+export const OFFER_CATALOG_VERSION = JERICHO_OFFER_CATALOG_VERSION;
 export const OFFER_TERMS_VERSION = "jericho-2026-10-review-1";
 export const INTRO_OFFER_ID = "meet-jericho-2026-10";
 const definition = (id, plan, name, cents, credits, intro = false) => Object.freeze({
@@ -63,7 +63,7 @@ export const offerAcceptance = (offer, acceptance) => {
     disclosure: offer.disclosure, amount_cents: offer.amount_cents,
     renewal_amount_cents: offer.renewal_amount_cents, currency: offer.currency,
     interval: offer.interval, monthly_credits: offer.monthly_credits,
-    entitlements: { ...planDefaults(offer.plan), ai_monthly_limit: offer.monthly_credits },
+    entitlements: planEntitlementsForContract(offer.plan, offer.price_contract),
     price_id: offer.price_id, contract_sha256: offer.price_contract.contract_sha256,
     stripe_account_id: offer.stripe_account_id, coupon_id: offer.coupon_id };
   return Object.freeze({ ...terms, terms_sha256: createHash("sha256").update(JSON.stringify(terms)).digest("hex") });
@@ -74,7 +74,7 @@ export const publicBillingOffers = (config) => {
   return BILLING_OFFERS.flatMap((item) => {
     try {
       const offer = configuredOffer(config, item.id);
-      const rights = planDefaults(offer.plan);
+      const rights = planEntitlementsForContract(offer.plan, offer.price_contract);
       return [{ id: offer.id, plan: offer.plan, name: offer.name, currency: offer.currency,
         amount_cents: offer.amount_cents, renewal_amount_cents: offer.renewal_amount_cents,
         monthly_credits: offer.monthly_credits, introductory: offer.introductory,

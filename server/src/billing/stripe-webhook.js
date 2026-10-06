@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { planDefaults } from "./plans.js";
+import { planEntitlementsForContract } from "./plans.js";
 import { billingRecordId, fulfillCredits } from "./fulfillment.js";
 import { retrieveStripeSubscription } from "./stripe-read.js";
 import { isStripeRefundEvent, prepareStripeRefundObservation, recordStripeRefundObservation, replayStripeRefundObservation } from "./refund-events.js";
@@ -176,7 +176,7 @@ const upsertSubscription = async ({ repository, config, subscription: snapshot, 
     );
   }
   const plan = grantsPlan ? paidPlan : "free";
-  const defaults = { ...planDefaults(plan), ...(grantsPlan ? { ai_monthly_limit: priceContract.monthly_credits } : {}) };
+  const defaults = planEntitlementsForContract(plan, grantsPlan ? priceContract : null);
   return repository.withRecordTransaction(async (tx) => {
     const sync = await tx.getRecord("BillingSubscriptionSync", claim.id, owner);
     if (sync.revision !== claim.revision) return { user, action: "subscription_sync_superseded" };

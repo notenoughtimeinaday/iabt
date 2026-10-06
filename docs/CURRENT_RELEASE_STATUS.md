@@ -6,12 +6,17 @@ The draft branch now contains a test-only implementation of the approved future
 price/credit offer, including Starter schema support, versioned offer IDs,
 renewal-disclosure acceptance and durable introductory eligibility. New offers
 default off and this candidate cannot activate them in live mode. Existing
-legacy contracts, balances and tier capabilities remain unchanged. Proposed
-Starter feature rights and introductory eligibility still require acceptance.
+legacy contracts, balances and tier capabilities remain unchanged. The staging
+policy now gives every new paid offer commercial-use rights, subject to supplier
+terms and law, through the verified versioned purchase contract. Legacy rights
+remain unchanged. Introductory eligibility and disclosure are implemented;
+actual hosted customer acceptance remains open.
 See [the configuration, policy, tests and rollback map](PRICING_OFFER_ROLLOUT.md).
-This source change does not create Stripe objects, update environments or
-establish hosted offer acceptance. The deployed runtime evidence below remains
-separate; no new deployment is implied.
+The three new test products/prices and the once-only, Starter-restricted discount
+have now been provisioned in the correct existing standalone test account.
+They are not activated in the isolated app. This source change alone does not
+update environments or establish hosted offer acceptance. The deployed runtime
+evidence below remains separate; no new deployment is implied.
 
 Pricing repository verification passed in
 [CI run 682](https://github.com/notenoughtimeinaday/iabt/actions/runs/37483576318):
@@ -29,23 +34,37 @@ The first CI attempt (run 681) exposed two PostgreSQL retry failures. Fix
 `aff4b88` canonicalizes only new-offer request fingerprints so JSONB key ordering
 cannot change accepted terms; legacy fingerprints stay unchanged. A regression
 reproduces the prior failure and now passes. Local database skips are superseded
-by run 682's database evidence, not by inference from memory tests. Interactive
-desktop/mobile verification remains pending because the local browser download
-failed. Actual Stripe offer checkout, renewal, policy/disclosure acceptance and
-activation remain unaccepted.
+by run 682's database evidence, not by inference from memory tests. Subsequent
+commercial-rights, presentation and operator refund-review changes passed the
+complete local verification: **427 tests, zero failures/skips**, including 70
+PostgreSQL checks, plus lint, type checking and production build. Their published
+commit and CI remain to be recorded separately. Local desktop/mobile inspection at 1280 by 720 and
+390 by 844 passed for readable pricing, no horizontal overflow and per-offer
+renewal-consent controls using an in-memory fixture with mocked payment
+readiness. No payment was submitted from that fixture. Actual new-offer Stripe
+checkout, introductory renewal and hosted disclosure acceptance remain unaccepted.
 
 The smallest implementation changes are grouped as follows:
 
 | Path | Purpose / preservation boundary |
 | --- | --- |
 | `src/lib/pricing.js`, `src/components/BillingDialog.jsx`, `src/index.css` | Server-supplied offer cards, explicit renewal consent and pending-purchase resume; legacy purchased allowances remain distinct. |
-| `server/src/billing/plans.js`, `offers.js` | Add proposed Starter rights and versioned offer facts; retain all legacy defaults and require exact test-account/price/coupon terms. |
+| `server/src/billing/plans.js`, `offers.js` | Add versioned commercial-use rights for new paid offers; retain all legacy defaults and require exact test-account/price/coupon terms. |
 | `server/src/billing/price-catalog.js`, `server/migrations/009_starter_price_contracts.sql` | Add Starter to the registry without rewriting old price IDs, hashes, allowances or migration 008. |
 | `server/src/billing/stripe-checkout.js`, `checkout-attempt.js`, `intro-eligibility.js` | Persist accepted terms and introductory claims with existing transaction/lease admission; preserve frozen retries and require provider-confirmed release. |
 | `server/src/billing/stripe-webhook.js`, `server/src/app.js` | Consume introduction once on signed paid fulfillment and expose an owner-scoped offer/disclosure view; reuse normal invoice credit grants. |
 | `server/src/config.js`, `standalone.env.example` | Add disabled switches and empty configuration placeholders; no service environment changes. |
 | `server/test/billing-offers.test.js`, `billing-view.test.js`, `price-catalog.test.js` | Cover eligibility, disclosure, concurrency/restart, JSONB retries, failure/replay, additive contracts and legacy display/capacity. |
-| `docs/PRICING_OFFER_ROLLOUT.md`, `docs/BILLING_FULFILLMENT.md`, `server/src/learning/curriculum.js` | Record proposed policy, exact configuration, remaining acceptance and rollback with fulfillment preserved. |
+| `docs/PRICING_OFFER_ROLLOUT.md`, `docs/BILLING_FULFILLMENT.md`, `server/src/learning/curriculum.js` | Record staging policy, exact configuration, remaining acceptance and rollback with fulfillment preserved. |
+
+The same undeployed candidate also adds a host-only refund review workflow.
+It verifies current Stripe state, the original payment and persisted customer,
+fulfillment and ledger grant before binding an explicit operator decision to
+immutable evidence. The selected `retain_existing_credits_v1` policy changes no
+credits, access or cash, including after partial refunds. This is not unused-
+credit accounting or a cash-refund implementation. Its implementation details
+are in [operator refund reconciliation](REFUND_OPERATOR_RECONCILIATION.md);
+actual provider refund acceptance remains open.
 
 ## Previously deployed acceptance baseline
 
@@ -61,6 +80,10 @@ delivered three matching downloads and left **199 credits** at that checkpoint.
 The early October 6 database check below subsequently observed **198 credits**.
 The later immediate-cancellation and resubscription check retained those credits
 through cancellation and added one legacy allowance, ending at **298 credits**.
+Subsequent real Stripe Billing simulations renewed that subscription, recovered
+a declined recurring invoice, and reached its scheduled cancellation boundary.
+The final verified database state is **Free/canceled, 498 available credits and
+zero reserved credits**. These are test credits, not live revenue.
 Earlier 200-credit observations belong to the preceding payment tests.
 **Full paid launch is not accepted.** Reuse the existing
 candidate and isolated environment; do not restart completed upload, download,
@@ -90,12 +113,56 @@ showed Builder as the current plan and 298 credits.
 
 This closes effective immediate cancellation with credit retention and later
 resubscription for this isolated runtime. It is a distinct lifecycle scenario;
-the October 5 initial-purchase baseline remains separate. A later independent
-sign-in, project access after downgrade, natural period-end cancellation,
-monthly renewal and recurring decline/recovery remain unverified. No refunds,
-new prices, live/production changes or runtime deployment occurred. Exact
+the October 5 initial-purchase baseline remains separate. That scenario alone
+did not establish a later independent sign-in, project access after downgrade,
+natural period-end cancellation, monthly renewal or recurring decline/recovery.
+The subsequent simulation below establishes the latter three separately.
+No refunds, new prices, live/production changes or runtime deployment occurred
+during the immediate-cancellation/resubscription check. Exact
 provider and user identities belong in the private acceptance evidence.
 See [billing acceptance](BILLING_ACCEPTANCE.md#october-6-immediate-cancellation-and-resubscription).
+
+## October 6 monthly renewal, recurring recovery and period-end cancellation
+
+The current Stripe test API successfully attached a Billing test clock to the
+same existing customer and legacy Builder subscription. This used actual
+provider simulation and signed webhooks on API d06894d / frontend 286b99d;
+there was no synthetic webhook injection or manual credit adjustment.
+
+- Advancing to simulated November 7 produced a paid USD 29 monthly renewal
+  invoice for the November 6–December 6 period. Its signed `invoice.paid`
+  delivery granted one legacy 100-credit allowance: **298 to 398 available,
+  zero reserved**, Builder/active. A fresh hosted browser also showed 398.
+- A declining public Stripe test method made the next monthly invoice fail on
+  its first collection attempt. Stripe showed the same invoice open, zero paid,
+  and the subscription `past_due`; the database retained **398 credits**.
+  Restoring the original successful test method and advancing through the
+  configured retry produced payment on attempt two of that same USD 29 invoice.
+  Its signed paid event granted **100 once**, producing Builder/active with
+  **498 available and zero reserved credits**.
+- Scheduling cancellation at the recovered period's end and advancing beyond
+  January 6, 2027 produced Stripe `canceled` with `ended_at` equal to the
+  scheduled boundary. The signed deletion event granted zero credits; the
+  database became **Free/canceled with 498 available and zero reserved**.
+  A fresh hosted Studio independently showed Free/498, 12 saved conversations
+  and the selected completed TreeBay report's three deliverables intact.
+
+These checks establish actual legacy renewal, recurring decline/recovery and
+natural period-end cancellation without changing the purchased allowance.
+The ledger independently confirmed exactly one 100-credit grant for each of
+the two new monthly periods.
+Replay of these new cycle events, a later independent sign-in and project access
+after downgrade remain separate acceptance steps. The earlier replay results
+are preserved, not reused as evidence for an unperformed new-cycle replay.
+Exact invoice, event, customer and ledger identities and the renewal screenshot
+are retained in private evidence.
+
+The clock's real-time automatic deletion is **November 5, 2026 at 15:51:50 UTC**,
+independent of its simulated January date. Finishing or deleting the simulation
+deletes its associated customer. Do not finish/delete it as routine cleanup;
+preserve evidence and plan staging customer continuity before that expiry. No
+live payments, production cutover or runtime deployment occurred in this test.
+See [billing acceptance](BILLING_ACCEPTANCE.md#october-6-monthly-renewal-recurring-recovery-and-period-end-cancellation).
 
 ## October 6 connection and database reconciliation
 
@@ -240,9 +307,10 @@ configuration unchanged until release acceptance.
   from zero to 100 with none reserved. Other October 5 jobs had consumed the
   earlier starter balance. Manual redelivery returned HTTP 200 with
   `reused: true` and no balance increase. The portal opened and showed the paid
-  invoice. Renewal, recurring failure/recovery, asynchronous packs and refund
-  reconciliation remain open. The separate October 6 check above now establishes
-  effective immediate cancellation and resubscription on d06894d.
+  invoice. Asynchronous packs and actual refund reconciliation remain open.
+  The separate October 6 checks above establish effective immediate cancellation,
+  resubscription, monthly renewal, recurring decline/recovery and natural
+  period-end cancellation on d06894d.
 - **Isolated card-pack decline/recovery:** the $10/100-credit pack Checkout
   showed an insufficient-funds decline; a fresh app read remained at 100
   credits. Retrying the same Checkout successfully produced a signed
@@ -284,10 +352,10 @@ credit delivery hashes, Stripe test results and remaining scenarios are in
 | --- | --- |
 | Identity and private files | Reuse existing accounts/jobs to verify password recovery and second-account denial, and visually review the new TreeBay-source DOCX. Native MD/PDF/DOCX delivery and four-page PDF visual review passed for that new report. Anonymous source access already returned 401. |
 | Stripe identity/configuration | The existing standalone test account connection was verified before the October 6 15:38–15:42 UTC lifecycle check, resolving the earlier legacy-only connector gate. The restricted test key, four legacy prices, dedicated active test webhook and unique `iabt-isolated-staging-v1` marker remain installed; webhook API version is `2026-08-26.dahlia`. Preserve the working isolated configuration and historical endpoint/customer state. No real purchase or funding is needed. |
-| Payment lifecycle | Initial isolated subscription payment, observed concurrent UI session reuse, cancellation/reopen, changed-plan conflict, same-invoice replay and card-pack decline/recovery/replay passed on 286b99d. Scheduling/restoration and effective immediate cancellation with credit retention followed by same-customer resubscription passed on d06894d. Still verify fulfillment without returning from Checkout, renewal-credit granting, recurring decline/recovery, asynchronous packs, natural period-end cancellation, later independent sign-in and project access after downgrade, provider expiry and interrupted/different-event fulfillment. Historical September payments/replays remain separate evidence. |
-| Refunds/disputes | Extend the existing inbox with verified payment association, current provider state and operator review. Cash refunds and credit adjustments require explicit approval; no automatic clawback or access change. |
+| Payment lifecycle | Initial isolated subscription payment, observed concurrent UI session reuse, cancellation/reopen, changed-plan conflict, same-invoice replay and card-pack decline/recovery/replay passed on 286b99d. Scheduling/restoration, immediate cancellation/resubscription, true monthly renewal, recurring decline/recovery and natural period-end cancellation passed on d06894d. Still verify replay of the new cycle events, fulfillment without returning from Checkout, asynchronous packs, later independent sign-in and project access after downgrade, provider expiry and interrupted/different-event fulfillment. Preserve the clocked customer's evidence and plan continuity before real-time automatic deletion on November 5 at 15:51:50 UTC. Historical September payments/replays remain separate evidence. |
+| Refunds/disputes | The undeployed candidate adds current provider/payment association and immutable operator review with explicit retain-existing-credits approval. Complete its exact-candidate verification and actual sandbox refund/reconciliation acceptance. Cash refunds remain separate authorized provider operations; no automatic clawback or access change. Dispute reconciliation remains absent. |
 | Test/live state | Migration 007 and the database mode binding first deployed at 286b99d and remain included in d06894d. Exact owner/subscription provenance governs legacy inference; guards precede provider calls/receipt writes. Mode binding does not prove Stripe-account identity or replace a reviewed production data/credit migration. Drain older binaries before initializing another database. [Contract](BILLING_FULFILLMENT.md#database-billing-mode-binding) |
-| Pricing | Versioned price contracts are published, CI-verified and deployed to the API at d06894d with migration 008. Fresh hosted subscription events resolved the legacy Builder contract correctly; October 6 direct SQL enumeration confirmed all three legacy monthly contracts. Renewal-credit granting and new-offer acceptance remain open. The approved offer remains Meet Jericho first month $4.99/100 credits then Starter $12/100; Builder $29/300; Pro $59/650; top-up $10/100. Finish the offer rollout, renewal disclosure and introductory eligibility while preserving existing purchases. October 5 payment acceptance used 286b99d's legacy $29/100-credit Builder contract and $10/100-credit pack. Approval of customer prices is not authorization for infrastructure/provider spending. |
+| Pricing | Versioned price contracts are deployed to the API at d06894d with migration 008; actual legacy renewals now granted the retained 100-credit allowance. The hosted registry still contains only the three legacy monthly contracts. Approved new test products/prices and the restricted introductory coupon are provisioned but not enabled. Finish exact-candidate verification, migration 009, test-only configuration and hosted new-offer acceptance: Meet Jericho first month $4.99/100 then Starter $12/100; Builder $29/300; Pro $59/650; top-up $10/100. All new paid offers include versioned commercial-use rights; legacy purchased terms remain unchanged. Local responsive disclosure controls passed, but no new-offer hosted purchase is implied. Approval of customer prices is not authorization for infrastructure/provider spending. |
 | Recovery/migration | A synthetic local database restore passed. Verify hosted database and object-storage recovery and reconcile legacy data without changing protected production. |
 | Product expansion | Customer connector workflows and isolated execution/testing of generated software remain incomplete. Existing maintenance cannot finish unrestricted software development or certify launch autonomously. |
 | Public launch | Finish staging acceptance, workload costing, commercial/tax review and exact cutover/rollback preparation before domain changes, live billing or main merge. |

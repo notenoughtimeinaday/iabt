@@ -1,9 +1,10 @@
 # Gated Jericho offer candidate — October 6, 2026
 
-This implements a disabled, test-only candidate. It does not accept the proposed
-introductory eligibility, Starter feature rights, renewal disclosure or public
-launch. It creates no Stripe products/prices/coupons, changes no service
-configuration, and does not authorize a deployment, production merge or charge.
+This implements a disabled, test-only candidate. The owner's authorization to
+complete affordable monetization covers the staging offer, introductory policy
+and disclosure below. It creates no Stripe products/prices/coupons and changes
+no service configuration by itself. Production launch, legal/tax acceptance,
+live charges and production merges remain separate release gates.
 
 ## Purchased terms and future offers
 
@@ -20,12 +21,15 @@ original Stripe prices and existing capabilities. No subscription is migrated.
 Free starter credits and existing available/reserved credits are not reset or
 replaced by a new payment. Agency remains a recognized legacy entitlement.
 
-`PLAN_DEFAULTS` retains the existing tier capabilities. Proposed Starter has one
-project, five hourly AI requests, HTML/static ZIP export, one seat, and no React,
-commercial-use or white-label entitlement. New Builder and Pro retain their
-existing tier capabilities; only their purchased price/allowance changes.
-These Starter rights need acceptance before sale. No paid plan can be advertised
-as allowing commercial use beyond its actual entitlement.
+`PLAN_DEFAULTS` retains the existing tier capabilities. Every new paid offer,
+including Meet Jericho, Starter and new Builder, includes commercial-use rights
+subject to the applicable supplier terms and law. The verified purchased
+`jericho-2026-10-v1` price contract selects these rights; legacy Builder remains
+unchanged. Starter has one project, five hourly AI requests, HTML/static ZIP
+export and one seat. React exports, capacity, seats and white-label differences
+retain their existing tier boundaries. Customer acceptance snapshots, sale
+cards and signed subscription fulfillment use the same versioned rights.
+Cancellation restores Free capabilities while retaining purchased credits.
 
 Migration 009 expands the price-contract tier constraint without changing
 migration 008 or any existing row/hash. The original five-field contract hash
@@ -72,13 +76,13 @@ default. New sessions fix USD and disable adaptive currency conversion; legacy
 session parameters stay unchanged. Review product names, descriptions and tax
 behavior separately before activation; preserve historical product copy.
 
-The October 6 release record identifies a Stripe connector account-access gate.
-Do not use the empty legacy Base44 account as a replacement, replace staging
-keys, or repeat the completed historical payment tests.
+The correct standalone Stripe test account was connected on October 6. Verify
+it again before provider writes. Do not use the empty legacy Base44 account as
+a replacement, replace staging keys, or repeat completed historical payments.
 
 ## Introductory policy and disclosure proposal
 
-Proposed policy: once per verified IABT account and linked Stripe customer, with
+Staging policy: once per verified IABT account and linked Stripe customer, with
 no previous successful paid subscription. Prior top-up-only purchases do not
 disqualify an account. A canceled/current Free account is not automatically new.
 Any subscription allowance receipt or unreconciled Stripe/founding entitlement
@@ -119,7 +123,8 @@ disabled. The subscription's verified period boundary supplies the displayed
 next billing date. Existing subscribers continue to use their billing portal;
 no subscription/price update is submitted by this rollout.
 
-Terms version acceptance is a release input, not legal review. Review the
+Terms version acceptance is a release input, not legal review. Before public
+sale, review the
 cancellation wording, tax-inclusive versus tax-exclusive presentation, customer
 support/refund terms, Starter rights, intro policy and portal behavior before
 activation. This change does not enable `automatic_tax`; Stripe Tax requires
@@ -143,15 +148,22 @@ workflow supplies PostgreSQL; it does not deploy. Record its exact candidate
 SHA and conclusion. Local tests use mocked Stripe responses, never real
 customers or payment instruments.
 
-Local lint, type checking, available regression tests and the production build
-passed on October 6. Database tests were skipped locally because no disposable
-PostgreSQL service was available; CI must establish that evidence. A browser
-download failed in this workspace, so interactive desktop/mobile verification
-remains pending rather than being counted as passed.
+The earlier pricing candidate passed CI run 682 with disposable PostgreSQL;
+see the exact revisions in `CURRENT_RELEASE_STATUS.md`. The subsequent
+commercial-rights and refund-review changes require their own full verification.
 
-Before any future staging activation: accept the product/disclosure proposal,
-verify the intended Stripe account, provision separately authorized test-only
-objects, verify actual provider terms/permissions and preserve current data.
+On October 6, the local candidate was inspected interactively at 1280 by 720
+and 390 by 844 using the real frontend and API with an in-memory fixture and
+mocked payment readiness. Dark-theme prices, features and disclosure text were
+readable. The mobile dialog stayed within the viewport with no horizontal
+overflow. Meet Jericho began unchecked and disabled; checking its disclosure
+enabled only that offer, and unchecking disabled it again. No Checkout was
+submitted from the fixture. This is local presentation and consent-control
+evidence, not a hosted purchase, provider or persistence acceptance result.
+
+Before staging activation: verify the intended Stripe account, provision the
+authorized test-only objects, verify actual provider terms/permissions and
+preserve current data.
 Then test actual discounted Checkout and renewal amounts, payment failure and
 recovery, asynchronous completion without browser return, replay, cancellation,
 resubscription, customer portal restrictions and signed fulfillment. Actual
