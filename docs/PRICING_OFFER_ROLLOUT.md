@@ -92,7 +92,9 @@ requests across API instances share one session and provider idempotency key.
 The exact offer, price hash, coupon, currency, first/renewal amount, disclosure
 and acceptance timestamp are retained privately. Retries resume that snapshot,
 including after new sales are disabled. Different offers cannot replace a
-pending purchase. Browser cancellation, local expiry, timeouts and payment
+pending purchase. New-offer request fingerprints ignore JSONB object-key order;
+the historical legacy fingerprint algorithm remains unchanged. Browser
+cancellation, local expiry, timeouts and payment
 failure do not release eligibility. Only Stripe-confirmed session expiry with
 no subscription releases a reservation. The existing definite provider-request
 rejection classification (400/401/403, no returned session) also releases an

@@ -52,7 +52,12 @@ export async function subscriptionCheckoutAttempt({ repository, user, config, pl
   const appId = config.providers.stripe.metadataAppId;
   const recordId = billingRecordId(`subscription-checkout:${mode}:${owner.id}`);
   const credential = digest(config.providers.stripe.secretKey);
-  const terms = digest(JSON.stringify({ mode, appId, plan, params }));
+  // JSONB reorders object keys. Canonicalize only new-offer request fingerprints;
+  // changing the historical algorithm would strand existing legacy attempts.
+  const fingerprintParams = offerTerms
+    ? Object.fromEntries(Object.keys(params).sort().map((key) => [key, params[key]]))
+    : params;
+  const terms = digest(JSON.stringify({ mode, appId, plan, params: fingerprintParams }));
   const contract = normalizePriceContract(priceContract);
   if (contract.plan !== plan || contract.price_id !== params["line_items[0][price]"]) throw reconcile();
   let waiting = 0;

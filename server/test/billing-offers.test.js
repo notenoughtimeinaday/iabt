@@ -287,6 +287,28 @@ for (const adapter of ["memory", "postgres"]) {
   });
 }
 
+test("persisted request key order cannot change accepted new-offer terms", async (t) => {
+  for (const ambiguous of [false, true]) {
+    const f = await fixture(t);
+    if (ambiguous) {
+      f.hook((n) => { if (n === 1) throw new Error("timeout"); });
+      await assert.rejects(f.create(), { code: "stripe_checkout_unavailable" });
+    } else await f.create();
+    const row = await f.row();
+    // PostgreSQL JSONB does not retain JavaScript object insertion order.
+    await f.repository.updateRecord("BillingCheckoutAttempt", row.id, f.user, {
+      request_params: Object.fromEntries(Object.entries(row.request_params).reverse())
+    });
+    const resumed = await f.create({ config: configFor({ IABT_NEW_OFFERS_ENABLED: "false" }) });
+    assert.equal(resumed.session_id, [...f.sessions.keys()][0]);
+    assert.equal(f.sessions.size, 1);
+    if (ambiguous) {
+      assert.equal(f.calls[0].key, f.calls[1].key);
+      assert.deepEqual(f.calls[0].params, f.calls[1].params);
+    }
+  }
+});
+
 test("pending offer summary contains disclosure without provider secrets or mutable checkout parameters", async (t) => {
   const f = await fixture(t);
   await f.create();
