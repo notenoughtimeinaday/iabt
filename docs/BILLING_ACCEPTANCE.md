@@ -113,7 +113,10 @@ Builder price: version `legacy-v1`, 100 credits per month, contract SHA-256
 This proves a fresh hosted subscription entitlement update used the durable
 contract lookup. It does not prove renewal-credit granting, effective
 cancellation or a new offer. Direct SQL enumeration of the hosted registry
-remains unverified. The earlier invoice/pack replay tests ran against 286b99d
+subsequently passed on October 6: three test-mode `legacy-v1` monthly contracts
+persist for Builder 100, Pro 500 and Agency 2000 credits. This read-only check
+does not establish a renewal grant or new-offer acceptance.
+The earlier invoice/pack replay tests ran against 286b99d
 and are not the evidence for this new lookup path.
 
 The hosted learning response returned HTTP 200 with
@@ -133,7 +136,9 @@ for a report grounded in that source. The supported safe, zero-external-cost
 workflow ran automatically. One job succeeded with three stored artifacts and
 one captured IABT credit, changing available credits from 200 to **199**. The
 earlier 200-credit cancellation/replay observations remain historical; 199 is
-the latest observed available balance. The credit funding was Stripe test-mode
+the balance observed for this delivery. A later October 6 read-only database
+check observed 198 available and zero reserved credits on the same Builder
+test account. The credit funding was Stripe test-mode
 funding, not live revenue.
 
 Native browser downloads matched each artifact's persisted byte count and
@@ -228,6 +233,19 @@ The October 5 dashboard setup, installed isolated test credential, dedicated
 webhook, legacy price mapping and actual payment now supersede the claim that
 isolated payment wiring is still absent. They do not establish which accounts
 a later connector listing will expose.
+
+On October 6, reconnection restored connector authentication, but the authorized
+test account was still the legacy Base44 account. Complete read-only customer,
+price and subscription lists were empty; its only webhook destination was
+Base44. The standalone account identity is retained in the private October 5
+acceptance record. The owner received Stripe's account-access link to add that
+existing account in test mode. No provider writes, replacement accounts, new
+prices, payment attempts or runtime changes were made during this check.
+Resume the unverified lifecycle scenarios only after the authorized account
+matches the existing staging subscription and price contracts. The isolated
+database's two verified original users and three immutable legacy monthly
+contracts were confirmed independently; those reads do not replace hosted
+password recovery, cross-account request tests or provider lifecycle evidence.
 
 Keep `IABT_STRIPE_MODE=test` and the unique isolated app marker fixed for the
 accepted pending sessions and subscription. Separate endpoint signing secrets

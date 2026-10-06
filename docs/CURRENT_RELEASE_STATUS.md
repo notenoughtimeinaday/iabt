@@ -1,4 +1,4 @@
-# Current IABT release status — October 5, 2026 (updated October 6 UTC)
+# Current IABT release status — October 6, 2026
 
 The standalone candidate has verified sample file delivery, a deployed refund
 observation inbox, durable billing-mode protection and bounded storage reads.
@@ -8,11 +8,43 @@ decline/recovery, a verified 100-credit pack grant and same-event pack replay.
 The versioned price-contract implementation is now published and deployed to
 the isolated API; the frontend remains on the unchanged 286b99d build.
 A subsequent Studio source-review job used one test-purchased credit and
-delivered three matching downloads. The latest observed available balance is
-**199 credits**; earlier 200-credit observations belong to the preceding tests.
+delivered three matching downloads and left **199 credits** at that checkpoint.
+The October 6 database check below subsequently observed **198 credits**;
+earlier 200-credit observations belong to the preceding payment tests.
 **Full paid launch is not accepted.** Reuse the existing
 candidate and isolated environment; do not restart completed upload, download,
 email-validation or refund-observation implementation.
+
+## October 6 connection and database reconciliation
+
+Stripe connector authentication is working again, but its authorized test
+account is the legacy Base44 setup. Complete read-only lists returned no prices,
+customers or subscriptions, and its only webhook points to Base44. The existing
+standalone account recorded in the private October 5 billing evidence is a
+different account. The owner was given Stripe's account-access link to authorize
+that existing account in test mode. Do not create replacement accounts or prices,
+change staging credentials, or repeat successful payments to work around this
+authorization boundary. No Stripe write or payment test was performed in this
+reconciliation.
+
+Direct read-only queries against the canonical isolated Neon database confirmed:
+
+- Both original test accounts are email-verified: two users, two verified.
+- Eight schema migrations are applied and the durable billing mode is `test`.
+- Three persisted `legacy-v1` monthly price contracts exist: Builder 100,
+  Pro 500 and Agency 2000 credits, registered October 6 at 02:12:36.172 UTC.
+  This closes the previous direct-registry-enumeration evidence gap. It does not
+  establish new-offer acceptance or a renewal credit grant.
+- Account B retains Builder with 198 available and zero reserved test credits;
+  account A has zero available and zero reserved credits. Earlier balances
+  remain evidence for their individual scenarios.
+
+Render's deployment records still show API d06894d and unchanged frontend
+286b99d below. Repository head bd86e9f at the start of this check contained the
+later documentation; no runtime deployment or repeated test suite was needed.
+Password recovery, hosted request-based isolation and payment lifecycle gates
+remain distinct from these database reads. Preserve the completed October 5
+purchase, decline/recovery, replay and file-delivery evidence.
 
 ## Canonical candidate and environment
 
@@ -97,8 +129,9 @@ configuration unchanged until release acceptance.
   then cleared the cancellation schedule. The canonical period-end projection
   was correct despite the provider's period-end boolean being false. This
   establishes fresh subscription contract lookup, not renewal-credit granting
-  or effective cancellation. Direct hosted registry enumeration remains
-  unverified. Earlier payment/replay evidence stays scoped to 286b99d.
+  or effective cancellation. Direct hosted registry enumeration subsequently
+  passed in the October 6 read-only check above. Earlier payment/replay evidence
+  stays scoped to 286b99d.
 - **Hosted sample delivery:** one source-review job used one starter credit
   (10 to 9), produced actual Markdown/DOCX/PDF downloads, and retained matching
   hashes after reopening. Word and PDF pages were visually inspected. Those
@@ -164,11 +197,11 @@ credit delivery hashes, Stripe test results and remaining scenarios are in
 | Area | Remaining work |
 | --- | --- |
 | Identity and private files | Reuse existing accounts/jobs to verify password recovery and second-account denial, and visually review the new TreeBay-source DOCX. Native MD/PDF/DOCX delivery and four-page PDF visual review passed for that new report. Anonymous source access already returned 401. |
-| Stripe identity/configuration | October 5 isolated dashboard setup and actual signed fulfillment supersede the earlier absent-key/empty-price gate. The restricted test key, four legacy prices, dedicated active test webhook and unique `iabt-isolated-staging-v1` marker are installed. Webhook API version is `2026-08-26.dahlia`. Keep this test configuration separate from production and preserve the historical endpoint/customer state. Current connector visibility is not established by dashboard acceptance. No real purchase or funding is needed. |
+| Stripe identity/configuration | October 5 isolated dashboard setup and actual signed fulfillment supersede the earlier absent-key/empty-price gate. The restricted test key, four legacy prices, dedicated active test webhook and unique `iabt-isolated-staging-v1` marker are installed. Webhook API version is `2026-08-26.dahlia`. October 6 connector authentication works but authorizes only the legacy Base44 account; add the existing standalone account before further connector payment tests. Preserve the working staging configuration and historical endpoint/customer state. No real purchase or funding is needed. |
 | Payment lifecycle | Initial isolated subscription payment, observed concurrent UI session reuse, cancellation/reopen, changed-plan conflict, same-invoice replay and card-pack decline/recovery/replay passed on 286b99d. Fresh period-end cancellation scheduling and restoration of renewal passed on d06894d with no credit change. Still verify fulfillment without returning from Checkout, renewal-credit granting, recurring decline/recovery, asynchronous packs, effective/immediate cancellation, provider expiry, later resubscription and interrupted/different-event fulfillment. Historical September payments/replays remain separate evidence. |
 | Refunds/disputes | Extend the existing inbox with verified payment association, current provider state and operator review. Cash refunds and credit adjustments require explicit approval; no automatic clawback or access change. |
 | Test/live state | Migration 007 and the database mode binding first deployed at 286b99d and remain included in d06894d. Exact owner/subscription provenance governs legacy inference; guards precede provider calls/receipt writes. Mode binding does not prove Stripe-account identity or replace a reviewed production data/credit migration. Drain older binaries before initializing another database. [Contract](BILLING_FULFILLMENT.md#database-billing-mode-binding) |
-| Pricing | Versioned price contracts are published, CI-verified and deployed to the API at d06894d with migration 008. Fresh hosted subscription events resolved the legacy Builder contract correctly; direct registry enumeration, renewal-credit granting and new-offer acceptance remain open. The approved offer remains Meet Jericho first month $4.99/100 credits then Starter $12/100; Builder $29/300; Pro $59/650; top-up $10/100. Finish the offer rollout, renewal disclosure and introductory eligibility while preserving existing purchases. October 5 payment acceptance used 286b99d's legacy $29/100-credit Builder contract and $10/100-credit pack. Approval of customer prices is not authorization for infrastructure/provider spending. |
+| Pricing | Versioned price contracts are published, CI-verified and deployed to the API at d06894d with migration 008. Fresh hosted subscription events resolved the legacy Builder contract correctly; October 6 direct SQL enumeration confirmed all three legacy monthly contracts. Renewal-credit granting and new-offer acceptance remain open. The approved offer remains Meet Jericho first month $4.99/100 credits then Starter $12/100; Builder $29/300; Pro $59/650; top-up $10/100. Finish the offer rollout, renewal disclosure and introductory eligibility while preserving existing purchases. October 5 payment acceptance used 286b99d's legacy $29/100-credit Builder contract and $10/100-credit pack. Approval of customer prices is not authorization for infrastructure/provider spending. |
 | Recovery/migration | A synthetic local database restore passed. Verify hosted database and object-storage recovery and reconcile legacy data without changing protected production. |
 | Product expansion | Customer connector workflows and isolated execution/testing of generated software remain incomplete. Existing maintenance cannot finish unrestricted software development or certify launch autonomously. |
 | Public launch | Finish staging acceptance, workload costing, commercial/tax review and exact cutover/rollback preparation before domain changes, live billing or main merge. |
