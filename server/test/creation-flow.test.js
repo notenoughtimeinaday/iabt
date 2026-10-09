@@ -61,20 +61,20 @@ const approve = (plan) => ({
   idempotency_key: "approve:" + plan.id + ":" + plan.pricing_version
 });
 
-test("plain piano prompt becomes an exact quote and four verified artifacts", async () => {
+test("an explicit piano starter becomes an exact quote and standalone preview/source artifacts", async () => {
   const planned = await createCreationPlan({
     repository,
     config,
     providers,
     user,
     requestText:
-      "Create a piano app that uses the computer keyboard as piano keys, shows the keyboard, and has octave controls.",
+      "Create a piano starter that uses the computer keyboard as piano keys, shows the keyboard, and has octave controls.",
     conversationId: "piano-conversation"
   });
   assert.equal(planned.plan.intent, "app");
   assert.equal(planned.plan.title, "Keyboard Piano");
   assert.equal(planned.plan.render_ready, true);
-  assert.equal(planned.plan.deliverables.length, 4);
+  assert.equal(planned.plan.deliverables.length, 2);
 
   await assert.rejects(
     executeCreationPlan({
@@ -112,12 +112,12 @@ test("plain piano prompt becomes an exact quote and four verified artifacts", as
 
   const completed = await worker.runOnce();
   assert.equal(completed.job.status, "succeeded");
-  assert.equal(completed.artifacts.length, 4);
-  assert.equal(completed.job.output.artifact_manifest.length, 4);
+  assert.equal(completed.artifacts.length, 2);
+  assert.equal(completed.job.output.artifact_manifest.length, 2);
   assert.equal(providerCalls, 0);
 
   const preview = completed.artifacts.find((artifact) =>
-    artifact.original_name.endsWith("Interactive Preview.html")
+    artifact.original_name.endsWith(".html")
   );
   const previewHtml = (await storage.read(preview.storage_key)).toString("utf8");
   assert.match(previewHtml, /AudioContext/);
@@ -145,7 +145,7 @@ test("storefront prompt is inferred without a mode selector and produces a worki
     providers,
     user,
     requestText:
-      "I need an advertising website for IABT that sells merchandise with products, a cart, quantities, totals, and Stripe-ready checkout.",
+      "Create an IABT merchandise storefront demo with products, a cart, quantities, totals, and a preview-only checkout notice.",
     conversationId: "store-conversation"
   });
   assert.equal(planned.plan.intent, "website");
@@ -160,7 +160,7 @@ test("storefront prompt is inferred without a mode selector and produces a worki
   const completed = await worker.runOnce();
   assert.equal(completed.job.status, "succeeded");
   const preview = completed.artifacts.find((artifact) =>
-    artifact.original_name.endsWith("Interactive Preview.html")
+    artifact.original_name.endsWith(".html")
   );
   const html = (await storage.read(preview.storage_key)).toString("utf8");
   assert.match(html, /Add to cart/);

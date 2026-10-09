@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  # GitHub activates scheduled workflows only from the default branch. This is
+  # intentionally dormant while the reviewed autonomy branch remains unmerged.
+  schedule:
+    - cron: "37 8 * * *"
 
 permissions:
   contents: read
@@ -11,7 +16,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     services:
       postgres:
         image: postgres:16-alpine
@@ -34,6 +39,8 @@ jobs:
       IABT_AUTH_TEST_DATABASE_URL: postgresql://iabt_test:iabt_test@127.0.0.1:5432/iabt_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -43,4 +50,16 @@ jobs:
             server/package-lock.json
       - run: npm ci
       - run: npm ci --prefix server
-      - run: npm run verify
+      - name: Verify repository and record readiness evidence
+        if: always()
+        run: node scripts/jericho-readiness.mjs
+      - name: Preserve structured readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jericho-readiness-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            .jericho/reports/readiness.json
+            .jericho/reports/readiness.md
+          retention-days: 30
+          if-no-files-found: warn

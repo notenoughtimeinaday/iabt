@@ -1,3 +1,6 @@
+import { inspectImageSource } from "../files/image-sources.js";
+import { estimateLumaVideoCostCents } from "./luma-pricing.js";
+
 export class ProviderCallError extends Error {
   constructor(code, message, { status = 409, retryable = false, providerRequestId = "" } = {}) {
     super(message);
@@ -108,8 +111,8 @@ export class ProviderRegistry {
       Number.isInteger(p.luma.costPerFiveSecondsCents) &&
       p.luma.costPerFiveSecondsCents > 0;
     const stripeKeyReady =
-      (p.stripe.mode === "test" && p.stripe.secretKey.startsWith("sk_test_")) ||
-      (p.stripe.mode === "live" && p.stripe.secretKey.startsWith("sk_live_"));
+      (p.stripe.mode === "test" && /^[sr]k_test_/.test(p.stripe.secretKey)) ||
+      (p.stripe.mode === "live" && /^[sr]k_live_/.test(p.stripe.secretKey));
     const stripePricesReady =
       Object.values(p.stripe.prices || {}).every((price) => String(price).startsWith("price_")) &&
       String(p.stripe.creditPackPriceId || "").startsWith("price_");
@@ -199,6 +202,17 @@ export class ProviderRegistry {
         ? "openai_image"
         : provider;
     this.assertProviderReady(readinessProvider, approval);
+
+    if (provider === "luma" && operation === "submit_video") {
+      // Recompute from server configuration at the spending boundary: old
+      // queued jobs or understated payload estimates cannot lower approval.
+      // Poll/download must keep recovering an existing paid generation even
+      // when configuration prices increase after its original submission.
+      if ((payload.model || "ray-3.2") !== "ray-3.2" || (payload.resolution || "720p") !== "720p") {
+        throw new ProviderCallError("luma_video_profile_unsupported", "The quoted video profile supports Ray 3.2 at 720p SDR only", { status: 422 });
+      }
+      requireApproval(context, Math.max(expectedCost, estimateLumaVideoCostCents(this.config.providers.luma.costPerFiveSecondsCents, payload.duration_seconds ?? 5)));
+    }
 
     if (provider === "openai" && operation === "response") {
       return this.openaiResponse(payload, context);
@@ -329,6 +343,17 @@ export class ProviderRegistry {
   }
 
   async lumaSubmit(payload, context) {
+    let keyframes;
+    if (payload.source_kind === "image") {
+      // Only the worker's revalidated in-memory bytes may become a reference.
+      // Ignore browser/provider URLs and never persist base64 in job inputs.
+      const source = payload.source_image;
+      if (!source || !Buffer.isBuffer(source.bytes)) {
+        throw new ProviderCallError("image_source_required", "The approved image bytes are required for image-to-video", { status: 422 });
+      }
+      inspectImageSource(source.bytes, source.contentType);
+      keyframes = [{ data: source.bytes.toString("base64"), media_type: source.contentType }];
+    }
     const response = await this.fetch("https://agents.lumalabs.ai/v1/generations", {
       method: "POST",
       headers: {
@@ -344,7 +369,10 @@ export class ProviderRegistry {
         aspect_ratio: payload.aspect_ratio || "16:9",
         video: {
           resolution: payload.resolution || "720p",
-          duration: Number(payload.duration_seconds) === 10 ? "10s" : "5s"
+          duration: Number(payload.duration_seconds) === 10 ? "10s" : "5s",
+          // A single keyframe at zero supports both 5s and 10s Ray 3.2
+          // generation. Legacy start_frame is limited to 5s.
+          ...(keyframes ? { keyframes, keyframe_indexes: [0] } : {})
         }
       })
     });
@@ -441,9 +469,12 @@ export class ProviderRegistry {
     }
     const response = await this.fetch("https://api.stripe.com/v1" + path, {
       method: "POST",
+      redirect: "error",
+      signal: AbortSignal.timeout(15000),
       headers: {
         Authorization: "Bearer " + this.config.providers.stripe.secretKey,
         "Content-Type": "application/x-www-form-urlencoded",
+        "Stripe-Version": "2026-08-26.dahlia",
         "Idempotency-Key": context.idempotencyKey
       },
       body: new URLSearchParams(payload.params || {})

@@ -108,8 +108,8 @@ function App() {
         <Router>
           <ScrollToTop />
           {platformRuntime.backend === 'standalone' && (
-            <div className="fixed top-2 right-2 z-[9999] rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-black shadow-lg">
-              STANDALONE STAGING
+            <div className="fixed bottom-2 right-2 z-[40] pointer-events-none rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-900">
+              Test workspace
             </div>
           )}
           <AuthenticatedApp />

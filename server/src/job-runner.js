@@ -9,7 +9,12 @@ import {
   buildDesignArtifacts,
   buildGcodeSimulationArtifacts
 } from "./creation/specialized-artifacts.js";
-import { createId } from "./security.js";
+import { readTextSources } from "./files/text-sources.js";
+import { readImageSources } from "./files/image-sources.js";
+import { buildSourceReviewArtifacts } from "./creation/source-review.js";
+import { orchestrationStep } from "./autonomy/orchestrator.js";
+import { classifyFailure } from "./autonomy/recovery.js";
+import { recordExecutionLesson } from "./learning/service.js";
 
 const safeFilename = (value, fallback) => {
   const cleaned = String(value || "")
@@ -17,6 +22,32 @@ const safeFilename = (value, fallback) => {
     .trim()
     .slice(0, 160);
   return cleaned || fallback;
+};
+
+const artifactObjectId = (jobId, index, digest) => {
+  const hex = createHash("sha256").update(jobId + ":" + index + ":" + digest).digest("hex");
+  return hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-5" + hex.slice(13, 16) + "-a" + hex.slice(17, 20) + "-" + hex.slice(20, 32);
+};
+
+// Terminal evidence is a projection. A failed learning write must never repeat
+// an operation or reverse a committed artifact/credit transition.
+const rememberOutcome = async (repository, job) => {
+  try {
+    const user = await repository.getUser(job.owner_id);
+    if (user) await recordExecutionLesson({ repository, user, job });
+  } catch {
+    console.error({ code: "execution_learning_sync_failed", job_id: job.id });
+  }
+};
+
+const internalFallbackJob = (job) => ({
+  ...job,
+  job_type: ({ app: "creation.interactive", website: "creation.interactive", document: "creation.document", code: "creation.code", design: "creation.design" })[job.input.intent] || "creation.document"
+});
+
+const checkpointOutput = async (repository, job, workerId, outputPatch) => {
+  await repository.checkpointJob({ jobId: job.id, workerId, outputPatch });
+  job.output = { ...job.output, ...outputPatch };
 };
 
 const failureContract = (error, { willRetry = false } = {}) => {
@@ -135,14 +166,27 @@ const providerContext = (job) => ({
   idempotencyKey: job.idempotency_key
 });
 
-const lumaStep = async (job, providers, pollDelayMs) => {
-  let providerJobId = String(job.input.provider_job_id || "");
+const lumaStep = async (job, providers, pollDelayMs, repository, storage, workerId, assertLease) => {
+  let providerJobId = String(job.input.provider_job_id || job.output?.luma_submission?.provider_job_id || "");
   let providerResult;
   if (!providerJobId) {
+    if (job.output?.luma_submission?.phase === "submitting") throw Object.assign(new Error("Provider submission needs reconciliation"), { code: "provider_outcome_unknown" });
+    let sourceImage;
+    if (job.input.source_kind === "image") {
+      const user = await repository.getUser(job.owner_id);
+      const [source] = await readImageSources({ repository, storage, user,
+        fileIds: (job.input.file_references || []).map((reference) => reference.file_id),
+        expectedReferences: job.input.file_references || [] });
+      sourceImage = { bytes: source.bytes, contentType: source.contentType };
+    } else if (job.input.file_references?.length) {
+      throw Object.assign(new Error("Video attachment kind is missing"), { code: "source_intent_unsupported" });
+    }
+    await assertLease();
+    await checkpointOutput(repository, job, workerId, { luma_submission: { phase: "submitting" } });
     providerResult = await providers.execute(
       "luma",
       "submit_video",
-      job.input,
+      { ...job.input, ...(sourceImage ? { source_image: sourceImage } : {}) },
       providerContext(job)
     );
     providerJobId = String(providerResult.providerJobId || "");
@@ -151,6 +195,8 @@ const lumaStep = async (job, providers, pollDelayMs) => {
         code: "luma_invalid_response"
       });
     }
+    await assertLease();
+    await checkpointOutput(repository, job, workerId, { luma_submission: { phase: "submitted", provider_job_id: providerJobId } });
   } else {
     providerResult = await providers.execute(
       "luma",
@@ -187,7 +233,9 @@ const lumaStep = async (job, providers, pollDelayMs) => {
           provider_state: "succeeded",
           poll_count: Number(job.input.provider_poll_count || 0)
         },
-        artifacts: [{ ...video, kind: "video", metadata: video.metadata || {} }]
+        artifacts: [{ ...video, kind: "video", metadata: { ...video.metadata,
+          ...(job.input.source_kind === "image" ? { source_integrity_verified: true, source_references: job.input.file_references } : {})
+        } }]
       }
     };
   }
@@ -237,6 +285,7 @@ export const runClaimedJob = async ({
   repository,
   storage,
   providers,
+  config = {},
   assertLease = async () => {},
   pollDelayMs = 5000
 }) => {
@@ -244,15 +293,53 @@ export const runClaimedJob = async ({
     if (job.attempts_exhausted) {
       throw Object.assign(new Error("Job retry budget exhausted"), { code: "job_attempts_exhausted" });
     }
-    if (job.lease_recovered && job.job_type.startsWith("provider.") && !job.input?.provider_job_id) {
+    if (job.lease_recovered && job.job_type.startsWith("provider.") && !job.input?.provider_job_id && !job.output?.luma_submission?.provider_job_id && !job.output?.provider_result) {
       // A prior worker may have submitted the paid request before it crashed.
       // Never issue a second charge when the provider outcome is unknown.
       throw Object.assign(new Error("Provider submission needs reconciliation"), { code: "provider_outcome_unknown" });
     }
     await assertLease();
     let result;
-    if (job.job_type === "provider.luma.video") {
-      const step = await lumaStep(job, providers, pollDelayMs);
+    if (job.job_type === "creation.orchestrated") {
+      const step = await orchestrationStep({ job, workerId, repository, storage, providers, config, assertLease });
+      if (step.deferred) {
+        await assertLease();
+        const deferred = await repository.deferJob({ jobId: job.id, workerId, outputPatch: step.outputPatch, availableAt: step.availableAt });
+        return { job: deferred, deferred: true, artifacts: [], released_credits: 0 };
+      }
+      if (step.result) {
+        if (job.input.app_output_contract === "self_contained_html_v1" && step.result.metadata?.orchestration?.incomplete) {
+          throw Object.assign(new Error("The app could not be completed. Your existing version is unchanged and reserved credits were restored."), { code: "app_creation_incomplete" });
+        }
+        result = step.result;
+      }
+      else if (step.fallback) {
+        if (job.input.app_output_contract === "self_contained_html_v1") {
+          throw Object.assign(new Error("The app could not be completed. Your existing version is unchanged and reserved credits were restored."), { code: "app_creation_incomplete" });
+        }
+        // Attached-file integrity and intent constraints remain authoritative.
+        if (job.input?.file_references?.length) {
+          const user = await repository.getUser(job.owner_id);
+          const sources = await readTextSources({ repository, storage, user, fileIds: job.input.file_references.map((file) => file.file_id), expectedReferences: job.input.file_references });
+          result = buildSourceReviewArtifacts({ requestText: job.input.request_text, sources });
+        } else result = await resultFor(internalFallbackJob(job), providers);
+        result.metadata = { ...result.metadata, delivery_mode: "template_fallback", objective_completed: false, fallback_reason: step.reason,
+          limitations: ["Responses orchestration did not complete. This is an internal template deliverable, not a verified completion of the full requested objective."] };
+        for (const artifact of result.artifacts) artifact.metadata = { ...artifact.metadata, delivery_mode: "template_fallback", objective_completed: false };
+      }
+    } else if (job.input?.file_references?.length && job.job_type !== "provider.luma.video") {
+      if (job.job_type !== "creation.document" || job.input.intent !== "document") {
+        throw Object.assign(new Error("Attached sources require the source-review document workflow"), { code: "source_intent_unsupported" });
+      }
+      const user = await repository.getUser(job.owner_id);
+      const sources = await readTextSources({
+        repository, storage, user,
+        fileIds: job.input.file_references.map((reference) => reference.file_id),
+        expectedReferences: job.input.file_references
+      });
+      result = buildSourceReviewArtifacts({ requestText: job.input.request_text, sources });
+    } else if (job.job_type === "provider.luma.video") {
+      const step = await lumaStep(job, providers, pollDelayMs, repository, storage, workerId, assertLease);
       if (step.deferred) {
         await assertLease();
         const deferred = await repository.deferJob({
@@ -270,6 +357,26 @@ export const runClaimedJob = async ({
         };
       }
       result = step.result;
+    } else if (providerTask(job)) {
+      if (job.output?.provider_result) {
+        result = { ...job.output.provider_result, artifacts: job.output.provider_result.artifacts.map((item) => ({ ...item, bytes: Buffer.from(item.content_base64, "base64") })) };
+      } else {
+        if (job.output?.provider_dispatch === "submitting") throw Object.assign(new Error("Provider submission needs reconciliation"), { code: "provider_outcome_unknown" });
+        await checkpointOutput(repository, job, workerId, { provider_dispatch: "submitting" });
+        try { result = await resultFor(job, providers); }
+        catch (error) {
+          // An explicit rate limit rejects the request before generation. Other
+          // uncertain POST outcomes retain the barrier against a second spend.
+          if (/rate_limited$/.test(String(error.code || ""))) await checkpointOutput(repository, job, workerId, { provider_dispatch: "rate_limited" });
+          throw error;
+        }
+        const resultBytes = result.artifacts.reduce((sum, item) => sum + item.bytes.length, 0);
+        if (resultBytes <= 6_000_000) {
+          const saved = { ...result, artifacts: result.artifacts.map(({ bytes, ...item }) => ({ ...item, content_base64: bytes.toString("base64") })) };
+          await assertLease();
+          await checkpointOutput(repository, job, workerId, { provider_result: saved, provider_dispatch: "completed" });
+        }
+      }
     } else {
       result = await resultFor(job, providers);
     }
@@ -289,13 +396,29 @@ export const runClaimedJob = async ({
           code: "durable_output_required"
         });
       }
-      const objectId = createId();
-      const stored = await storage.put({
-        ownerId: job.owner_id,
-        objectId,
-        bytes: item.bytes,
-        contentType: item.contentType
-      });
+      const digest = createHash("sha256").update(item.bytes).digest("hex");
+      const objectId = artifactObjectId(job.id, storedArtifacts.length, digest);
+      let stored;
+      try {
+        stored = await storage.put({ ownerId: job.owner_id, objectId, bytes: item.bytes, contentType: item.contentType });
+      } catch (error) {
+        // A crashed worker may already have written this immutable object. The
+        // deterministic key can be reused only after its exact bytes match.
+        if (error?.code !== "EEXIST" || storage.kind !== "local" || !storage.read) throw error;
+        stored = { storage_provider: storage.kind, storage_key: job.owner_id + "/" + objectId };
+      }
+      let readbackVerified = false;
+      if (storage.read) {
+        let readback;
+        try { readback = await storage.read(stored.storage_key, { maxBytes: item.bytes.length }); }
+        catch { throw Object.assign(new Error("Artifact could not be read after storage"), { code: "storage_verification_failed", retryable: true }); }
+        if (!Buffer.isBuffer(readback) || readback.length !== item.bytes.length || createHash("sha256").update(readback).digest("hex") !== digest) {
+          throw Object.assign(new Error("Artifact storage checksum did not match"), { code: "storage_verification_failed", retryable: true });
+        }
+        readbackVerified = true;
+      } else {
+        throw Object.assign(new Error("Private storage readback is required"), { code: "storage_readback_not_configured" });
+      }
       const record = {
         id: objectId,
         ownerId: job.owner_id,
@@ -304,7 +427,7 @@ export const runClaimedJob = async ({
         originalName: safeFilename(item.filename, "iabt-artifact.bin"),
         contentType: item.contentType || "application/octet-stream",
         sizeBytes: item.bytes.length,
-        sha256: createHash("sha256").update(item.bytes).digest("hex")
+        sha256: digest
       };
       storedArtifacts.push(record);
       manifest.push({
@@ -314,7 +437,7 @@ export const runClaimedJob = async ({
         mime_type: record.contentType,
         size_bytes: record.sizeBytes,
         sha256: record.sha256,
-        metadata: item.metadata || {}
+        metadata: { ...item.metadata, storage_readback_verified: readbackVerified }
       });
     }
 
@@ -323,6 +446,7 @@ export const runClaimedJob = async ({
       jobId: job.id,
       workerId,
       output: {
+        ...job.output,
         verified: true,
         plan_id: job.input.plan_id || "",
         conversation_id: job.input.conversation_id || "",
@@ -334,13 +458,21 @@ export const runClaimedJob = async ({
       artifacts: storedArtifacts
     });
     await syncPlanStatus(repository, job, "completed");
+    await rememberOutcome(repository, completed.job);
     return completed;
   } catch (error) {
     if (error?.code === "job_lease_lost") throw error;
+    const classification = classifyFailure(error);
+    error.retryable = classification.retryable;
     const retryAt =
       error?.retryable && job.attempt_count < job.max_attempts
         ? new Date(Date.now() + Math.min(60000, 1000 * 2 ** job.attempt_count)).toISOString()
         : null;
+    if (repository.checkpointJob) {
+      const history = [...(job.output?.repair_history || []), { code: classification.code, attempt: job.attempt_count, recovery: retryAt ? "retry_with_backoff" : "escalate_and_release", at: new Date().toISOString() }].slice(-20);
+      await assertLease();
+      await repository.checkpointJob({ jobId: job.id, workerId, outputPatch: { repair_history: history } });
+    }
     const failed = await repository.failJob({
       jobId: job.id,
       workerId,
@@ -349,6 +481,7 @@ export const runClaimedJob = async ({
     });
     if (failed.job.status === "failed" || failed.job.status === "needs_setup") {
       await syncPlanStatus(repository, job, "failed");
+      await rememberOutcome(repository, failed.job);
     }
     return failed;
   }

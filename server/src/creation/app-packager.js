@@ -4,6 +4,7 @@ import {
 } from "./deterministic-app.js";
 import { createZip } from "./zip.js";
 import { buildDocumentArtifactSet } from "./document-export.js";
+import { buildWebAppArtifacts } from "./web-app.js";
 
 const safeName = (value, fallback = "iabt-deliverable") =>
   String(value || fallback)
@@ -60,6 +61,14 @@ export const buildInteractiveArtifacts = ({ title, requestText, spec = {} }) => 
     });
   }
 
+  if (spec.starter_id) {
+    const result = buildWebAppArtifacts({ title: definition.app?.name || title, html: implementation.preview_html });
+    const starterMetadata = { delivery_mode: "named_starter", starter_id: spec.starter_id, objective_completed: false, generation_strategy: implementation.generation_strategy };
+    result.metadata = { ...result.metadata, ...starterMetadata };
+    for (const artifact of result.artifacts) artifact.metadata = { ...artifact.metadata, ...starterMetadata };
+    return result;
+  }
+
   const packageName = slug(definition.app?.name || title);
   const sourceFiles = {
     "package.json": JSON.stringify({
@@ -98,6 +107,7 @@ export const buildInteractiveArtifacts = ({ title, requestText, spec = {} }) => 
   return {
     metadata: {
       generation_strategy: implementation.generation_strategy,
+      ...(spec.starter_id ? { delivery_mode: "named_starter", starter_id: spec.starter_id, objective_completed: false } : {}),
       validation_status: validation.status,
       artifact_count: 4
     },
@@ -107,7 +117,7 @@ export const buildInteractiveArtifacts = ({ title, requestText, spec = {} }) => 
         contentType: "text/html; charset=utf-8",
         filename: safeName(title) + " - Interactive Preview.html",
         kind: "app",
-        metadata: { interactive: true, preview_ready: true, validation_status: validation.status }
+        metadata: { interactive: true, preview_ready: true, validation_status: validation.status, ...(spec.starter_id ? { delivery_mode: "named_starter", starter_id: spec.starter_id } : {}) }
       },
       {
         bytes: Buffer.from(JSON.stringify(definition, null, 2), "utf8"),

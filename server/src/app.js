@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isValidAccountEmail } from "../../shared/auth-email.js";
 import {
   createId,
   createOpaqueToken,
@@ -10,28 +11,41 @@ import {
   verifyPassword
 } from "./security.js";
 import { readSingleFile } from "./multipart.js";
+import { streamPrivateDownload } from "./storage/download-gateway.js";
 import {
   createCreationPlan,
+  creationRequestDisposition,
   executeCreationPlan
 } from "./creation/planner.js";
 import { processStripeWebhook } from "./billing/stripe-webhook.js";
 import { planDefaults } from "./billing/plans.js";
+import { newOffersAvailable, publicBillingOffers } from "./billing/offers.js";
+import { introEligibility } from "./billing/intro-eligibility.js";
+import { createProjectsWithinQuota } from "./billing/project-quota.js";
 import {
   createCreditCheckout,
   createCustomerPortal,
-  createSubscriptionCheckout
+  createSubscriptionCheckout,
+  pendingOfferSummary
 } from "./billing/stripe-checkout.js";
 import { createTransactionalEmailSender } from "./email/resend.js";
+import { ensureStarterCredits, withStarterCredits } from "./auth/starter-credits.js";
 import { recordPolicyAcceptance } from "./operations/policy-acceptance.js";
 import { SUPPORTED_AGENT_NAMES, respondToSupportRequest, buildJerichoKnowledge } from "./operations/jericho-support.js";
 import { handleExchangeFunction } from "./functions/exchange.js";
 import { handleIntegrationFunction } from "./functions/integrations.js";
+import { fileIdsFromRequest } from "./files/text-sources.js";
+import { prepareWebAppHtml, readRevisionSource } from "./creation/web-app.js";
+import { capabilityRegistry } from "./autonomy/capabilities.js";
+import { loadLearningContext, recordUserCorrection, resolveUserCorrection, withdrawLesson, proposeImprovement, listImprovementProposals } from "./learning/service.js";
+import { ensureMaintenanceSchedule, readMaintenanceStatus, configureMaintenance } from "./maintenance/service.js";
 
 const WORKFLOW_ENTITIES = new Set([
   "AgentConversation", "CollaborationProfile", "ProjectNeed", "MatchRecord",
   "IntroductionRequest", "CollaborationRoom", "RoomMessage", "CredentialClaim",
   "ExchangeBlock", "ExchangeSafetyReport", "ExchangeAuditEvent",
-  "IntegrationConnection", "ConnectionAdapter", "CommercialPolicy", "ProviderAgreement"
+  "IntegrationConnection", "ConnectionAdapter", "CommercialPolicy", "ProviderAgreement",
+  "JerichoLesson", "JerichoImprovementProposal"
 ]);
 
 class HttpError extends Error {
@@ -149,7 +163,7 @@ const issueSession = async (repository, config, user, expectedPasswordHash) => {
     expectedPasswordHash
   });
   if (!created) throw new HttpError(401, "invalid_credentials", "Account credentials changed. Please sign in again.");
-  return { access_token: token, expires_at: expiresAt, user };
+  return withStarterCredits({ repository, user, payload: { access_token: token, expires_at: expiresAt, user } });
 };
 
 const limitAuthRequest = async (req, action, email, repository, config) => {
@@ -181,6 +195,7 @@ const authenticate = async (req, repository) => {
   if (!session) throw new HttpError(401, "invalid_session", "Session is invalid or expired");
   const user = await repository.getUser(session.user_id);
   if (!user) throw new HttpError(401, "invalid_session", "Session user no longer exists");
+  if (!user.email_verified) throw new HttpError(403, "email_verification_required", "Verify your email before continuing");
   return { user, token };
 };
 
@@ -202,13 +217,13 @@ const handleAuth = async ({
   const action = segments[2];
   if (req.method === "POST" && ["register", "login", "verify-otp", "resend-otp", "reset-request", "reset"].includes(action)) {
     await limitAuthRequest(req, action, normalizeEmail(body.email), repository, config);
+    if (["register", "resend-otp", "reset-request"].includes(action) && !isValidAccountEmail(body.email)) {
+      throw new HttpError(400, "invalid_email", "Enter a valid email address without list markers or spaces.");
+    }
   }
 
   if (req.method === "POST" && action === "register") {
     const email = normalizeEmail(body.email);
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
-      throw new HttpError(400, "invalid_email", "A valid email address is required");
-    }
     requireEmailDelivery(config, emailSender);
     const existing = await repository.findUserByEmail(email, { includeSecret: true });
     let user;
@@ -252,7 +267,7 @@ const handleAuth = async ({
       session: { tokenHash: hashToken(token), expiresAt }
     });
     if (!user) throw new HttpError(400, "invalid_otp", "Verification code is invalid or expired. Request a new code or sign in if already verified.");
-    return { status: 200, payload: { access_token: token, expires_at: expiresAt, user } };
+    return { status: 200, payload: await withStarterCredits({ repository, user, payload: { access_token: token, expires_at: expiresAt, user } }) };
   }
 
   if (req.method === "POST" && action === "resend-otp") {
@@ -330,15 +345,16 @@ const handleAuth = async ({
       passwordHash
     });
     if (!user) throw new HttpError(400, "invalid_reset", "Reset code is invalid or expired. Request a new code.");
-    return { status: 200, payload: { ok: true } };
+    return { status: 200, payload: await withStarterCredits({ repository, user, payload: { ok: true } }) };
   }
 
   throw new HttpError(404, "route_not_found", "Authentication route was not found");
 };
 
 const handleEntity = async ({ req, segments, body, repository, config }) => {
-  const { user } = await authenticate(req, repository);
+  let { user } = await authenticate(req, repository);
   const entityName = requireEntity(config, decodeURIComponent(segments[2] || ""));
+  if (["Asset", "CreationPlan"].includes(entityName)) user = { ...user, role: "user" };
   const operation = segments[3];
   const readOperation =
     req.method === "GET" ||
@@ -381,6 +397,10 @@ const handleEntity = async ({ req, segments, body, repository, config }) => {
     if (!Array.isArray(body.records) || body.records.length > 500) {
       throw new HttpError(400, "invalid_records", "records must be an array of at most 500 items");
     }
+    if (entityName === "Project") {
+      const records = await createProjectsWithinQuota({ repository, user, inputs: body.records.map(asObject), bulk: true });
+      return { status: 201, payload: records };
+    }
     const records = [];
     for (const input of body.records) {
       records.push(await repository.createRecord(entityName, user, asObject(input)));
@@ -402,6 +422,10 @@ const handleEntity = async ({ req, segments, body, repository, config }) => {
   }
 
   if (segments.length === 3 && req.method === "POST") {
+    if (entityName === "Project") {
+      const [record] = await createProjectsWithinQuota({ repository, user, inputs: [asObject(body)] });
+      return { status: 201, payload: record };
+    }
     const record = await repository.createRecord(entityName, user, asObject(body));
     await repository.appendAudit(user, "entity.create", {
       entity_name: entityName,
@@ -503,13 +527,46 @@ const handleAgents = async ({
   if (conversationId && segments[4] === "messages" && req.method === "POST") {
     if (body.role && body.role !== "user") throw new HttpError(400, "invalid_message_role", "Only user messages can be submitted");
     if (typeof body.content !== "string" || !body.content.trim() || body.content.length > 20000) throw new HttpError(400, "invalid_message", "Enter a message of at most 20,000 characters");
+    const fileIds = fileIdsFromRequest(body);
+    const submissionId = String(body.submission_id || "");
+    if (submissionId.length > 200) throw new HttpError(400, "invalid_submission_id", "Submission identifier is too long");
+    const revisionFileId = String(body.revision_file_id || "");
+    const submissionFingerprint = createHash("sha256").update(JSON.stringify({ content: body.content, file_ids: [...fileIds].sort(), quote_only: body.quote_only === true, ...(revisionFileId ? { revision_file_id: revisionFileId } : {}) })).digest("hex");
+    const replay = (record) => {
+      const previous = submissionId && record.messages?.find((message) => message.role === "user" && message.submission_id === submissionId);
+      if (!previous) return null;
+      if (previous.submission_fingerprint !== submissionFingerprint) throw new HttpError(409, "submission_conflict", "This submission identifier was already used for a different message");
+      return { status: 200, payload: record };
+    };
+    // Validate every attachment before recording a message or quoting a job.
+    // S3 reads must happen outside the shared record transaction lock.
+    const sourceConversation = await repository.getRecord("AgentConversation", conversationId, actor);
+    if (!sourceConversation) throw new HttpError(404, "conversation_not_found", "Conversation was not found");
+    const previousResponse = replay(sourceConversation);
+    if (previousResponse) return previousResponse;
+    const support = !fileIds.length && !revisionFileId && await respondToSupportRequest({ repository, user, providers, storage, config, requestText: body.content, agentName: sourceConversation.agent_name });
+    const disposition = creationRequestDisposition(body.content);
+    const conversationalResponse = support || (!disposition.create && (!revisionFileId || disposition.reason === "execution_withheld") ? { content: disposition.response, metadata: { execution: "not_requested" } } : null);
+    // Planning, storage reads and job enqueue run outside the conversation lock.
+    // The PostgreSQL record adapter intentionally cannot start nested transactions.
+    const attachedPlan = !conversationalResponse ? await createCreationPlan({
+      repository, config, providers, storage, user,
+      requestText: body.content, conversationId,
+      projectId: String(sourceConversation.metadata?.project_id || ""), fileIds, revisionFileId,
+      automatic: body.quote_only !== true,
+      submissionId
+    }) : null;
     return repository.withRecordTransaction(async (repository) => {
     const record = await repository.getRecord("AgentConversation", conversationId, actor);
     if (!record) throw new HttpError(404, "conversation_not_found", "Conversation was not found");
+    const concurrentResponse = replay(record);
+    if (concurrentResponse) return concurrentResponse;
     const message = {
       id: createId(),
       role: "user",
       content: String(body.content || ""),
+      ...(submissionId ? { submission_id: submissionId, submission_fingerprint: submissionFingerprint } : {}),
+      ...(attachedPlan ? { file_ids: fileIds, file_references: attachedPlan.plan.file_references, ...(revisionFileId ? { revision_file_id: revisionFileId } : {}) } : {}),
       created_date: new Date().toISOString()
     };
     let messages = [...(record.messages || []), message];
@@ -523,40 +580,21 @@ const handleAgents = async ({
 
     if (message.role === "user" && message.content.trim().length >= 3) {
       try {
-        const support = await respondToSupportRequest({ repository, user, providers, storage, config, requestText: message.content, agentName: record.agent_name });
-        if (support) {
+        if (conversationalResponse) {
           updated = await repository.updateRecord("AgentConversation", conversationId, actor, {
-            messages: [...messages, { ...support, id: createId(), role: "assistant", created_date: new Date().toISOString() }]
+            messages: [...messages, { ...conversationalResponse, id: createId(), role: "assistant", created_date: new Date().toISOString() }]
           });
           return { status: 200, payload: updated };
         }
-        const planned = await createCreationPlan({
-          repository,
-          config,
-          providers,
-          user,
-          requestText: message.content,
-          conversationId,
-          projectId: String(record.metadata?.project_id || "")
-        });
+        const planned = attachedPlan;
         const plan = planned.plan;
         const assistant = {
           id: createId(),
           role: "assistant",
-          content:
-            "I inferred **" +
-            plan.intent +
-            "** from your request and prepared a server-owned plan.\n\n" +
-            plan.assistant_summary +
-            "\n\n**Deliverables**\n" +
-            plan.deliverables.map((item) => "- " + item).join("\n") +
-            "\n\n**Exact quote:** " +
-            plan.credit_cost +
-            " IABT credit" +
-            (plan.credit_cost === 1 ? "" : "s") +
-            ". Review the approval panel before production.",
+          content: plan.assistant_summary + " " + plan.credit_cost + " credit" + (plan.credit_cost === 1 ? "" : "s") +
+            (planned.job ? ". I'll save the result here when it is ready." : ". Review the cost and choose Create to begin."),
           created_date: new Date().toISOString(),
-          metadata: { plan_id: plan.id, intent: plan.intent }
+          metadata: { plan_id: plan.id, intent: plan.intent, ...(planned.job ? { job_id: planned.job.id, automatic_execution: true } : {}) }
         };
         messages = [...messages, assistant];
         updated = await repository.updateRecord("AgentConversation", conversationId, actor, {
@@ -650,19 +688,22 @@ const handleFiles = async ({
   const id = decodeURIComponent(segments[2] || "");
   if (req.method === "GET" && id && segments[3] === "access") {
     const { user } = await authenticate(req, repository);
-    const record = await repository.getStoredObject(id, user);
+    const record = await repository.getStoredObject(id, { ...user, role: "user" });
     if (!record) throw new HttpError(404, "file_not_found", "File was not found");
+    const fileUrl = url.searchParams.get("download") === "1"
+      ? await storage.createDownloadUrl(record, { expiresInSeconds: 300 })
+      : await storage.createReadUrl(record, { expiresInSeconds: 300 });
     return {
       status: 200,
       payload: {
         file_id: record.id,
-        file_url: await storage.createReadUrl(record, { expiresInSeconds: 300 }),
+        file_url: fileUrl,
         expires_in_seconds: 300
       }
     };
   }
 
-  if (req.method === "GET" && id && segments[3] === "content" && storage.kind === "local") {
+  if (req.method === "GET" && id && segments.length === 4 && segments[3] === "content") {
     const expires = url.searchParams.get("expires");
     const signature = url.searchParams.get("signature");
     if (!storage.verifyDownload(id, expires, signature)) {
@@ -670,14 +711,7 @@ const handleFiles = async ({
     }
     const record = await repository.getStoredObjectById(id);
     if (!record) throw new HttpError(404, "file_not_found", "File was not found");
-    const bytes = await storage.read(record.storage_key);
-    res.writeHead(200, {
-      ...responseHeaders(origin),
-      "Content-Type": record.content_type,
-      "Content-Length": String(bytes.length),
-      "Content-Disposition": "inline; filename*=UTF-8''" + encodeURIComponent(record.original_name)
-    });
-    res.end(bytes);
+    await streamPrivateDownload({ req, res, storage, record, headers: responseHeaders(origin) });
     return { direct: true };
   }
 
@@ -686,6 +720,7 @@ const handleFiles = async ({
 
 const publicJob = (job) => ({
   id: job.id,
+  job_type: job.job_type,
   user_id: job.owner_id,
   plan_id: job.input?.plan_id || job.output?.plan_id || "",
   conversation_id: job.input?.conversation_id || job.output?.conversation_id || "",
@@ -709,7 +744,11 @@ const publicJob = (job) => ({
           : 5,
   stage:
     job.status === "succeeded"
-      ? "Deliverables created and verified"
+      ? job.output?.provider_metadata?.delivery_mode === "template_fallback"
+        ? "Template fallback saved; review its limitations"
+        : job.output?.provider_metadata?.orchestration?.incomplete
+          ? "Partial deliverables saved; objective remains incomplete"
+          : "Deliverables created and storage verified"
       : job.status === "failed"
         ? "Production failed; reserved credits restored"
         : job.status === "needs_setup"
@@ -728,6 +767,15 @@ const publicJob = (job) => ({
           ? "reserved"
           : "none",
   artifact_id: job.output?.artifact_id || "",
+  limitations: Array.isArray(job.output?.provider_metadata?.limitations) ? job.output.provider_metadata.limitations.map(String).slice(0, 12) : [],
+  execution: job.output?.orchestration ? {
+    phase: job.output.orchestration.phase,
+    model_turns: job.output.orchestration.turn,
+    inspected_file_count: (job.output.orchestration.inspected_file_ids || []).length,
+    // Arguments, source content, provider responses and encoded files stay private.
+    graph: (job.output.orchestration.execution_graph?.nodes || []).map(({ id, tool, depends_on, status }) => ({ id, tool, depends_on, status })),
+    recovery_count: (job.output.orchestration.failures || []).length
+  } : null,
   error_message: job.last_error_message || "",
   diagnosis: {
     error_code: job.last_error_code || "",
@@ -749,7 +797,8 @@ const publicJob = (job) => ({
 });
 
 const handleJobs = async ({ req, segments, repository }) => {
-  const { user } = await authenticate(req, repository);
+  const authenticated = await authenticate(req, repository);
+  const user = { ...authenticated.user, role: "user" };
   if (req.method === "GET" && segments.length === 2) {
     const jobs = await repository.listJobs(user, { limit: 100 });
     return { status: 200, payload: jobs.map(publicJob) };
@@ -763,7 +812,8 @@ const handleJobs = async ({ req, segments, repository }) => {
 };
 
 const handleArtifacts = async ({ req, repository, storage }) => {
-  const { user } = await authenticate(req, repository);
+  const authenticated = await authenticate(req, repository);
+  const user = { ...authenticated.user, role: "user" };
   if (req.method !== "GET") {
     throw new HttpError(405, "method_not_allowed", "Method is not allowed");
   }
@@ -823,6 +873,32 @@ const handleFunction = async ({
   const { user } = await authenticate(req, repository);
   const name = decodeURIComponent(segments[2] || "");
 
+  if (name === "get-app-preview") {
+    const source = await readRevisionSource({ repository, storage, user, fileId: body.file_id });
+    return { status: 200, payload: { data: { file_id: source.reference.file_id, sha256: source.reference.sha256, mime_type: "text/html", content: prepareWebAppHtml(source.text) } } };
+  }
+
+  if (name === "get-capability-registry") {
+    return { status: 200, payload: { data: await capabilityRegistry({ repository, config, providers, storage }) } };
+  }
+  if (name === "get-jericho-learning") {
+    return { status: 200, payload: { data: { ...(await loadLearningContext({ repository, user })), proposals: await listImprovementProposals({ repository, user }) } } };
+  }
+  if (name === "get-jericho-maintenance") {
+    await ensureMaintenanceSchedule({ repository, user, config });
+    return { status: 200, payload: { data: await readMaintenanceStatus({ repository, user, config }) } };
+  }
+  if (name === "configure-jericho-maintenance") {
+    return { status: 200, payload: { data: await configureMaintenance({ repository, user, config, enabled: body.enabled, intervalMinutes: body.interval_minutes }) } };
+  }
+  const learningFunctions = {
+    "record-jericho-correction": () => recordUserCorrection({ repository, user, jobId: body.job_id, category: body.category, requestId: body.request_id }),
+    "resolve-jericho-correction": () => resolveUserCorrection({ repository, user, lessonId: body.lesson_id, jobId: body.job_id, accepted: body.accepted === true }),
+    "withdraw-jericho-lesson": () => withdrawLesson({ repository, user, lessonId: body.lesson_id }),
+    "propose-jericho-improvement": () => proposeImprovement({ repository, user, lessonId: body.lesson_id })
+  };
+  if (Object.hasOwn(learningFunctions, name)) return { status: 200, payload: { data: await learningFunctions[name]() } };
+
   if (name === "accept-policies") {
     const record = await repository.withRecordTransaction((transaction) => recordPolicyAcceptance({ repository: transaction, user, input: body }));
     return { status: 200, payload: { data: record } };
@@ -837,10 +913,13 @@ const handleFunction = async ({
       repository,
       config,
       providers,
+      storage,
       user,
       requestText: body.request_text || body.request || body.prompt,
       conversationId: String(body.conversation_id || body.context?.conversation_id || ""),
-      projectId: String(body.project_id || "")
+      projectId: String(body.project_id || ""),
+      fileIds: fileIdsFromRequest(body),
+      revisionFileId: String(body.revision_file_id || "")
     });
     return { status: 200, payload: planned };
   }
@@ -848,7 +927,7 @@ const handleFunction = async ({
   if (name === "execute-creation") {
     return {
       status: 200,
-      payload: await executeCreationPlan({ repository, config, user, body })
+      payload: await executeCreationPlan({ repository, config, storage, user, body })
     };
   }
 
@@ -870,6 +949,8 @@ const handleFunction = async ({
           config,
           user,
           plan: String(body.plan || ""),
+          offerId: String(body.offer_id || ""),
+          acceptance: body.disclosure_acceptance,
           idempotencyKey
         })
       : name === "stripe-create-credit-checkout"
@@ -891,7 +972,7 @@ const handleFunction = async ({
   }
 
   if (name === "get-account-entitlement") {
-    const account = await repository.getCreditAccount(user.id);
+    const account = await ensureStarterCredits({ repository, user });
     const existing = (
       await repository.listRecords("AccountEntitlement", user, {
         query: { user_id: user.id },
@@ -919,7 +1000,10 @@ const handleFunction = async ({
           total_remaining: account.available_credits,
           total_iabt_credits_remaining: account.available_credits,
           base44_required: false,
-          billing: providers?.readiness?.().stripe || {}
+          billing: { ...(providers?.readiness?.().stripe || {}), credit_pack_size: config.providers.stripe.creditPackSize,
+            offers: publicBillingOffers(config), new_offers_enabled: newOffersAvailable(config),
+            pending_offer: await pendingOfferSummary({ repository, config, user }),
+            intro_eligibility: newOffersAvailable(config) ? await introEligibility({ repository, config, user }) : null }
         }
       }
     };
@@ -965,7 +1049,7 @@ const handleFunction = async ({
       throw new HttpError(501, "storage_not_configured", "Private object storage is not configured");
     }
     const artifactId = String(body.artifact_id || "");
-    const record = await repository.getStoredObject(artifactId, user);
+    const record = await repository.getStoredObject(artifactId, { ...user, role: "user" });
     if (!record) throw new HttpError(404, "artifact_not_found", "Artifact was not found");
     return {
       status: 200,
@@ -982,7 +1066,7 @@ const handleFunction = async ({
 
   if (name === "refresh-generation-job" || name === "get-creation-status") {
     const jobId = String(body.job_id || "");
-    const job = await repository.getJob(jobId, user);
+    const job = await repository.getJob(jobId, { ...user, role: "user" });
     if (!job) throw new HttpError(404, "job_not_found", "Job was not found");
     return { status: 200, payload: { data: { job: publicJob(job) } } };
   }
@@ -1266,6 +1350,10 @@ export const createIabtHandler = ({
     const expected = Number.isInteger(declaredStatus) && declaredStatus >= 400 && declaredStatus <= 599;
     const status = expected ? declaredStatus : 500;
     const code = expected ? error.code || "request_failed" : "internal_error";
+    if (code === "billing_offer_verification_failed" && error.billingVerification) {
+      console.error(JSON.stringify({ event: "billing_offer_verification_failed", request_id: requestId,
+        ...error.billingVerification }));
+    }
     if (!expected) {
       // Driver errors can contain connection details, SQL, or submitted values.
       // Preserve a correlation ID without exposing those values in API/logs.

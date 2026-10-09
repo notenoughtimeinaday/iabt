@@ -215,11 +215,15 @@ test("file reader rejects traversal, symlink escape and wrong sizes", async () =
     await mkdir(join(root, "files"), { recursive: true });
     await writeFile(join(root, "files", "document.txt"), bytes);
     await writeFile(join(temporary, "outside.txt"), bytes);
-    await symlink(join(temporary, "outside.txt"), join(root, "files", "link.txt"));
+    // Directory junctions exercise the same realpath containment boundary on
+    // Windows without requiring administrator symlink privileges.
+    await mkdir(join(temporary, "outside"));
+    await writeFile(join(temporary, "outside", "document.txt"), bytes);
+    await symlink(join(temporary, "outside"), join(root, "files", "link"), process.platform === "win32" ? "junction" : "dir");
     const read = await createImportFileReader(root);
     assert.deepEqual(await read({ local_path: "files/document.txt", size_bytes: bytes.length }), bytes);
     await assert.rejects(read({ local_path: "../outside.txt", size_bytes: bytes.length }), { code: "file_path_unsafe" });
-    await assert.rejects(read({ local_path: "files/link.txt", size_bytes: bytes.length }), { code: "file_path_unsafe" });
+    await assert.rejects(read({ local_path: "files/link/document.txt", size_bytes: bytes.length }), { code: "file_path_unsafe" });
     await assert.rejects(read({ local_path: "files/document.txt", size_bytes: 1 }), { code: "file_size_mismatch" });
   } finally {
     await rm(temporary, { recursive: true, force: true });

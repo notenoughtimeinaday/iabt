@@ -19,6 +19,7 @@ after(async () => rm(directory, { recursive: true, force: true }));
 test("an owner image prompt produces a signed quote and a verified private PNG", async () => {
   const config = loadConfig({
     NODE_ENV: "test",
+    IABT_CREATION_PROFILE: "advanced",
     IABT_AUTH_SECRET: "image-flow-test-secret",
     OPENAI_API_KEY: "configured-test-key",
     OPENAI_IMAGE_MODEL: "gpt-image-1.5",

@@ -1,3 +1,6 @@
+import { loadStripePriceCatalog } from "./billing/price-catalog.js";
+import { loadOfferConfig } from "./billing/offers.js";
+
 export const SERVER_MANAGED_ENTITIES = Object.freeze([
   "AccountEntitlement",
   "AiUsage",
@@ -64,6 +67,12 @@ export const loadConfig = (env = process.env) => {
   }
 
   const apiOrigin = env.IABT_API_ORIGIN || "http://localhost:8787";
+  const stripeMode = env.IABT_STRIPE_MODE || "test";
+  if (!["test", "live"].includes(stripeMode)) throw new Error("IABT_STRIPE_MODE must be test or live");
+  const stripeCatalog = loadStripePriceCatalog({
+    legacyPrices: { builder: env.STRIPE_BUILDER_PRICE_ID || "", pro: env.STRIPE_PRO_PRICE_ID || "", agency: env.STRIPE_AGENCY_PRICE_ID || "" },
+    creditPackPriceId: env.STRIPE_AI_CREDIT_PACK_PRICE_ID || "", json: env.IABT_STRIPE_PRICE_CATALOG_JSON
+  });
   const storageProvider = String(env.IABT_STORAGE_PROVIDER || "").trim().toLowerCase() ||
     (environment === "production" ? "s3" : "local");
   const costPerMinuteCents = Number(env.IABT_ELEVENLABS_COST_PER_MINUTE_CENTS);
@@ -75,6 +84,7 @@ export const loadConfig = (env = process.env) => {
 
   return Object.freeze({
     environment,
+    creation: Object.freeze({ profile: env.IABT_CREATION_PROFILE === "advanced" ? "advanced" : "core" }),
     port: asPositiveInteger(env.PORT, 8787),
     publicOrigin: env.IABT_PUBLIC_ORIGIN || "http://localhost:5173",
     apiOrigin,
@@ -88,6 +98,26 @@ export const loadConfig = (env = process.env) => {
       enabled: asBoolean(env.IABT_JOB_WORKER_ENABLED),
       pollMs: asPositiveInteger(env.IABT_JOB_POLL_MS, 1500),
       leaseMs: asPositiveInteger(env.IABT_JOB_LEASE_MS, 5 * 60 * 1000)
+    }),
+    maintenance: Object.freeze({
+      enabled: env.IABT_MAINTENANCE_ENABLED === undefined || asBoolean(env.IABT_MAINTENANCE_ENABLED),
+      remoteReadbackEnabled: asBoolean(env.IABT_MAINTENANCE_REMOTE_READBACK_ENABLED),
+      intervalMs: Math.max(300000, Math.min(asPositiveInteger(env.IABT_MAINTENANCE_INTERVAL_MS, 900000), 86400000)),
+      pollMs: Math.max(1000, Math.min(asPositiveInteger(env.IABT_MAINTENANCE_POLL_MS, 15000), 60000)),
+      leaseMs: Math.max(30000, Math.min(asPositiveInteger(env.IABT_MAINTENANCE_LEASE_MS, 120000), 600000)),
+      maxJobs: Math.min(asPositiveInteger(env.IABT_MAINTENANCE_MAX_JOBS, 25), 25),
+      maxPassMs: Math.max(1000, Math.min(asPositiveInteger(env.IABT_MAINTENANCE_MAX_PASS_MS, 30000), 60000)),
+      maxArtifactBytes: Math.min(asPositiveInteger(env.IABT_MAINTENANCE_MAX_ARTIFACT_BYTES, 2000000), 2000000),
+      maxPassBytes: Math.min(asPositiveInteger(env.IABT_MAINTENANCE_MAX_PASS_BYTES, 8000000), 8000000)
+    }),
+    orchestration: Object.freeze({
+      enabled: asBoolean(env.IABT_ENABLE_ORCHESTRATION),
+      budgetAccepted: asBoolean(env.IABT_ORCHESTRATION_BUDGET_ACCEPTED),
+      responseCostCents: asPositiveInteger(env.IABT_OPENAI_RESPONSE_COST_CENTS, 0),
+      budgetCents: asPositiveInteger(env.IABT_ORCHESTRATION_BUDGET_CENTS, 0),
+      maxTurns: Math.min(asPositiveInteger(env.IABT_ORCHESTRATION_MAX_TURNS, 8), 8),
+      maxPolls: Math.min(asPositiveInteger(env.IABT_ORCHESTRATION_MAX_POLLS, 120), 120),
+      maxOutputTokens: Math.min(asPositiveInteger(env.IABT_ORCHESTRATION_MAX_OUTPUT_TOKENS, 6000), 6000)
     }),
     storage: Object.freeze({
       provider: storageProvider,
@@ -141,15 +171,13 @@ export const loadConfig = (env = process.env) => {
       stripe: freezeProvider({
         secretKey: env.STRIPE_SECRET_KEY || "",
         webhookSecret: env.STRIPE_WEBHOOK_SECRET || "",
-        mode: env.IABT_STRIPE_MODE === "live" ? "live" : "test",
+        mode: stripeMode,
         metadataAppId: env.IABT_STRIPE_METADATA_APP_ID || "6a849bcd3e04d068553b4af7",
         creditPackSize: asPositiveInteger(env.IABT_CREDIT_PACK_SIZE, 100),
         creditPackPriceId: env.STRIPE_AI_CREDIT_PACK_PRICE_ID || "",
-        prices: freezeProvider({
-          builder: env.STRIPE_BUILDER_PRICE_ID || "",
-          pro: env.STRIPE_PRO_PRICE_ID || "",
-          agency: env.STRIPE_AGENCY_PRICE_ID || ""
-        })
+        prices: stripeCatalog.prices,
+        priceContracts: stripeCatalog.contracts,
+        offers: loadOfferConfig(env)
       })
     }),
     allowedEntities: new Set(ALLOWED_ENTITIES),

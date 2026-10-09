@@ -27,6 +27,7 @@ test("specialized plans execute into durable, truthfully bounded artifacts", asy
 
   const config = loadConfig({
     NODE_ENV: "test",
+    IABT_CREATION_PROFILE: "advanced",
     IABT_AUTH_SECRET: "specialized-test-secret",
     IABT_API_ORIGIN: "http://127.0.0.1:8787"
   });

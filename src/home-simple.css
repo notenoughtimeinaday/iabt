@@ -1,0 +1,67 @@
+.home-simple.iabt-home { background: #f8faf9; color: #172b2a; }
+.home-simple .iabt-home-nav { position: relative; background: #fff; padding: 20px max(24px, calc((100vw - 1120px) / 2)); border-bottom: 1px solid #e5eae8; }
+.home-simple .iabt-home-brand strong { font-size: 23px; letter-spacing: -.04em; color: #172b2a; }
+.home-simple .iabt-home-brand span { color: #6b7774; font-size: 11px; }
+.home-simple .iabt-mark { box-shadow: none; border-radius: 11px; }
+.home-simple-nav { display: flex; align-items: center; gap: 8px; }
+.home-simple-nav > button { color: #354c46; }
+.home-account { position: relative; }
+.home-account summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; border-radius: 10px; font-size: 13px; }
+.home-account summary::-webkit-details-marker { display: none; }
+.home-account summary:hover, .home-account[open] summary { background: #eef3f0; }
+.home-account-menu { position: absolute; top: calc(100% + 8px); right: 0; width: 240px; z-index: 30; padding: 14px; background: #fff; border: 1px solid #dde7e1; border-radius: 16px; box-shadow: 0 12px 36px #1d383719; display: grid; gap: 5px; }
+.home-account-menu > strong { overflow-wrap: anywhere; }
+.home-account-menu > span { color: #697a74; font-size: 12px; margin-bottom: 8px; }
+.home-account-menu button { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; text-align: left; font-size: 13px; }
+.home-account-menu button:hover { background: #f0f5f2; }
+.home-simple .iabt-home-main { max-width: 1120px; padding: 0 24px 60px; margin: 0 auto; }
+.home-create { max-width: 780px; margin: 0 auto; padding: 80px 0 60px; text-align: center; }
+.home-create-kicker { color: #647970; font-size: 12px; font-weight: 650; letter-spacing: .04em; }
+.home-create h1 { font-size: clamp(32px, 4.5vw, 48px); line-height: 1.12; letter-spacing: -.05em; margin: 16px 0; font-weight: 650; color: #18332b; }
+.home-create > p { margin: 0 0 30px; font-size: 16px; line-height: 1.65; color: #60726b; }
+.home-request { padding: 20px; border: 1px solid #cadbd2; border-radius: 20px; background: #fff; box-shadow: 0 12px 40px #21493309; text-align: left; }
+.home-request:focus-within { border-color: #447e67; box-shadow: 0 0 0 3px #447e6710; }
+.home-request textarea { width: 100%; resize: vertical; min-height: 88px; max-height: 280px; border: 0; outline: 0; background: transparent; color: #18332b; font-size: 17px; line-height: 1.6; }
+.home-request textarea::placeholder { color: #8b9892; }
+.home-request > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; }
+.home-request > div > span { font-size: 12px; color: #75827c; }
+.home-request button { gap: 10px; background: #24563f; border-radius: 11px; }
+.home-request button:hover { background: #1c4633; }
+.home-starters { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.home-starters button { border: 1px solid #dfe7e2; border-radius: 30px; padding: 8px 13px; background: #fff; color: #51675c; font-size: 12px; }
+.home-starters button:hover { border-color: #87a895; background: #eff6f1; }
+.home-recent { border-top: 1px solid #e3eae5; padding: 30px 0; }
+.home-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 18px; }
+.home-section-heading h2 { font-size: 18px; letter-spacing: -.02em; font-weight: 650; }
+.home-section-heading button { display: flex; align-items: center; gap: 7px; color: #587363; font-size: 12px; }
+.home-recent-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.home-work-card { text-align: left; padding: 20px; background: #fff; border: 1px solid #e0e9e3; border-radius: 15px; display: grid; gap: 17px; min-width: 0; }
+.home-work-card:hover { border-color: #99b6a5; box-shadow: 0 5px 20px #27483208; }
+.home-work-icon { width: 37px; height: 37px; background: #edf4ef; border-radius: 10px; display: grid; place-items: center; color: #527c63; }
+.home-work-card strong { font-size: 14px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 550; overflow-wrap: anywhere; }
+.home-work-card > span:last-child { display: flex; justify-content: space-between; color: #708577; font-size: 11px; }
+.home-recent-empty { padding: 28px 0; color: #7e8e84; font-size: 14px; }
+.home-imported { margin-top: 12px; border-top: 1px solid #e3eae5; padding-top: 20px; }
+.home-imported > summary { cursor: pointer; font-size: 13px; color: #637c6b; }
+.home-imported > summary span { margin-left: 6px; }
+.home-imported .iabt-projects { padding-top: 24px; }
+.home-simple .iabt-project-empty { min-height: 180px; }
+.home-simple .iabt-home-footer { background: transparent; font-size: 11px; color: #7b8980; padding: 25px; }
+@media (max-width: 700px) {
+  .home-simple .iabt-home-nav { padding: 16px; gap: 10px; }
+  .home-simple .iabt-home-brand { gap: 8px; }
+  .home-simple .iabt-home-brand strong { font-size: 20px; }
+  .home-simple-nav { gap: 0; }
+  .home-simple-nav > button { padding: 8px; font-size: 12px; }
+  .home-account summary { padding: 9px; }
+  .home-account summary span { display: none; }
+  .home-simple .iabt-home-main { padding: 0 18px 40px; }
+  .home-create { padding: 48px 0 36px; }
+  .home-create > p { font-size: 14px; }
+  .home-request { padding: 16px; }
+  .home-request > div > span { max-width: 110px; }
+  .home-recent-grid { grid-template-columns: 1fr; }
+  .home-work-card { grid-template-columns: 38px 1fr; align-items: center; padding: 16px; gap: 12px; }
+  .home-work-card > span:last-child { grid-column: 2; }
+  .home-section-heading h2 { font-size: 16px; }
+}

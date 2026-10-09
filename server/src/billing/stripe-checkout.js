@@ -1,3 +1,7 @@
+import { ensureBillingPriceCatalog, resolvePriceContract } from "./price-catalog.js";
+import { configuredOffer, offerAcceptance, verifyOfferProviderTerms, OFFER_CATALOG_VERSION } from "./offers.js";
+import { billingRecordId } from "./fulfillment.js";
+
 const billingError = (status, code, message) =>
   Object.assign(new Error(message), { status, code });
 
@@ -8,12 +12,20 @@ const customerId = (entitlement) =>
 
 const currentEntitlement = async (repository, user) =>
   (
-    await repository.listRecords("AccountEntitlement", user, {
+    await repository.listRecordsExact("AccountEntitlement", { ...user, role: "user" }, {
       query: { user_id: user.id },
       sort: "-updated_date",
       limit: 1
     })
   )[0] || null;
+
+export const pendingOfferSummary = async ({ repository, config, user }) => {
+  const row = await repository.getRecord("BillingCheckoutAttempt",
+    billingRecordId(`subscription-checkout:${config.providers.stripe.mode}:${user.id}`), { ...user, role: "user" });
+  if (!row?.offer_terms || !["creating", "open", "uncertain"].includes(row.status)) return null;
+  return { id: row.offer_terms.offer_id, disclosure: row.offer_terms.disclosure,
+    disclosure_version: row.offer_terms.disclosure_version };
+};
 
 const executionContext = ({ user, action, idempotencyKey, live }) => ({
   idempotencyKey,
@@ -68,32 +80,21 @@ export const createSubscriptionCheckout = async ({
   config,
   user,
   plan,
-  idempotencyKey
+  offerId,
+  acceptance,
+  idempotencyKey,
+  now = Date.now
 }) => {
-  assertCheckoutReady(providers);
-  if (!["builder", "pro", "agency"].includes(plan)) {
+  if (!offerId && !["builder", "pro", "agency"].includes(plan)) {
     throw billingError(400, "invalid_subscription_plan", "Plan must be builder, pro, or agency");
   }
+  await ensureBillingPriceCatalog({ repository, config });
   const entitlement = await currentEntitlement(repository, user);
   const customer = customerId(entitlement);
-  const hasSubscription =
-    customer.startsWith("cus_") &&
-    String(entitlement?.provider_subscription_id || "").startsWith("sub_") &&
-    ["active", "trialing", "past_due", "paused"].includes(String(entitlement?.status || ""));
+  const hasSubscription = hasManagedSubscription(entitlement);
 
   if (hasSubscription) {
-    const portal = await createStripeSession({
-      providers,
-      config,
-      user,
-      path: "/billing_portal/sessions",
-      params: {
-        customer,
-        return_url: config.publicOrigin + "/"
-      },
-      action: "portal-existing-subscription",
-      idempotencyKey
-    });
+    const portal = await createCustomerPortal({ repository, providers, config, user, idempotencyKey });
     return {
       ok: true,
       kind: "portal",
@@ -102,37 +103,86 @@ export const createSubscriptionCheckout = async ({
     };
   }
 
+  // A disabled/changed sale configuration must not strand an already issued
+  // offer. Resume its exact saved request; admission still rejects a fresh
+  // attempt if Stripe confirms expiry and the offer has since been disabled.
+  const saved = offerId ? await repository.getRecord("BillingCheckoutAttempt",
+    billingRecordId(`subscription-checkout:${config.providers.stripe.mode}:${user.id}`), { ...user, role: "user" }) : null;
+  const resume = Boolean(offerId && saved?.offer_terms?.offer_id === offerId && ["creating", "open", "uncertain"].includes(saved.status));
+  if (resume) {
+    if (acceptance?.accepted !== true || acceptance.version !== saved.offer_terms.disclosure_version || !saved.request_params || !saved.price_contract) {
+      throw billingError(409, "billing_disclosure_required", "Review the saved purchase disclosure before resuming Checkout.");
+    }
+    return subscriptionCheckoutAttempt({ repository, user, config, plan: saved.plan, params: saved.request_params,
+      priceContract: saved.price_contract, offerTerms: saved.offer_terms, now,
+      submit: async (frozenParams, providerKey) => {
+        const result = await providers.execute("stripe", "post", { path: "/checkout/sessions", params: frozenParams, estimated_cost_cents: 0 },
+          executionContext({ user, action: "subscription-checkout-" + saved.plan, idempotencyKey: providerKey, live: config.providers.stripe.mode === "live" }));
+        return result?.data;
+      },
+      retrieve: (sessionId) => retrieveSubscriptionCheckout({ config, sessionId, fetchImpl: providers.fetch || globalThis.fetch }) });
+  }
+
+  assertCheckoutReady(providers);
+
+  const offer = offerId ? configuredOffer(config, offerId) : null;
+  const offerTerms = offer ? offerAcceptance(offer, acceptance) : null;
+  if (offer) plan = offer.plan;
+  const selectedPrice = offer?.price_id || config.providers.stripe.prices[plan];
+  const priceContract = await resolvePriceContract({ repository, config, priceId: selectedPrice });
+  if (!priceContract || priceContract.plan !== plan) {
+    throw billingError(503, "stripe_price_not_configured", "The selected Stripe price has no verified billing contract");
+  }
+  if (!offer && priceContract.catalog_version === OFFER_CATALOG_VERSION) {
+    throw billingError(409, "billing_offer_required", "Reload billing and accept the versioned offer before purchasing.");
+  }
+  if (offer) await verifyOfferProviderTerms({ config, offer, fetchImpl: providers.fetch || globalThis.fetch });
+
   const metadata = {
     iabt_app_id: config.providers.stripe.metadataAppId,
     base44_app_id: config.providers.stripe.metadataAppId,
     plan,
     user_id: user.id,
-    user_email: user.email
+    user_email: user.email,
+    ...(offerTerms ? { billing_offer_id: offerTerms.offer_id, billing_offer_terms_sha256: offerTerms.terms_sha256 } : {}),
+    // Keep legacy provider parameters stable for existing pending attempts.
+    ...(priceContract.catalog_version !== "legacy-v1" ? {
+      billing_catalog_version: priceContract.catalog_version,
+      billing_contract_sha256: priceContract.contract_sha256
+    } : {})
   };
   const params = {
     mode: "subscription",
-    "line_items[0][price]": config.providers.stripe.prices[plan],
+    "line_items[0][price]": selectedPrice,
     "line_items[0][quantity]": "1",
     success_url: config.publicOrigin + "/?billing=success&session_id={CHECKOUT_SESSION_ID}",
     cancel_url: config.publicOrigin + "/?billing=canceled",
     client_reference_id: user.id,
-    allow_promotion_codes: "true",
+    ...(offerTerms ? {
+      currency: offerTerms.currency,
+      "adaptive_pricing[enabled]": "false",
+      "custom_text[submit][message]": offerTerms.disclosure,
+      ...(offerTerms.coupon_id ? { "discounts[0][coupon]": offerTerms.coupon_id } : {})
+    } : { allow_promotion_codes: "true" }),
     ...(customer.startsWith("cus_") ? { customer } : { customer_email: user.email })
   };
   for (const [key, value] of Object.entries(metadata)) {
     params["metadata[" + key + "]"] = value;
     params["subscription_data[metadata][" + key + "]"] = value;
   }
-  const session = await createStripeSession({
-    providers,
-    config,
-    user,
-    path: "/checkout/sessions",
-    params,
-    action: "subscription-checkout-" + plan,
-    idempotencyKey
+  const pending = await subscriptionCheckoutAttempt({ repository, user, config, plan, params, priceContract, offerTerms, now,
+    submit: async (frozenParams, providerKey) => {
+      const result = await providers.execute("stripe", "post", { path: "/checkout/sessions", params: frozenParams, estimated_cost_cents: 0 },
+        executionContext({ user, action: "subscription-checkout-" + plan, idempotencyKey: providerKey, live: config.providers.stripe.mode === "live" }));
+      return result?.data;
+    },
+    retrieve: (sessionId) => retrieveSubscriptionCheckout({ config, sessionId, fetchImpl: providers.fetch || globalThis.fetch })
   });
-  return { ok: true, kind: "checkout", url: session.url, session_id: session.id };
+  if (pending.kind === "portal_required") {
+    const portal = await createCustomerPortal({ repository, providers, config, user, idempotencyKey });
+    return { ...portal, message: "An existing subscription must be changed through the customer portal." };
+  }
+  return pending;
 };
 
 export const createCreditCheckout = async ({
@@ -142,6 +192,7 @@ export const createCreditCheckout = async ({
   user,
   idempotencyKey
 }) => {
+  await ensureBillingPriceCatalog({ repository, config });
   assertCheckoutReady(providers);
   const entitlement = await currentEntitlement(repository, user);
   const customer = customerId(entitlement);
@@ -185,6 +236,7 @@ export const createCustomerPortal = async ({
   user,
   idempotencyKey
 }) => {
+  await ensureBillingPriceCatalog({ repository, config });
   const readiness = providers?.readiness?.().stripe;
   if (!readiness?.configured) {
     throw billingError(503, "stripe_portal_not_ready", "Stripe customer portal is not configured");
@@ -208,3 +260,4 @@ export const createCustomerPortal = async ({
   });
   return { ok: true, kind: "portal", url: portal.url };
 };
+import { hasManagedSubscription, retrieveSubscriptionCheckout, subscriptionCheckoutAttempt } from "./checkout-attempt.js";

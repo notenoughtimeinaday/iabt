@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { build } from "vite";
 import { createFrontendConfig } from "./frontend-config.mjs";
+import "./studio.test.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const apiUrl = "https://independent-api.example.test";

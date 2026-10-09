@@ -1,10 +1,37 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { normalizeFileIds, readTextSources, referenceBinding, sourceReferences } from "../files/text-sources.js";
+import { readImageSources } from "../files/image-sources.js";
+import { estimateLumaVideoCostCents } from "../providers/luma-pricing.js";
+import { creationPolicy } from "../autonomy/policy.js";
+import { capabilityRegistry, orchestrationConfigured } from "../autonomy/capabilities.js";
+import { assertCreationProfile, coreStarter, CORE_STARTER_MESSAGE } from "./core-profile.js";
+import { readRevisionSource } from "./web-app.js";
 
-export const CREATION_PRICING_VERSION = "iabt-standalone-2026-09-04.4";
+export const CREATION_PRICING_VERSION = "iabt-standalone-2026-10-09.1";
 const QUOTE_TTL_MS = 30 * 60 * 1000;
 
 const normalize = (value, max = 12000) =>
   String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+
+// Intent is an authorization precondition, separate from output routing. A
+// fallback app classification must never turn conversation into billable work.
+export const creationRequestDisposition = (requestText) => {
+  const text = normalize(requestText).toLowerCase().replace(/[’]/g, "'");
+  const hold = /\b(?:do not|don't|never|not yet|hold off|wait before|stop|cancel)\b.{0,65}\b(?:creat\w*|build\w*|mak\w*|writ\w*|generat\w*|produc\w*|prepar\w*|design\w*|develop\w*|implement\w*|draft\w*|compos\w*|render\w*|review\w*|summari[sz]\w*|analy[sz]\w*|convert\w*|fix\w*|repair\w*|updat\w*|improv\w*|revis\w*|packag\w*|export\w*|test\w*|execut\w*|start\w*|begin\w*|animat\w*|enhanc\w*|sharpen\w*|upscal\w*|clear\w*|clean\w*|work|anything)\b/.test(text) || /\b(?:but not (?:yet|now|right now)|not until|wait for my (?:approval|permission|confirmation))\b/.test(text) ||
+    /\b(?:quote|plan|planning|explain|discussion|discuss)\s+only\b|\b(?:just|only)\s+(?:a\s+)?(?:quote|plan|explanation|discuss|explain)\b|^before\s+(?:creat\w*|build\w*|mak\w*|execut\w*|start\w*)\b|^(?:please\s+)?(?:create|make|build|generate)\s+nothing\b/.test(text);
+  if (hold) return { create: false, reason: "execution_withheld", response: "I will keep this read-only and reserve no credits. Describe what you want clarified or quoted; tell me explicitly when you want creation to begin." };
+  const request = text.replace(/^(?:(?:hello|hi|hey|okay|ok|thanks|thank you)[,!.\s]+)+/, "");
+  if (/^(?:can|could|do|would) you (?:create|build|make|generate|animate|enhance|sharpen|upscale|clear up|clean up) (?:apps|applications|websites|documents|images|photos|videos|audio|software)[?.!]*$/.test(request)) {
+    return { create: false, reason: "creation_not_requested", response: "I can explain the available creation tools and their limits. Describe a specific deliverable when you want me to begin; no credits have been reserved." };
+  }
+  const direct = /^(?:(?:please|can you|could you|would you|will you|i need you to|i want you to|i'd like you to)\s+)*(?:help me\s+)?(?:create|build|make|write|generate|produce|prepare|design|develop|implement|draft|compose|render|review|summari[sz]e|analy[sz]e|convert|fix|repair|update|improve|revise|package|export|test|animate|enhance|sharpen|upscale|clear up|clean up)\b\s+\S/.test(request);
+  const deliverable = /^(?:i\s+(?:need|want|would like)|i'd like)\s+(?:(?:an?|the|a new|new|some)\s+)?[^.!?]{0,100}\b(?:app|application|website|report|document|proposal|letter|manual|image|illustration|logo|poster|video|audio|song|script|source code|design|automation|runbook)\b/.test(request) && !/\b(?:help|advice|information|explanation|ideas|discuss)\b/.test(request);
+  if (direct || deliverable) return { create: true, reason: "creation_requested" };
+  return { create: false, reason: "creation_not_requested", response: "Describe the deliverable you want me to create, or ask about your existing work. I have not started a job or reserved credits." };
+};
+
+const TERMINAL_JOB_STATUSES = new Set(["succeeded", "failed", "needs_setup", "cancelled"]);
+const terminalPlanStatus = (jobStatus) => jobStatus === "succeeded" ? "completed" : "failed";
 
 export const inferCreationIntent = (requestText) => {
   const text = normalize(requestText).toLowerCase();
@@ -13,7 +40,7 @@ export const inferCreationIntent = (requestText) => {
   if (/\b(wireframe|design system|design tokens|interface design|brand guide|mockup)\b/.test(text)) return "design";
   if (/\b(website|web site|landing page|storefront|e-?commerce site)\b/.test(text)) return "website";
   if (/\b(app|application|mobile app|web app|software|piano app)\b/.test(text)) return "app";
-  if (/\b(video|mp4|film|animation|commercial clip)\b/.test(text)) return "video";
+  if (/\b(video|mp4|film|animation|animate|commercial clip)\b/.test(text)) return "video";
   if (/\b(audio|song|music track|mp3|voiceover|sound effect)\b/.test(text)) return "audio";
   if (/\b(document|report|proposal|letter|pdf|docx|manual)\b/.test(text)) return "document";
   if (/\b(image|photo|illustration|logo|poster|graphic)\b/.test(text)) return "image";
@@ -24,7 +51,7 @@ export const inferCreationIntent = (requestText) => {
 const titleFor = (requestText, intent) => {
   const text = normalize(requestText, 140);
   if (/piano/i.test(text) && intent === "app") return "Keyboard Piano";
-  if (/merch|store|shop|e-?commerce/i.test(text)) return "IABT Advertising Storefront";
+  if ((intent === "app" || intent === "website") && /merch|store|shop|e-?commerce/i.test(text)) return "IABT Advertising Storefront";
   if (intent === "audio") return "Original Audio Production";
   if (intent === "video") return "Video Production";
   if (intent === "document") return "JERICHO Document";
@@ -36,8 +63,13 @@ const titleFor = (requestText, intent) => {
   return text.slice(0, 90) || "IABT Creation";
 };
 
+const starterTitle = (request, starter) => {
+  const explicit = request.match(/\b(?:called|named|titled)\s+["']([^"']{1,80})["']/i);
+  return explicit?.[1] || ({ task_list: "My task list", piano: "Keyboard Piano", storefront: "Storefront demo" })[starter];
+};
+
 const durationSeconds = (requestText) => {
-  const seconds = normalize(requestText).match(/\b(\d{1,3})\s*(?:second|sec|s)\b/i);
+  const seconds = normalize(requestText).match(/\b(\d{1,3})\s*[-–]?\s*(?:seconds?|secs?|s)\b/i);
   if (seconds) return Math.max(3, Math.min(600, Number(seconds[1])));
   const clock = normalize(requestText).match(/\b(\d{1,2}):(\d{2})\b/);
   return clock ? Math.max(3, Math.min(600, Number(clock[1]) * 60 + Number(clock[2]))) : 30;
@@ -45,6 +77,14 @@ const durationSeconds = (requestText) => {
 
 const videoDurationSeconds = (requestText) =>
   durationSeconds(requestText) >= 8 ? 10 : 5;
+
+const videoAspectRatio = (requestText, source) => {
+  const explicit = requestText.match(/\b(9:16|16:9|1:1)\b/);
+  if (explicit) return explicit[1];
+  if (/\b(?:portrait|vertical)\b/i.test(requestText)) return "9:16";
+  if (/\b(?:landscape|horizontal|widescreen)\b/i.test(requestText)) return "16:9";
+  return source ? (source.height > source.width ? "9:16" : source.height === source.width ? "1:1" : "16:9") : "16:9";
+};
 
 const quoteFields = (plan) => [
   plan.id,
@@ -59,7 +99,12 @@ const quoteFields = (plan) => [
   plan.total_estimated_cost_cents,
   plan.currency,
   plan.pricing_version,
-  plan.quote_expires_at
+  plan.quote_expires_at,
+  plan.job_type,
+  plan.conversation_id || "",
+  plan.project_id || "",
+  plan.normalized_spec,
+  ...(plan.file_references ? [referenceBinding(plan.file_references)] : [])
 ];
 
 const signQuote = (config, plan) =>
@@ -73,8 +118,7 @@ export const verifyQuoteSignature = (config, plan) => {
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 };
 
-const capabilityFor = (intent, user, providers, requestText) => {
-  const readiness = providers?.readiness?.() || {};
+const capabilityFor = (intent, user, providers, requestText, readiness) => {
   if (intent === "app" || intent === "website") {
     return {
       id: "iabt-deterministic-interactive-v1",
@@ -195,7 +239,7 @@ const capabilityFor = (intent, user, providers, requestText) => {
   if (intent === "video") {
     const seconds = videoDurationSeconds(requestText);
     const unitCost = Number(providers?.config?.providers?.luma?.costPerFiveSecondsCents || 0);
-    const providerCost = unitCost > 0 ? Math.ceil(seconds / 5) * unitCost : 0;
+    const providerCost = unitCost > 0 ? estimateLumaVideoCostCents(unitCost, seconds) : 0;
     const technical = Boolean(readiness.luma?.configured);
     const ownerDemo = user.role === "admin" && technical;
     const ready = Boolean(readiness.luma?.commercial_ready || ownerDemo);
@@ -342,10 +386,15 @@ export const createCreationPlan = async ({
   repository,
   config,
   providers,
+  storage,
   user,
   requestText,
   conversationId = "",
-  projectId = ""
+  projectId = "",
+  fileIds = [],
+  revisionFileId = "",
+  automatic = false,
+  submissionId = ""
 }) => {
   const request = normalize(requestText);
   if (request.length < 3) {
@@ -354,8 +403,78 @@ export const createCreationPlan = async ({
       code: "request_too_short"
     });
   }
-  const intent = inferCreationIntent(request);
-  const capability = capabilityFor(intent, user, providers, request);
+  const ids = normalizeFileIds(fileIds);
+  const revisionId = revisionFileId ? normalizeFileIds([revisionFileId])[0] : "";
+  if (revisionId && ids.length) throw Object.assign(new Error("Choose the app to change without adding other files."), { status: 422, code: "revision_attachments_unsupported" });
+  // The requested output wins over its subject: a report about software is
+  // still a report. An actual "build an app" request remains unsupported here.
+  const explicitSourceReview = /^(?:(?:please|can you|could you|would you)\s+)?(?:(?:create|write|generate|produce|make|prepare)\s+(?:me\s+)?(?:(?:an?|the)\s+)?(?:(?:brief|short|detailed|source|file|review)\s+){0,3}(?:report|document|checklist|summary|review)\b|(?:review|summari[sz]e)\b)/i.test(request);
+  const intent = revisionId ? "app" : ids.length && explicitSourceReview ? "document" : inferCreationIntent(request);
+  assertCreationProfile({ config, user, intent });
+  const aiReady = orchestrationConfigured(config);
+  const starter = !revisionId && ["app", "website"].includes(intent) ? coreStarter(request) : null;
+  const namedStarterRequested = starter && /\b(?:starter|demo)\b/i.test(request);
+  if (["app", "website"].includes(intent) && !aiReady && !namedStarterRequested && !ids.length) {
+    throw Object.assign(new Error(revisionId ? "Changes to saved apps need custom app creation, which is not available right now. Your original app is unchanged. Nothing was charged." : CORE_STARTER_MESSAGE), { status: 409, code: "app_creation_unavailable" });
+  }
+  const registry = await capabilityRegistry({ config, providers, repository, storage, observe: false });
+  const capability = capabilityFor(intent, user, providers, request, registry.capabilities);
+  if (ids.length && intent === "image") {
+    throw Object.assign(new Error("Editing or clearing up an uploaded photo is not implemented yet. Your image is saved, but IABT cannot enhance it. You can request a video from one JPEG or PNG when the video provider is configured. No job or credit reservation was created."), {
+      status: 422, code: "source_intent_unsupported"
+    });
+  }
+  if (ids.length && !["document", "video"].includes(intent)) {
+    throw Object.assign(new Error("Attached files support text source-review documents or video from one JPEG/PNG image. Uploaded code is never executed or modified."), {
+      status: 422, code: "source_intent_unsupported"
+    });
+  }
+  const imageVideo = ids.length > 0 && intent === "video";
+  const sources = revisionId
+    ? [await readRevisionSource({ repository, storage, user, fileId: revisionId })]
+    : await (imageVideo ? readImageSources : readTextSources)({ repository, storage, user, fileIds: ids });
+  const references = sourceReferences(sources);
+  if (imageVideo && !capability.renderReady) {
+    throw Object.assign(new Error("Image-to-video is not ready on this server. An administrator must configure the Luma key, paid-media access, billing estimate and applicable usage approval. Your photo is saved; no video job or credit reservation was created."), { status: 409, code: "image_video_not_configured" });
+  }
+  if (references.length) {
+    for (const [entity, id] of [["AgentConversation", conversationId], ["Project", projectId]]) {
+      if (id && !await repository.getRecord(entity, id, { ...user, role: "user" })) {
+        throw Object.assign(new Error("The source-review context was not found in your account."), { status: 404, code: "source_context_not_found" });
+      }
+    }
+    if (imageVideo) {
+      capability.id = "luma-ray-3.2-image-video-v1";
+      capability.warnings = [...capability.warnings, "After quote approval, the verified photo is sent privately to Luma as the starting frame. Provider moderation and generation quality limits still apply; video generation does not restore missing detail in a blurry image."];
+    } else if (!revisionId) {
+      capability.id = "iabt-source-review-v1";
+      capability.deliverables = ["Source inventory and candidate requirement checklist in Markdown", "Microsoft Word-compatible DOCX source review", "Portable PDF source review"];
+      capability.warnings = ["Deterministic UTF-8 source review only: no general semantic analysis, uploaded-code execution, or repository changes."];
+    }
+  }
+  const orchestrated = !namedStarterRequested && (!references.length || revisionId) && ["app", "website", "document", "code", "design"].includes(intent) && aiReady;
+  if (orchestrated) {
+    capability.id = "openai-responses-orchestration-v1";
+    capability.provider = "openai";
+    capability.jobType = "creation.orchestrated";
+    capability.providerCostCents = config.orchestration.budgetCents;
+    capability.creditCost = Math.max(capability.creditCost, Math.ceil(capability.providerCostCents / 3));
+    capability.deliverables = intent === "document"
+      ? ["Request-specific Markdown document", "DOCX and PDF document exports", "Artifact verification results"]
+      : ["app", "website"].includes(intent)
+        ? ["Interactive app preview", "Standalone HTML and source ZIP"]
+        : ["Request-specific private source package", "Artifact verification results"];
+    capability.warnings = ["Try the result before publishing. Cloud accounts, shared data and payments are not connected. Provider cost is an estimate within the accepted quote."];
+    capability.steps = [
+      { order: 1, title: "Interpret objective", deliverable: "Server-owned bounded execution plan" },
+      { order: 2, title: "Create with approved tools", deliverable: "Private artifacts" },
+      { order: 3, title: "Verify durable delivery", deliverable: "Verification evidence" }
+    ];
+  } else if (starter) {
+    capability.deliverables = ["Interactive app preview", "Standalone HTML and source ZIP"];
+    capability.steps = [{ order: 1, title: "Create your starter", deliverable: "App preview" }, { order: 2, title: "Save your files", deliverable: "HTML and source ZIP" }];
+    capability.warnings = ["This creates the named starter, not a finished custom application. The storefront demo does not accept payments."];
+  }
   const now = new Date();
   const expires = new Date(now.getTime() + QUOTE_TTL_MS).toISOString();
   const total = capability.providerCostCents;
@@ -365,24 +484,41 @@ export const createCreationPlan = async ({
     (intent === "audio" || intent === "video" || intent === "image") &&
     capability.providerReady;
 
+  const submission = normalize(submissionId, 200);
+  const requestKey = submission ? createHash("sha256").update(JSON.stringify([user.id, conversationId, submission])).digest("hex") : "";
+  const recordId = requestKey ? [requestKey.slice(0, 8), requestKey.slice(8, 12), requestKey.slice(12, 16), requestKey.slice(16, 20), requestKey.slice(20, 32)].join("-") : undefined;
+  const requestFingerprint = createHash("sha256").update(JSON.stringify([request, conversationId, projectId, referenceBinding(references), ...(revisionId ? [revisionId] : [])])).digest("hex");
   let plan = await repository.createRecord("CreationPlan", user, {
     user_id: user.id,
     user_email: user.email,
     ...(conversationId ? { conversation_id: conversationId } : {}),
     ...(projectId ? { project_id: projectId } : {}),
     request_text: request,
-    title: titleFor(request, intent),
+    request_fingerprint: requestFingerprint,
+    title: imageVideo ? "Image-to-Video Production" : revisionId ? "Updated app" : references.length ? "JERICHO Source Review" : starter && !orchestrated ? starterTitle(request, starter) : titleFor(request, intent),
     intent,
     status: "quoted",
     capability_id: capability.id,
     provider: capability.provider,
     provider_ready: capability.providerReady,
     render_ready: capability.renderReady,
-    fallback_available: true,
-    assistant_summary:
-      "JERICHO inferred " + intent + " from your request and prepared an exact server-owned plan.",
+    fallback_available: !orchestrated || !["app", "website"].includes(intent),
+    assistant_summary: revisionId
+      ? "I'll make the change using your saved app and keep the original version."
+      : imageVideo
+      ? "JERICHO verified your saved image and prepared a paid video quote. Approving it permits sending that image to Luma to guide the video; no provider call has happened yet."
+      : references.length
+      ? "JERICHO verified " + references.length + " private text source(s) and will create a source inventory, candidate requirement checklist, and complete source evidence. Uploaded code will not run or change."
+      : starter && !orchestrated ? "I'll create the " + starter.replace(/_/g, "-") + " starter for you to try and download."
+      : ["app", "website"].includes(intent) ? "I'll create an app you can try here and download."
+      : "I'll prepare your saved files.",
+    ...(references.length ? { file_references: references } : {}),
     normalized_spec: {
       creative_prompt: request,
+      ...(["app", "website"].includes(intent) ? { app_output_contract: "self_contained_html_v1" } : {}),
+      ...(starter && !orchestrated ? { starter_id: starter } : {}),
+      ...(revisionId ? { revision_source: references[0] } : {}),
+      ...(orchestrated ? { orchestration_budget_cents: config.orchestration.budgetCents } : {}),
       ...(intent === "audio"
         ? {
             prompt: request,
@@ -405,7 +541,8 @@ export const createCreationPlan = async ({
         ? {
             prompt: request,
             model: "ray-3.2",
-            aspect_ratio: "16:9",
+            aspect_ratio: videoAspectRatio(request, imageVideo ? sources[0] : null),
+            ...(imageVideo ? { source_kind: "image" } : {}),
             resolution: "720p",
             duration_seconds: videoDurationSeconds(request),
             estimated_cost_cents: capability.providerCostCents
@@ -444,10 +581,27 @@ export const createCreationPlan = async ({
       available: account.available_credits,
       required: capability.creditCost
     }
-  });
-  plan = await repository.updateRecord("CreationPlan", plan.id, user, {
-    quote_signature: signQuote(config, plan)
-  });
+  }, { id: recordId });
+  if (plan.request_fingerprint !== requestFingerprint) {
+    throw Object.assign(new Error("This submission ID belongs to a different request or attachment version."), { status: 409, code: "idempotency_conflict" });
+  }
+  // Reused records retain their original quote and signature. Re-signing a
+  // mutated quote during replay could authorize different tools or file bytes.
+  const policy = creationPolicy(plan);
+  if (!plan.quote_signature) {
+    plan = await repository.updateRecord("CreationPlan", plan.id, user, {
+      quote_signature: signQuote(config, plan),
+      autonomy_policy: policy,
+      consent_summary: automatic && policy.automatic && creationRequestDisposition(request).create
+        ? `${plan.credit_cost} IABT credit(s) reserved automatically for your requested private workflow; captured after verified delivery. No external provider charge.`
+        : plan.consent_summary
+    });
+  }
+  if (automatic && policy.automatic && creationRequestDisposition(request).create) {
+    return executeCreationPlan({ repository, config, storage, user, automatic: true, body: {
+      plan_id: plan.id, pricing_version: plan.pricing_version, accepted_total_cents: plan.total_estimated_cost_cents
+    } });
+  }
   return {
     ok: true,
     plan,
@@ -475,17 +629,20 @@ export const createCreationPlan = async ({
 export const executeCreationPlan = async ({
   repository,
   config,
+  storage,
   user,
-  body
+  body,
+  automatic = false
 }) => {
-  const plan = await repository.getRecord("CreationPlan", normalize(body.plan_id, 200), user);
+  const plan = await repository.getRecord("CreationPlan", normalize(body.plan_id, 200), { ...user, role: "user" });
   if (!plan) {
     throw Object.assign(new Error("Creation plan was not found"), {
       status: 404,
       code: "plan_not_found"
     });
   }
-  if (body.approved !== true) {
+  const automaticAllowed = automatic === true && creationPolicy(plan).automatic && creationRequestDisposition(plan.request_text).create;
+  if (body.approved !== true && !automaticAllowed) {
     throw Object.assign(new Error("Explicit approval is required"), {
       status: 400,
       code: "explicit_approval_required"
@@ -504,7 +661,11 @@ export const executeCreationPlan = async ({
   if (plan.status !== "quoted") {
     if (plan.execution_job_id) {
       const existing = await repository.getJob(plan.execution_job_id, user);
-      return { ok: true, reused: true, job: existing };
+      if (!existing) throw Object.assign(new Error("The execution job could not be found"), { status: 409, code: "plan_job_missing" });
+      const reconciled = TERMINAL_JOB_STATUSES.has(existing.status) && plan.status !== terminalPlanStatus(existing.status)
+        ? await repository.updateRecord("CreationPlan", plan.id, user, { status: terminalPlanStatus(existing.status) })
+        : plan;
+      return { ok: true, reused: true, job: existing, plan: reconciled };
     }
     throw Object.assign(new Error("This plan is no longer eligible for execution"), {
       status: 409,
@@ -519,11 +680,25 @@ export const executeCreationPlan = async ({
     });
   }
 
-  const idempotencyKey =
-    normalize(body.idempotency_key, 200) ||
-    "plan:" + plan.id + ":" + plan.pricing_version;
+  assertCreationProfile({ config, user, intent: plan.intent });
+
+  if (plan.job_type === "provider.luma.video" && Number(config.providers?.luma?.costPerFiveSecondsCents) > 0 &&
+      estimateLumaVideoCostCents(config.providers.luma.costPerFiveSecondsCents, plan.normalized_spec.duration_seconds) > Number(plan.provider_cost_cents)) {
+    throw Object.assign(new Error("The video provider estimate has increased since this quote. Request a new plan before approving generation."), { status: 409, code: "quote_mismatch" });
+  }
+
+  if (plan.file_references?.length) {
+    await (plan.intent === "video" && plan.normalized_spec?.source_kind === "image" ? readImageSources : readTextSources)({
+      repository, storage, user,
+      fileIds: plan.file_references.map((reference) => reference.file_id),
+      expectedReferences: plan.file_references
+    });
+  }
+
+  // A browser-supplied key must never reserve the same plan twice.
+  const idempotencyKey = "plan:" + plan.id + ":" + plan.pricing_version;
   const ownerDemo = Boolean(plan.commercial_summary?.owner_demo_only);
-  const job = await repository.enqueueJob({
+  let job = await repository.enqueueJob({
     ownerId: user.id,
     jobType: plan.job_type,
     input: {
@@ -534,10 +709,13 @@ export const executeCreationPlan = async ({
       plan_id: plan.id,
       conversation_id: plan.conversation_id || "",
       project_id: plan.project_id || "",
+      ...(plan.file_references?.length ? { file_references: plan.file_references } : {}),
       render_ready: Boolean(plan.render_ready)
     },
     approval: {
       approved: true,
+      source: automaticAllowed ? "autonomy_policy" : "explicit_user",
+      policy_version: creationPolicy(plan).version,
       pricing_version: plan.pricing_version,
       approval_id: "plan:" + plan.id,
       approved_at: new Date().toISOString(),
@@ -548,11 +726,19 @@ export const executeCreationPlan = async ({
     creditAmount: Number(plan.credit_cost || 0),
     maxAttempts: 3
   });
-  const updated = await repository.updateRecord("CreationPlan", plan.id, user, {
-    status: "executing",
-    approved_at: new Date().toISOString(),
+  let updated = await repository.updateRecord("CreationPlan", plan.id, user, {
+    status: TERMINAL_JOB_STATUSES.has(job.status) ? terminalPlanStatus(job.status) : "executing",
+    approved_at: job.approval?.approved_at || new Date().toISOString(),
     execution_job_id: job.id
   });
+  // A worker may finish while enqueue/plan projection are interleaved. Read
+  // the authoritative job after the write so a late replay cannot roll back a
+  // completed plan to "executing" or advertise a second credit reservation.
+  job = await repository.getJob(job.id, user) || job;
+  const terminal = TERMINAL_JOB_STATUSES.has(job.status);
+  if (terminal && updated.status !== terminalPlanStatus(job.status)) {
+    updated = await repository.updateRecord("CreationPlan", plan.id, user, { status: terminalPlanStatus(job.status) });
+  }
   await repository.createRecord("ConsentGrant", user, {
     user_id: user.id,
     user_email: user.email,
@@ -563,12 +749,15 @@ export const executeCreationPlan = async ({
     accepted_total_cents: Number(plan.total_estimated_cost_cents || 0),
     currency: plan.currency,
     acceptance_text:
-      "User explicitly approved the exact server-owned quote and IABT credit reservation.",
+      automaticAllowed
+        ? "User requested this workflow; server policy authorized reversible private execution with no external provider cost and the disclosed IABT credit reservation."
+        : "User explicitly approved the exact server-owned quote and IABT credit reservation.",
+    authorization_source: automaticAllowed ? "autonomy_policy" : "explicit_user",
     accepted_at: new Date().toISOString()
-  });
+  }, { id: job.id });
   return {
     ok: true,
-    reused: false,
+    reused: terminal,
     plan: updated,
     job: {
       id: job.id,
@@ -579,15 +768,15 @@ export const executeCreationPlan = async ({
       mode: plan.render_ready ? "render" : "prepare",
       provider: plan.provider,
       status: job.status,
-      progress: 0,
-      stage: "Approval recorded; queued for production",
-      usage_state: job.credit_amount > 0 ? "reserved" : "none"
+      progress: job.status === "succeeded" ? 100 : 0,
+      stage: terminal ? (job.status === "succeeded" ? "Verified deliverables are ready" : "Job ended; review its recovery details") : automaticAllowed ? "Safe private workflow queued automatically" : "Approval recorded; queued for production",
+      usage_state: job.credit_amount > 0 ? terminal ? job.status === "succeeded" ? "captured" : "released" : "reserved" : "none"
     },
     billing: {
       card_charged: false,
-      credits_reserved: job.credit_amount > 0,
+      credits_reserved: !terminal && job.credit_amount > 0,
       credits_deducted: false,
-      action: "reserve_only"
+      action: terminal ? "already_finalized" : "reserve_only"
     }
   };
 };
