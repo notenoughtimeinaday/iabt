@@ -21,9 +21,18 @@ provider. Custom app creation and revisions require the configured Responses
 provider and the existing cost approval. Missing setup is an explicit error
 before charging, not a generic replacement app or a success claim.
 
-The implementation is undergoing full repository and browser acceptance.
-At the start of this work, both isolated services were Live at
-`67d904558a9d612b9ccc8fc95482d84ec4d45126`; this candidate is not yet deployed.
+The simplified interface is deployed to isolated staging and its named task-list
+flow passed hosted browser acceptance. The API is Live at
+`2030aff31bb5aa753da89b1e4e8b9bc4415d3ce0`; the frontend is Live at
+`fb46b55ad1468eccfff94107a6e2be74efe07071` (final display-only changes).
+Complete local verification passed 466 tests with no failures or skips; CI runs
+691, 692 and 693 passed. Preserve `67d904558a9d612b9ccc8fc95482d84ec4d45126`
+as the pre-simplification rollback point.
+
+Custom AI creation is still blocked: staging explicitly disables paid AI and
+orchestration, with zero budgets. A key entry exists but its validity/funding
+is unverified. Authorization for two bounded paid acceptance jobs is pending.
+This is a working starter flow, not public-launch or custom-AI certification.
 See [the simplified release scope](SIMPLIFIED_CORE_RELEASE.md) for acceptance
 evidence and the remaining public-release gates.
 

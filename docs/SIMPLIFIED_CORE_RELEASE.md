@@ -53,13 +53,32 @@ The identical source tree was published as `793dd2d1cc89240047345f36cb97ae32fbbe
 [CI run 691](https://github.com/notenoughtimeinaday/iabt/actions/runs/37908031471)
 passed. Mobile follow-up retains every header action and restores the cost
 disclosure below 480px; this is display-only. The Free plan no longer advertises
-paused paid-media creation. Deployed staging evidence is still pending. This
-document does not establish a public launch.
+paused paid-media creation. CI runs 692 and 693 also passed. The API is Live at
+`2030aff31bb5aa753da89b1e4e8b9bc4415d3ce0` (deploy `dep-db4arp3bc2fs73b7cpq0`);
+the frontend is Live at `fb46b55ad1468eccfff94107a6e2be74efe07071` (deploy
+`dep-db4b1qe7bikc73e5shvg`). The latter changes only preview ordering and the
+accessible mobile Account label. Both services keep auto-deploy disabled.
+
+Hosted acceptance created one task-list starter, saving HTML and ZIP to private
+storage and charging exactly one existing test credit (498 to 497). Adding and
+completing a task worked in the private preview. Downloads matched byte-for-byte
+(HTML SHA-256 `89f0c6d5d9c58666ade3c4dad03c050e1b961214784a0cc96d7be22d299cde63`).
+The saved result survived frontend deployment/reload without a second job or
+charge. HTML preview now precedes its ZIP; mobile Account has an accessible name.
+
+A custom revision quote failed explicitly because AI execution is disabled;
+the original app, draft and 497-credit balance were preserved. Render's existing
+paid-AI/orchestration switches are false and budgets zero. The existing OpenAI
+key entry is masked and unverified. No real custom generation is accepted.
+The owner has been asked to authorize up to $0.50 for one custom app and one
+revision, with at most six calls and 6,000 output tokens per call per job. The
+proposed budget is a per-job estimate, not a provider account hard cap. No paid
+settings changed. This document does not establish a public launch.
 
 ## Remaining public-release gates
 
-1. Verify the simplified flow on the exact deployed staging version, including
-   private file retrieval and owner isolation.
+1. Extend the accepted hosted starter/private-download flow with cross-account
+   owner-isolation checks and real-inbox registration/recovery acceptance.
 2. Accept real Responses app creation and a source-based revision within an
    approved budget. Try meaningful app interactions and preserve the original
    version. A ZIP that downloads is not proof of working software.
