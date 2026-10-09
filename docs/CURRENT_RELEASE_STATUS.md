@@ -1,6 +1,50 @@
-# Current IABT release status — October 6, 2026
+# Current IABT release status — October 9, 2026
 
-## Disabled pricing implementation candidate
+## October 9 checkout diagnosis and continuation
+
+The October 7 [release report](https://drive.google.com/file/d/1wphiGWaq7Z67vtLtfZkva8wDFFsNLEul/view)
+supersedes the historical October 6 predeployment notes below: c43a5a7 was
+deployed to both isolated services on October 6, new test offers were enabled,
+and migration 009 was completed. The new Builder Checkout then returned 503
+`billing_offer_verification_failed` before submitting a Checkout session.
+
+An October 9 read-only probe on the canonical isolated API confirmed that the
+first verification request, `GET /v1/account`, receives Stripe HTTP 403
+`invalid_request_error`. A second deployed probe classified Stripe's exact
+required-permissions explanation as `insufficient_permissions`. Account access
+is the confirmed blocker; price and coupon access have not yet been reached.
+Raw provider messages, credentials and account diagnostics are not stored here.
+Do not replace this result with the earlier pricing rollout audit.
+
+Runtime `95d2646f9aa90c4ada4470d4448afb0a05b97dbc` adds bounded operator-only
+diagnostics and a default-off, test-only, read-only startup probe. It preserves
+the generic customer 503 and all account/price checks. The isolated API was
+updated; the frontend remains c43a5a7. The probe was disabled after evidence
+collection. No Checkout, payment, subscription/price change, credential rotation,
+permission expansion, production update or paid infrastructure was performed.
+PR #4 remains draft and unmerged.
+
+[CI run 687](https://github.com/notenoughtimeinaday/iabt/actions/runs/37890682563)
+passed for branch candidate 95d2646, using PR test-merge
+`e726ce4b9c5e6808ba92cb98ee3777d220de7f18`, including disposable PostgreSQL.
+The preceding diagnostic candidate passed CI run 686 and local `npm run verify`;
+local database tests were skipped, not counted as hosted or database acceptance.
+Regression tests exercise account/price/coupon failures, timeouts, malformed
+responses, secret redaction, HTTP correlation, no Checkout writes and test-only
+probe activation. CI does not merge or deploy the PR.
+
+**Remaining correction:** inspect the existing restricted staging test key in
+the correct standalone Stripe Dashboard, grant only the read permission required
+by the account endpoint if authorized, then re-run the read-only Builder check.
+Do not broaden to an unrestricted key or disable account verification. The
+current connector exposes no request-log/key-permission operation and the cloud
+Stripe Dashboard requires sign-in. The provider's exact permission identifier
+was not captured; inspect its request log rather than guessing its UI label.
+Then validate selected price access and actual test Checkout separately. A
+passing account read alone will not establish new-offer purchase acceptance.
+See [the diagnostic procedure](PRICING_OFFER_ROLLOUT.md#read-only-verification-diagnosis-october-9).
+
+## Historical October 6 predeployment pricing checkpoint
 
 The draft branch now contains a test-only implementation of the approved future
 price/credit offer, including Starter schema support, versioned offer IDs,
