@@ -49,8 +49,12 @@ The exported app was served independently on localhost; a task survived reload
 using browser storage. The original preview artifact predates the short-title
 polish and is retained as evidence. No real AI custom generation is claimed.
 
-Deployed staging evidence is still pending. This document does not establish a
-public launch.
+The identical source tree was published as `793dd2d1cc89240047345f36cb97ae32fbbeb6d3`.
+[CI run 691](https://github.com/notenoughtimeinaday/iabt/actions/runs/37908031471)
+passed. Mobile follow-up retains every header action and restores the cost
+disclosure below 480px; this is display-only. The Free plan no longer advertises
+paused paid-media creation. Deployed staging evidence is still pending. This
+document does not establish a public launch.
 
 ## Remaining public-release gates
 

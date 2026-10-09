@@ -12,7 +12,7 @@ export const IABT_PLANS = [
       "1 cloud project",
       "10 starter IABT credits",
       "Live preview, JSON and standalone HTML",
-      "Eligible paid media with credits and approval",
+      "Private saved work and downloadable files",
     ],
   },
   {

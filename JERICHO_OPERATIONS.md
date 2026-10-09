@@ -1,6 +1,6 @@
 # JERICHO standalone operational support
 
-The owner's selected software benchmark is [TreeBay end-to-end release acceptance](docs/TREEBAY_ACCEPTANCE_BENCHMARK.md). It defines the future proof required for diagnosis, isolated repairs, Android builds and Play submission; it does not enable or certify those capabilities.
+The current public scope is [simplified core creation](docs/SIMPLIFIED_CORE_RELEASE.md). TreEbay is web-first on its existing Base44 backend for now; migration and app-store work are deferred. The historical [TreeBay end-to-end release benchmark](docs/TREEBAY_ACCEPTANCE_BENCHMARK.md) is preserved for later and does not enable or certify those capabilities.
 
 JERICHO reads implemented capability facts, current non-secret configuration and the signed-in account's jobs, incidents and learning records. It distinguishes available configuration, recorded delivery and live operational evidence. Read-only support questions such as “What can you do?”, “Check system health” and “Why did my audio fail?” do not submit paid generation or contact other people.
 

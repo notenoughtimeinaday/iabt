@@ -201,3 +201,31 @@
 .creator-shell.creator-simple * { scrollbar-color: #afc3b6 #f0f5f2; }
 .creator-shell.creator-simple *::-webkit-scrollbar-track { background: #f0f5f2; }
 .creator-shell.creator-simple *::-webkit-scrollbar-thumb { background: #afc3b6; border-color: #f0f5f2; }
+
+@media (max-width: 480px) {
+  .creator-shell.creator-simple .creator-topbar {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 12px 10px;
+    min-height: 60px;
+  }
+  .creator-shell.creator-simple .creator-menu-button { width: 32px; height: 32px; }
+  .creator-shell.creator-simple .creator-topbar-title { min-width: 0; gap: 6px; margin: 0; }
+  .creator-shell.creator-simple .creator-simple-mark { width: 24px; height: 24px; flex: 0 0 24px; }
+  .creator-shell.creator-simple .creator-topbar-title strong { font-size: 14px; line-height: 1.25; white-space: normal; }
+  .creator-shell.creator-simple .creator-topbar-actions { gap: 4px; min-width: 0; }
+  .creator-shell.creator-simple .creator-topbar-actions .creator-builder-link {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0;
+    justify-content: center;
+    flex: 0 0 32px;
+  }
+  .creator-shell.creator-simple .creator-credit-chip { padding-inline: 5px; gap: 4px; font-size: 10px; height: 32px; min-height: 32px; }
+  .creator-shell.creator-simple .creator-credit-chip svg { width: 12px; height: 12px; }
+  .creator-shell.creator-simple .creator-composer-foot { justify-content: space-between; }
+  .creator-shell.creator-simple .creator-composer-foot > span { display: block; }
+}
