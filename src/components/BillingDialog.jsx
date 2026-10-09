@@ -114,7 +114,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
         </DialogHeader>
 
         <div className="iabt-billing-trust">
-          <span><ShieldCheck /> Secure server-side checkout</span>
+          <span><ShieldCheck /> Secure checkout</span>
           <span><Sparkles /> {remainingCredits.toLocaleString()} IABT credits available</span>
           <span><Zap /> Change plans through Stripe</span>
         </div>
@@ -131,7 +131,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
 
         <div className="iabt-billing-economics">
           <div><Zap /></div>
-          <p><strong>Credits fund your creation work.</strong><span>Free accounts receive 10 starter credits. Paid plans add credits after each verified monthly payment. Supported private work can run automatically within your balance; paid-provider work requires quote approval. A saved file does not guarantee a finished, tested application.</span></p>
+          <p><strong>Credits let you create.</strong><span>Start with 10 free credits. Paid plans add more each month after payment. You see the cost before any work that needs approval.</span></p>
         </div>
 
         {billing.needsPaymentAttention && <p role="status" className="iabt-billing-note">Your subscription needs attention ({billing.subscriptionStatus.replaceAll("_", " ")}). Open billing management to review payment or resume your subscription.</p>}
@@ -228,7 +228,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
           <div>
             <span className="iabt-credit-pack-kicker">Flexible creation capacity</span>
             <strong>{billing.creditPackSize ? `${billing.creditPackSize.toLocaleString()} extra IABT credits` : "Extra IABT credit pack"}</strong>
-            <p>Purchased credits remain available until used. Review the price and taxes in Stripe before paying. Paid-provider work requires an accepted quote; supported private work can run automatically within your credit balance.</p>
+            <p>Purchased credits stay available until used. Review the total, including any taxes, before paying.</p>
           </div>
           <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan) || !billingReady}>
             {busyPlan === "credits" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

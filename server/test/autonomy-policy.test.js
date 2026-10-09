@@ -57,9 +57,13 @@ test("affirmative creation gate distinguishes tasks from conversation, explanati
   const f = await fixture(t);
   for (const text of ["Hello", "Thanks", "Okay", "Do not create anything yet", "Please don't build the app yet", "I want a report but do not create it yet", "I want a report but don't write it yet", "I need a design but do not begin until tomorrow", "I want a report but not right now", "Create a report but wait for my approval", "Just a quote for a new app", "Plan only", "Before creating anything, explain the requirements", "Tell me how to create an app", "Can you create apps?", "Create nothing"]) {
     assert.equal(creationRequestDisposition(text).create, false, text);
-    const result = await f.plan({ requestText: text, automatic: true });
-    assert.equal(result.billing.action, "quote_only", text);
-    assert.equal(result.billing.credits_reserved, false);
+    try {
+      const result = await f.plan({ requestText: text, automatic: true });
+      assert.equal(result.billing.action, "quote_only", text);
+      assert.equal(result.billing.credits_reserved, false);
+    } catch (error) {
+      assert.equal(error.code, "app_creation_unavailable", text);
+    }
   }
   assert.equal((await f.repository.listJobs(f.user)).length, 0);
   assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 20);
@@ -196,9 +200,11 @@ test("source review remains private, automatic, hash-bound and provider-free", a
 
 test("paid media and Responses orchestration require explicit quotes despite automatic objective mode", async (t) => {
   const f = await fixture(t, {
+    IABT_CREATION_PROFILE: "advanced",
     OPENAI_API_KEY: "paid-model-test", IABT_ENABLE_PAID_AI: "true", IABT_ENABLE_PAID_IMAGES: "true", IABT_OPENAI_IMAGE_COST_CENTS: "5", IABT_OPENAI_IMAGE_COMMERCIAL_APPROVED: "true",
     IABT_ENABLE_ORCHESTRATION: "true", IABT_ORCHESTRATION_BUDGET_ACCEPTED: "true", IABT_OPENAI_RESPONSE_COST_CENTS: "2", IABT_ORCHESTRATION_BUDGET_CENTS: "12"
   });
+  f.user.role = "admin";
   for (const requestText of ["Create an original image", "Create a document about gardens"]) {
     const result = await f.plan({ requestText, automatic: true });
     assert.equal(result.plan.autonomy_policy.automatic, false);

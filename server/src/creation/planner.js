@@ -4,6 +4,8 @@ import { readImageSources } from "../files/image-sources.js";
 import { estimateLumaVideoCostCents } from "../providers/luma-pricing.js";
 import { creationPolicy } from "../autonomy/policy.js";
 import { capabilityRegistry, orchestrationConfigured } from "../autonomy/capabilities.js";
+import { assertCreationProfile, coreStarter, CORE_STARTER_MESSAGE } from "./core-profile.js";
+import { readRevisionSource } from "./web-app.js";
 
 export const CREATION_PRICING_VERSION = "iabt-standalone-2026-10-09.1";
 const QUOTE_TTL_MS = 30 * 60 * 1000;
@@ -59,6 +61,11 @@ const titleFor = (requestText, intent) => {
   if (intent === "gcode_simulation") return "JERICHO G-code Simulation";
   if (intent === "automation") return "JERICHO Automation Runbook";
   return text.slice(0, 90) || "IABT Creation";
+};
+
+const starterTitle = (request, starter) => {
+  const explicit = request.match(/\b(?:called|named|titled)\s+["']([^"']{1,80})["']/i);
+  return explicit?.[1] || ({ task_list: "My task list", piano: "Keyboard Piano", storefront: "Storefront demo" })[starter];
 };
 
 const durationSeconds = (requestText) => {
@@ -385,6 +392,7 @@ export const createCreationPlan = async ({
   conversationId = "",
   projectId = "",
   fileIds = [],
+  revisionFileId = "",
   automatic = false,
   submissionId = ""
 }) => {
@@ -396,10 +404,19 @@ export const createCreationPlan = async ({
     });
   }
   const ids = normalizeFileIds(fileIds);
+  const revisionId = revisionFileId ? normalizeFileIds([revisionFileId])[0] : "";
+  if (revisionId && ids.length) throw Object.assign(new Error("Choose the app to change without adding other files."), { status: 422, code: "revision_attachments_unsupported" });
   // The requested output wins over its subject: a report about software is
   // still a report. An actual "build an app" request remains unsupported here.
   const explicitSourceReview = /^(?:(?:please|can you|could you|would you)\s+)?(?:(?:create|write|generate|produce|make|prepare)\s+(?:me\s+)?(?:(?:an?|the)\s+)?(?:(?:brief|short|detailed|source|file|review)\s+){0,3}(?:report|document|checklist|summary|review)\b|(?:review|summari[sz]e)\b)/i.test(request);
-  const intent = ids.length && explicitSourceReview ? "document" : inferCreationIntent(request);
+  const intent = revisionId ? "app" : ids.length && explicitSourceReview ? "document" : inferCreationIntent(request);
+  assertCreationProfile({ config, user, intent });
+  const aiReady = orchestrationConfigured(config);
+  const starter = !revisionId && ["app", "website"].includes(intent) ? coreStarter(request) : null;
+  const namedStarterRequested = starter && /\b(?:starter|demo)\b/i.test(request);
+  if (["app", "website"].includes(intent) && !aiReady && !namedStarterRequested && !ids.length) {
+    throw Object.assign(new Error(revisionId ? "Changes to saved apps need custom app creation, which is not available right now. Your original app is unchanged. Nothing was charged." : CORE_STARTER_MESSAGE), { status: 409, code: "app_creation_unavailable" });
+  }
   const registry = await capabilityRegistry({ config, providers, repository, storage, observe: false });
   const capability = capabilityFor(intent, user, providers, request, registry.capabilities);
   if (ids.length && intent === "image") {
@@ -413,7 +430,9 @@ export const createCreationPlan = async ({
     });
   }
   const imageVideo = ids.length > 0 && intent === "video";
-  const sources = await (imageVideo ? readImageSources : readTextSources)({ repository, storage, user, fileIds: ids });
+  const sources = revisionId
+    ? [await readRevisionSource({ repository, storage, user, fileId: revisionId })]
+    : await (imageVideo ? readImageSources : readTextSources)({ repository, storage, user, fileIds: ids });
   const references = sourceReferences(sources);
   if (imageVideo && !capability.renderReady) {
     throw Object.assign(new Error("Image-to-video is not ready on this server. An administrator must configure the Luma key, paid-media access, billing estimate and applicable usage approval. Your photo is saved; no video job or credit reservation was created."), { status: 409, code: "image_video_not_configured" });
@@ -427,13 +446,13 @@ export const createCreationPlan = async ({
     if (imageVideo) {
       capability.id = "luma-ray-3.2-image-video-v1";
       capability.warnings = [...capability.warnings, "After quote approval, the verified photo is sent privately to Luma as the starting frame. Provider moderation and generation quality limits still apply; video generation does not restore missing detail in a blurry image."];
-    } else {
+    } else if (!revisionId) {
       capability.id = "iabt-source-review-v1";
       capability.deliverables = ["Source inventory and candidate requirement checklist in Markdown", "Microsoft Word-compatible DOCX source review", "Portable PDF source review"];
       capability.warnings = ["Deterministic UTF-8 source review only: no general semantic analysis, uploaded-code execution, or repository changes."];
     }
   }
-  const orchestrated = !references.length && ["app", "website", "document", "code", "design"].includes(intent) && orchestrationConfigured(config);
+  const orchestrated = !namedStarterRequested && (!references.length || revisionId) && ["app", "website", "document", "code", "design"].includes(intent) && aiReady;
   if (orchestrated) {
     capability.id = "openai-responses-orchestration-v1";
     capability.provider = "openai";
@@ -442,13 +461,19 @@ export const createCreationPlan = async ({
     capability.creditCost = Math.max(capability.creditCost, Math.ceil(capability.providerCostCents / 3));
     capability.deliverables = intent === "document"
       ? ["Request-specific Markdown document", "DOCX and PDF document exports", "Artifact verification results"]
-      : ["Request-specific private source package", "Artifact verification results"];
-    capability.warnings = ["Provider costs are operator estimates, not a provider-enforced dollar cap. Calls and output tokens are bounded within the approved estimate. Generated code is packaged and checked but not executed in an isolated build environment. Template fallback is labeled if orchestration cannot finish."];
+      : ["app", "website"].includes(intent)
+        ? ["Interactive app preview", "Standalone HTML and source ZIP"]
+        : ["Request-specific private source package", "Artifact verification results"];
+    capability.warnings = ["Try the result before publishing. Cloud accounts, shared data and payments are not connected. Provider cost is an estimate within the accepted quote."];
     capability.steps = [
       { order: 1, title: "Interpret objective", deliverable: "Server-owned bounded execution plan" },
       { order: 2, title: "Create with approved tools", deliverable: "Private artifacts" },
       { order: 3, title: "Verify durable delivery", deliverable: "Verification evidence" }
     ];
+  } else if (starter) {
+    capability.deliverables = ["Interactive app preview", "Standalone HTML and source ZIP"];
+    capability.steps = [{ order: 1, title: "Create your starter", deliverable: "App preview" }, { order: 2, title: "Save your files", deliverable: "HTML and source ZIP" }];
+    capability.warnings = ["This creates the named starter, not a finished custom application. The storefront demo does not accept payments."];
   }
   const now = new Date();
   const expires = new Date(now.getTime() + QUOTE_TTL_MS).toISOString();
@@ -462,7 +487,7 @@ export const createCreationPlan = async ({
   const submission = normalize(submissionId, 200);
   const requestKey = submission ? createHash("sha256").update(JSON.stringify([user.id, conversationId, submission])).digest("hex") : "";
   const recordId = requestKey ? [requestKey.slice(0, 8), requestKey.slice(8, 12), requestKey.slice(12, 16), requestKey.slice(16, 20), requestKey.slice(20, 32)].join("-") : undefined;
-  const requestFingerprint = createHash("sha256").update(JSON.stringify([request, conversationId, projectId, referenceBinding(references)])).digest("hex");
+  const requestFingerprint = createHash("sha256").update(JSON.stringify([request, conversationId, projectId, referenceBinding(references), ...(revisionId ? [revisionId] : [])])).digest("hex");
   let plan = await repository.createRecord("CreationPlan", user, {
     user_id: user.id,
     user_email: user.email,
@@ -470,22 +495,29 @@ export const createCreationPlan = async ({
     ...(projectId ? { project_id: projectId } : {}),
     request_text: request,
     request_fingerprint: requestFingerprint,
-    title: imageVideo ? "Image-to-Video Production" : references.length ? "JERICHO Source Review" : titleFor(request, intent),
+    title: imageVideo ? "Image-to-Video Production" : revisionId ? "Updated app" : references.length ? "JERICHO Source Review" : starter && !orchestrated ? starterTitle(request, starter) : titleFor(request, intent),
     intent,
     status: "quoted",
     capability_id: capability.id,
     provider: capability.provider,
     provider_ready: capability.providerReady,
     render_ready: capability.renderReady,
-    fallback_available: true,
-    assistant_summary: imageVideo
+    fallback_available: !orchestrated || !["app", "website"].includes(intent),
+    assistant_summary: revisionId
+      ? "I'll make the change using your saved app and keep the original version."
+      : imageVideo
       ? "JERICHO verified your saved image and prepared a paid video quote. Approving it permits sending that image to Luma to guide the video; no provider call has happened yet."
       : references.length
       ? "JERICHO verified " + references.length + " private text source(s) and will create a source inventory, candidate requirement checklist, and complete source evidence. Uploaded code will not run or change."
-      : "JERICHO inferred " + intent + " from your request and prepared an exact server-owned plan.",
+      : starter && !orchestrated ? "I'll create the " + starter.replace(/_/g, "-") + " starter for you to try and download."
+      : ["app", "website"].includes(intent) ? "I'll create an app you can try here and download."
+      : "I'll prepare your saved files.",
     ...(references.length ? { file_references: references } : {}),
     normalized_spec: {
       creative_prompt: request,
+      ...(["app", "website"].includes(intent) ? { app_output_contract: "self_contained_html_v1" } : {}),
+      ...(starter && !orchestrated ? { starter_id: starter } : {}),
+      ...(revisionId ? { revision_source: references[0] } : {}),
       ...(orchestrated ? { orchestration_budget_cents: config.orchestration.budgetCents } : {}),
       ...(intent === "audio"
         ? {
@@ -647,6 +679,8 @@ export const executeCreationPlan = async ({
       code: "quote_expired"
     });
   }
+
+  assertCreationProfile({ config, user, intent: plan.intent });
 
   if (plan.job_type === "provider.luma.video" && Number(config.providers?.luma?.costPerFiveSecondsCents) > 0 &&
       estimateLumaVideoCostCents(config.providers.luma.costPerFiveSecondsCents, plan.normalized_spec.duration_seconds) > Number(plan.provider_cost_cents)) {

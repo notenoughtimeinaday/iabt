@@ -84,6 +84,7 @@ export const loadConfig = (env = process.env) => {
 
   return Object.freeze({
     environment,
+    creation: Object.freeze({ profile: env.IABT_CREATION_PROFILE === "advanced" ? "advanced" : "core" }),
     port: asPositiveInteger(env.PORT, 8787),
     publicOrigin: env.IABT_PUBLIC_ORIGIN || "http://localhost:5173",
     apiOrigin,

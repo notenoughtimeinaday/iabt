@@ -35,6 +35,7 @@ import { SUPPORTED_AGENT_NAMES, respondToSupportRequest, buildJerichoKnowledge }
 import { handleExchangeFunction } from "./functions/exchange.js";
 import { handleIntegrationFunction } from "./functions/integrations.js";
 import { fileIdsFromRequest } from "./files/text-sources.js";
+import { prepareWebAppHtml, readRevisionSource } from "./creation/web-app.js";
 import { capabilityRegistry } from "./autonomy/capabilities.js";
 import { loadLearningContext, recordUserCorrection, resolveUserCorrection, withdrawLesson, proposeImprovement, listImprovementProposals } from "./learning/service.js";
 import { ensureMaintenanceSchedule, readMaintenanceStatus, configureMaintenance } from "./maintenance/service.js";
@@ -529,7 +530,8 @@ const handleAgents = async ({
     const fileIds = fileIdsFromRequest(body);
     const submissionId = String(body.submission_id || "");
     if (submissionId.length > 200) throw new HttpError(400, "invalid_submission_id", "Submission identifier is too long");
-    const submissionFingerprint = createHash("sha256").update(JSON.stringify({ content: body.content, file_ids: [...fileIds].sort(), quote_only: body.quote_only === true })).digest("hex");
+    const revisionFileId = String(body.revision_file_id || "");
+    const submissionFingerprint = createHash("sha256").update(JSON.stringify({ content: body.content, file_ids: [...fileIds].sort(), quote_only: body.quote_only === true, ...(revisionFileId ? { revision_file_id: revisionFileId } : {}) })).digest("hex");
     const replay = (record) => {
       const previous = submissionId && record.messages?.find((message) => message.role === "user" && message.submission_id === submissionId);
       if (!previous) return null;
@@ -542,15 +544,15 @@ const handleAgents = async ({
     if (!sourceConversation) throw new HttpError(404, "conversation_not_found", "Conversation was not found");
     const previousResponse = replay(sourceConversation);
     if (previousResponse) return previousResponse;
-    const support = !fileIds.length && await respondToSupportRequest({ repository, user, providers, storage, config, requestText: body.content, agentName: sourceConversation.agent_name });
+    const support = !fileIds.length && !revisionFileId && await respondToSupportRequest({ repository, user, providers, storage, config, requestText: body.content, agentName: sourceConversation.agent_name });
     const disposition = creationRequestDisposition(body.content);
-    const conversationalResponse = support || (!disposition.create ? { content: disposition.response, metadata: { execution: "not_requested" } } : null);
+    const conversationalResponse = support || (!disposition.create && (!revisionFileId || disposition.reason === "execution_withheld") ? { content: disposition.response, metadata: { execution: "not_requested" } } : null);
     // Planning, storage reads and job enqueue run outside the conversation lock.
     // The PostgreSQL record adapter intentionally cannot start nested transactions.
     const attachedPlan = !conversationalResponse ? await createCreationPlan({
       repository, config, providers, storage, user,
       requestText: body.content, conversationId,
-      projectId: String(sourceConversation.metadata?.project_id || ""), fileIds,
+      projectId: String(sourceConversation.metadata?.project_id || ""), fileIds, revisionFileId,
       automatic: body.quote_only !== true,
       submissionId
     }) : null;
@@ -564,7 +566,7 @@ const handleAgents = async ({
       role: "user",
       content: String(body.content || ""),
       ...(submissionId ? { submission_id: submissionId, submission_fingerprint: submissionFingerprint } : {}),
-      ...(attachedPlan ? { file_ids: fileIds, file_references: attachedPlan.plan.file_references } : {}),
+      ...(attachedPlan ? { file_ids: fileIds, file_references: attachedPlan.plan.file_references, ...(revisionFileId ? { revision_file_id: revisionFileId } : {}) } : {}),
       created_date: new Date().toISOString()
     };
     let messages = [...(record.messages || []), message];
@@ -589,18 +591,8 @@ const handleAgents = async ({
         const assistant = {
           id: createId(),
           role: "assistant",
-          content:
-            "I inferred **" +
-            plan.intent +
-            "** from your request and prepared a server-owned plan.\n\n" +
-            plan.assistant_summary +
-            "\n\n**Deliverables**\n" +
-            plan.deliverables.map((item) => "- " + item).join("\n") +
-            "\n\n**Exact quote:** " +
-            plan.credit_cost +
-            " IABT credit" +
-            (plan.credit_cost === 1 ? "" : "s") +
-            (planned.job ? ". Execution status: " + planned.job.status + ". Track the job below for its saved result and verification evidence." : ". Review the approval panel before execution."),
+          content: plan.assistant_summary + " " + plan.credit_cost + " credit" + (plan.credit_cost === 1 ? "" : "s") +
+            (planned.job ? ". I'll save the result here when it is ready." : ". Review the cost and choose Create to begin."),
           created_date: new Date().toISOString(),
           metadata: { plan_id: plan.id, intent: plan.intent, ...(planned.job ? { job_id: planned.job.id, automatic_execution: true } : {}) }
         };
@@ -881,6 +873,11 @@ const handleFunction = async ({
   const { user } = await authenticate(req, repository);
   const name = decodeURIComponent(segments[2] || "");
 
+  if (name === "get-app-preview") {
+    const source = await readRevisionSource({ repository, storage, user, fileId: body.file_id });
+    return { status: 200, payload: { data: { file_id: source.reference.file_id, sha256: source.reference.sha256, mime_type: "text/html", content: prepareWebAppHtml(source.text) } } };
+  }
+
   if (name === "get-capability-registry") {
     return { status: 200, payload: { data: await capabilityRegistry({ repository, config, providers, storage }) } };
   }
@@ -921,7 +918,8 @@ const handleFunction = async ({
       requestText: body.request_text || body.request || body.prompt,
       conversationId: String(body.conversation_id || body.context?.conversation_id || ""),
       projectId: String(body.project_id || ""),
-      fileIds: fileIdsFromRequest(body)
+      fileIds: fileIdsFromRequest(body),
+      revisionFileId: String(body.revision_file_id || "")
     });
     return { status: 200, payload: planned };
   }

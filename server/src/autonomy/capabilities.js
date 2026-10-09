@@ -32,30 +32,33 @@ export async function capabilityRegistry({ config = {}, providers, repository, s
   const privateReady = databaseOk === false || storageOk === false ? false : databaseOk === true && storageOk === true ? true : null;
   const privateBlockers = [...(databaseOk !== true ? ["database_not_verified"] : []), ...(storageOk !== true ? ["storage_not_verified"] : [])];
   const local = (id, limitations) => entry(id, { operational: privateReady, blockers: privateBlockers, implementation: "deterministic", limitations });
+  const restricted = (capability) => ({ ...capability, public_creation_enabled: false, new_plan_access: config.creation?.profile === "advanced" ? "administrator_only" : "paused", adapter_preserved: true });
   return {
     version: "jericho-capabilities-v2", observed_at: new Date().toISOString(), base44_required: false,
+    creation_profile: config.creation?.profile || "core",
+    public_creation_focus: ["app", "website", "document"],
     capabilities: {
-      app: local("app", ["Known interactive templates; arbitrary application completion is not established."]),
+      app: local("app", ["Named starters or approved self-contained HTML generation and owned-source revision. Preview/export do not prove runtime correctness."]),
       website: local("website", ["Private preview and source packaging; no public deployment."]),
       document: local("document", ["Template documents or bounded text source reviews without paid orchestration."]),
       code: local("code", ["Scaffold packaging; no isolated execution of generated code."]),
       design: local("design", ["Specification and SVG board; no external design-account changes."]),
-      automation: local("automation", ["Disabled runbooks only; no external execution."]),
-      gcode_simulation: local("gcode_simulation", ["Simulation preparation only; no machine motion."]),
+      automation: restricted(local("automation", ["Disabled runbooks only; no external execution."])),
+      gcode_simulation: restricted(local("gcode_simulation", ["Simulation preparation only; no machine motion."])),
       source_review: local("source_review", ["UTF-8 text/code only; ownership and content hashes verified."]),
       internal_planner: entry("internal_planner", { operational: true, implementation: "server_rules" }),
       openai_responses: remote("openai_responses", { ...readiness.openai, configured: orchestrationConfigured(config), blocker_codes: [...(readiness.openai?.blocker_codes || []), ...(!orchestrationConfigured(config) ? ["orchestration_budget_not_enabled"] : [])] }, "internal_planner", config.orchestration?.budgetCents || null),
-      openai_image: remote("openai_image", readiness.openai_image, "design", config.providers?.openai?.imageCostCents || null),
+      openai_image: restricted(remote("openai_image", readiness.openai_image, "design", config.providers?.openai?.imageCostCents || null)),
       neon_postgres: entry("neon_postgres", { configured: Boolean(config.databaseUrl), operational: config.databaseUrl ? databaseOk : null, risk: "read", blockers: databaseOk === true ? [] : ["database_not_verified"] }),
       private_storage: entry("private_storage", { configured: Boolean(storage), operational: storageOk, risk: "read", blockers: storageOk === true ? [] : ["storage_not_verified"] }),
       render: remote("render", { configured: Boolean(config.infrastructure?.render) }, null, null, "publication"),
       github: remote("github", { configured: Boolean(config.infrastructure?.github) }, null, null, "publication"),
       resend: remote("resend", { configured: config.email?.provider === "resend" && Boolean(config.email?.apiKey && config.email?.from) }, null, null, "external_communication"),
       stripe: remote("stripe", readiness.stripe),
-      elevenlabs: remote("elevenlabs", readiness.elevenlabs, "document"),
-      luma: remote("luma", readiness.luma, "document"),
+      elevenlabs: restricted(remote("elevenlabs", readiness.elevenlabs, "document")),
+      luma: restricted(remote("luma", readiness.luma, "document")),
       image_to_video: {
-        ...remote("image_to_video", readiness.luma),
+        ...restricted(remote("image_to_video", readiness.luma)),
         input_formats: ["image/jpeg", "image/png"],
         max_input_files: 1,
         max_input_bytes: 5 * 1024 * 1024,

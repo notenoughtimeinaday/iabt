@@ -4,7 +4,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { base44, platformRuntime } from "@/api/iabtClient";
 import { storedFileId, resolveFileDownload, openFileDownload } from "@/lib/stored-files";
 import { createAttachmentTracker } from "@/lib/upload-batch";
-import { createStudioSubmissionGate, mediaReadiness, normalizeCreationCapabilities, refreshAcceptedSubmission, studioErrorMessage as errorMessage } from "@/lib/studio-state";
+import { createStudioSubmissionGate, refreshAcceptedSubmission, studioErrorMessage as errorMessage } from "@/lib/studio-state";
+import "@/studio-simple.css";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
@@ -17,12 +18,9 @@ import {
   AppWindow,
   Bot,
   Box,
-  Braces,
   Check,
   CheckCircle2,
   ChevronRight,
-  CircleDollarSign,
-  Clock3,
   Code2,
   Download,
   FileText,
@@ -33,18 +31,13 @@ import {
   Menu,
   MessageSquarePlus,
   Music2,
-  Network,
-  Palette,
   Paperclip,
-  PlugZap,
   Play,
   RefreshCw,
   Rocket,
-  ShieldCheck,
   Sparkles,
   Trash2,
   Video,
-  Workflow,
   X,
 } from "lucide-react";
 
@@ -52,66 +45,22 @@ const CREATOR_AGENT = "iabt_creator";
 const ACTIVE_JOB_STATUSES = new Set(["queued", "running", "waiting_provider"]);
 const ATTACHED_ASSET_LIMIT = 12;
 const MODE_OPTIONS = [
-  { id: "app", label: "App", icon: AppWindow, description: "Product flows, data and working screens" },
-  { id: "website", label: "Website", icon: Globe2, description: "Marketable sites with a clear purpose" },
-  { id: "image", label: "Image", icon: ImageIcon, description: "Original visual concepts and assets" },
-  { id: "video", label: "Video", icon: Video, description: "MP4 rendering when active · preproduction otherwise" },
-  { id: "audio", label: "Audio", icon: Music2, description: "Playable MP3 when active · preproduction otherwise" },
-  { id: "document", label: "Document", icon: FileText, description: "Detailed, useful written deliverables" },
-  { id: "code", label: "Code", icon: Code2, description: "Source packages with testing still required" },
-  { id: "design", label: "Design", icon: Palette, description: "Professional visual systems and specifications" },
-  { id: "gcode", label: "G-code", icon: Box, description: "Simulation plans and machine setup checklists" },
-  { id: "automation", label: "Automation", icon: Workflow, description: "Runbooks for review before activation" },
+  { id: "app", label: "App", icon: AppWindow },
+  { id: "website", label: "Website", icon: Globe2 },
+  { id: "document", label: "Document", icon: FileText },
+  { id: "code", label: "Code", icon: Code2 },
 ];
 
 const AUTO_STARTERS = [
-  "Build a playable piano app that maps computer keyboard keys to piano notes and verifies the sound controls.",
-  "Create an advertising website for IABT with a merchandise store and customer-owned Stripe checkout.",
-  "Create the finished deliverable described in my prompt, choose the correct format, and verify it before delivery.",
+  { label: "Try a task-list app", prompt: "Create a task-list starter with add, complete, delete, search and filter controls." },
+  { label: "Create a website", prompt: "Create a website for my local business with services, opening hours and contact details. Use clear placeholders for details I have not provided." },
+  { label: "Review my code", prompt: "Review the source files I attach and create a report of the requirements, gaps and next steps. Distinguish code inspection from tests actually run." },
 ];
 
-const STARTERS = {
-  app: [
-    "Create a complete customer portal for a home-services company.",
-    "Build an inventory and checkout app that works with a barcode scanner.",
-  ],
-  website: [
-    "Create a premium launch website for a new financial wellness service.",
-    "Design a conversion-focused website for a local professional business.",
-  ],
-  image: [
-    "Create a polished campaign image for a modern technology brand.",
-    "Design an original hero image with a premium editorial feel.",
-  ],
-  video: [
-    "Create a 20-second cinematic product launch video from nothing.",
-    "Produce a short social video with a clear story, shots, sound and captions.",
-  ],
-  audio: [
-    "Create a warm 30-second audio ad with a full script and production direction.",
-    "Develop an original podcast intro package and voice direction.",
-  ],
-  document: [
-    "Create a detailed business plan that is ready to present.",
-    "Write a polished operating guide with checklists and examples.",
-  ],
-  code: [
-    "Create a production-ready implementation for my software idea.",
-    "Design and build a reliable integration with tests and documentation.",
-  ],
-  design: [
-    "Create a complete visual identity direction for a premium new brand.",
-    "Design a professional dashboard system with responsive states.",
-  ],
-  gcode: [
-    "Plan a safe CNC sign project and produce reviewable G-code deliverables.",
-    "Create a 3D-print preparation package from my product description.",
-  ],
-  automation: [
-    "Create an automation that turns new customer requests into tracked work.",
-    "Design a reliable content workflow with approvals and delivery checks.",
-  ],
-};
+const REVISION_STARTERS = [
+  { label: "Improve this app", prompt: "Review this app and suggest the most useful next improvement. Explain any missing source files or access before making changes." },
+  { label: "Simplify the screens", prompt: "Simplify this app's screens while preserving its main features and saved work." },
+];
 
 function contentText(content) {
   if (typeof content === "string") return content;
@@ -124,7 +73,7 @@ function titleFromConversation(conversation) {
   const first = conversation?.messages?.find((message) => message.role === "user");
   const text = contentText(first?.content).trim();
   if (text) return text.length > 46 ? text.slice(0, 46) + "…" : text;
-  return "New project conversation";
+  return "Untitled work";
 }
 
 function formatDate(value) {
@@ -215,7 +164,7 @@ function StatusPill({ status }) {
   return <span className={"creator-status status-" + String(status || "draft")}>{readable(status || "draft")}</span>;
 }
 
-function ArtifactPreview({ artifact }) {
+function ArtifactPreview({ artifact, previewLoading, previewError, onPreview }) {
   const url = artifact.file_url;
   const kind = String(artifact.kind || "").toLowerCase();
   const mime = String(artifact.mime_type || "").toLowerCase();
@@ -229,31 +178,38 @@ function ArtifactPreview({ artifact }) {
   if (url && (kind === "audio" || mime.startsWith("audio/"))) {
     return <audio className="creator-artifact-audio" src={url} controls preload="metadata" />;
   }
-  if (mime === "text/html" && artifact.content) {
+  if (mime.split(";")[0] === "text/html") {
+    if (!artifact.content) return <div className="creator-preview-state" role={previewError ? "alert" : "status"}>
+      {previewLoading ? <><Loader2 className="animate-spin" /><span>Opening your app preview…</span></> : <>
+        <p>{previewError || "Open this version of your app."}</p>
+        <button type="button" onClick={onPreview}><RefreshCw /> {previewError ? "Retry preview" : "Preview app"}</button>
+      </>}
+    </div>;
     return (
       <iframe
         className="creator-artifact-app-preview"
         title={artifact.name || "Interactive application preview"}
         srcDoc={artifact.content}
-        sandbox="allow-scripts"
+        // Local form handlers need allow-forms; the preview CSP blocks form
+        // navigation, and omitting allow-same-origin keeps its origin isolated.
+        sandbox="allow-scripts allow-forms"
+        referrerPolicy="no-referrer"
       />
     );
   }
   if (artifact.content) {
-    return <pre className="creator-artifact-content">{artifact.content}</pre>;
+    return <details className="creator-file-preview"><summary>Read file</summary><pre className="creator-artifact-content">{artifact.content}</pre></details>;
   }
-  return (
-    <div className="creator-artifact-placeholder">
-      <FileText />
-      <span>The deliverable is ready in its original format.</span>
-    </div>
-  );
+  return null;
 }
 
 export default function Studio() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedConversationId = (searchParams.get("conversation") || "").slice(0, 200);
+  const startNew = searchParams.get("new") === "1";
+  const incomingPrompt = (searchParams.get("prompt") || "").slice(0, 12000);
   const targetProjectId = (searchParams.get("project_id") || "").trim().slice(0, 200);
   const setupProvider = (searchParams.get("setup") || "").trim().slice(0, 80);
   const reduceMotion = useReducedMotion();
@@ -265,9 +221,10 @@ export default function Studio() {
   const attachmentTracker = useRef(createAttachmentTracker());
   const switchingConversationRef = useRef(false);
   const submissionRef = useRef(createStudioSubmissionGate());
-  const [prompt, setPrompt] = useState(() => setupProvider
+  const [prompt, setPrompt] = useState(() => incomingPrompt || (setupProvider
     ? "Help me connect " + readable(setupProvider) + " to my IABT projects. Use the safest authorization method, keep credentials out of prompts and generated code, explain who pays provider costs, and verify the connection before using it."
-    : "");
+    : ""));
+  const [revisionArtifact, setRevisionArtifact] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [conversation, setConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -282,9 +239,8 @@ export default function Studio() {
     setAttachmentStatus(snapshot);
   }, []);
   const [artifactAccessUrls, setArtifactAccessUrls] = useState({});
-  const [capabilities, setCapabilities] = useState([]);
-  const [connectionFabric, setConnectionFabric] = useState(null);
-  const [_autonomyProfile, setAutonomyProfile] = useState(null);
+  const [appPreviews, setAppPreviews] = useState({});
+  const appPreviewsRef = useRef({});
   const [entitlement, setEntitlement] = useState(null);
   const [monthlyUsed, setMonthlyUsed] = useState(0);
   const [standaloneCredits, setStandaloneCredits] = useState(null);
@@ -300,14 +256,16 @@ export default function Studio() {
   const [loadError, setLoadError] = useState("");
   const [systemAlert, setSystemAlert] = useState(null);
   const [softwareAdvancementEnabled, setSoftwareAdvancementEnabled] = useState(true);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const menuButtonRef = useRef(null);
 
   const activePlan = plans[0] || null;
   const currentIntent = targetProjectId ? "app" : activePlan?.intent || "auto";
   const currentMode = MODE_OPTIONS.find((item) => item.id === currentIntent) || {
     id: "auto",
-    label: "Automatic routing",
+    label: "Your work",
     icon: Sparkles,
-    description: "JERICHO infers the correct output and tools from your objective.",
   };
   const visibleMessages = messages.filter((message) => !message.hidden && message.role !== "system");
   const latestMessage = visibleMessages.at(-1);
@@ -325,6 +283,31 @@ export default function Studio() {
   const remainingCredits = standaloneCredits ?? (Math.max(0, monthlyLimit - monthlyUsed) + bonusCredits);
   const assetScopeId = assetScopeFor(conversation?.id, targetProjectId);
   const attachedAssets = platformRuntime.backend === "standalone" ? assets : assets.slice(0, ATTACHED_ASSET_LIMIT);
+  const hasResults = Boolean(activePlan || jobs.length || artifacts.length);
+  const recentMessages = historyOpen ? visibleMessages : visibleMessages.slice(-2);
+
+  const loadAppPreview = useCallback(async (artifact, retry = false) => {
+    const existing = appPreviewsRef.current[artifact.id];
+    if (existing?.loading || existing?.content || (existing?.error && !retry)) return;
+    const publish = (value) => {
+      appPreviewsRef.current = { ...appPreviewsRef.current, [artifact.id]: value };
+      setAppPreviews((current) => ({ ...current, [artifact.id]: value }));
+    };
+    publish({ loading: true });
+    try {
+      const response = await base44.functions.invoke("get-app-preview", { file_id: storedFileId(artifact) || artifact.id });
+      const payload = response?.data || response;
+      if (!payload?.content || payload.mime_type !== "text/html") throw new Error("This app preview is not available yet.");
+      publish({ content: payload.content });
+    } catch (error) {
+      publish({ error: errorMessage(error, "The preview could not open. Your saved file is still available to download.") });
+    }
+  }, []);
+
+  useEffect(() => {
+    const newestApp = artifacts.find((artifact) => String(artifact.mime_type || "").split(";")[0] === "text/html");
+    if (newestApp && platformRuntime.backend === "standalone") void loadAppPreview(newestApp);
+  }, [artifacts, loadAppPreview]);
 
   const resolvePrivateArtifacts = useCallback(async (rows = []) => {
     const refreshBefore = Date.now() + 45_000;
@@ -418,6 +401,9 @@ export default function Studio() {
       attachmentTracker.current.switchScope(assetScopeFor(conversationId, targetProjectId), conversationId);
       publishAttachments();
       setConversation(full);
+      setRevisionArtifact(null);
+      setHistoryOpen(false);
+      setAttachmentsOpen(false);
       followLatestRef.current = true;
       setSubmissionError("");
       setSubmissionNotice("");
@@ -456,6 +442,9 @@ export default function Studio() {
       attachmentTracker.current.switchScope(assetScopeFor(created.id, targetProjectId), created.id, targetProjectId ? null : []);
       publishAttachments();
       setConversation(created);
+      setRevisionArtifact(null);
+      setHistoryOpen(false);
+      setAttachmentsOpen(false);
       followLatestRef.current = true;
       setSubmissionError("");
       setSubmissionNotice("");
@@ -484,31 +473,21 @@ export default function Studio() {
       setLoading(true);
       setLoadError("");
       try {
-        const [conversationRows, capabilityResponse, fabricResponse, autonomyResponse, entitlementResponse] = await Promise.all([
+        const [conversationRows, entitlementResponse] = await Promise.all([
           listCreatorConversations(),
-          base44.functions.invoke("get-creation-capabilities", {}).catch(() => null),
-          base44.functions.invoke("get-connection-fabric", {}).catch(() => null),
-          base44.functions.invoke("get-autonomy-profile", {}).catch(() => null),
           base44.functions.invoke("get-account-entitlement", {}).catch(() => null),
         ]);
         if (!active) return;
 
         setConversations(conversationRows || []);
-        const capabilityPayload = capabilityResponse?.data || capabilityResponse;
-        setCapabilities(normalizeCreationCapabilities(capabilityPayload?.capabilities));
-
-        const fabricPayload = fabricResponse?.data || fabricResponse;
-        setConnectionFabric(fabricPayload?.fabric || null);
-
-        const autonomyPayload = autonomyResponse?.data || autonomyResponse;
-        setAutonomyProfile(autonomyPayload || null);
-
         const entitlementPayload = entitlementResponse?.data || entitlementResponse;
         if (platformRuntime.backend === "standalone" && Number.isFinite(entitlementPayload?.credits_remaining)) setStandaloneCredits(entitlementPayload.credits_remaining);
         setEntitlement(entitlementPayload?.entitlement || entitlementPayload || null);
         setMonthlyUsed(Number(entitlementPayload?.usage?.monthly_used || 0));
 
-        if (conversationRows?.[0]?.id) {
+        if (requestedConversationId) {
+          await openConversation(requestedConversationId);
+        } else if (!incomingPrompt && !startNew && conversationRows?.[0]?.id) {
           await openConversation(conversationRows[0].id, true);
         } else {
           const created = await base44.agents.createConversation({
@@ -527,7 +506,7 @@ export default function Studio() {
           if (targetProjectId) await loadResources(created.id);
         }
       } catch (error) {
-        if (active) setLoadError(errorMessage(error, "The AI project operator could not start."));
+        if (active) setLoadError(errorMessage(error, "Your workspace could not open."));
       } finally {
         if (active) setLoading(false);
       }
@@ -593,6 +572,26 @@ export default function Studio() {
   }, [submissionError]);
 
   useEffect(() => {
+    if (!incomingPrompt && !startNew) return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("prompt");
+    next.delete("new");
+    setSearchParams(next, { replace: true });
+  }, [incomingPrompt, startNew, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setMobileNavOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
     setQuoteAccepted(false);
   }, [activePlan?.id]);
 
@@ -630,7 +629,8 @@ export default function Studio() {
       if (platformRuntime.backend === "standalone" && uploadedAssets.some((asset) => !asset.file_id)) {
         throw new Error("An older attachment has no permanent file reference. Remove it from this conversation and upload it again before requesting a file report.");
       }
-      const submissionKey = JSON.stringify([target.id, request, uploadedAssets.map((asset) => asset.file_id), softwareAdvancementEnabled]);
+      const revisionFileId = revisionArtifact ? storedFileId(revisionArtifact) || revisionArtifact.id : null;
+      const submissionKey = JSON.stringify([target.id, request, uploadedAssets.map((asset) => asset.file_id), softwareAdvancementEnabled, revisionFileId]);
       const submissionId = submissionRef.current.idFor(submissionKey);
 
       const sent = await base44.agents.addMessage(target, {
@@ -640,6 +640,7 @@ export default function Studio() {
           file_ids: uploadedAssets.map((asset) => asset.file_id),
           submission_id: submissionId,
           quote_only: !softwareAdvancementEnabled,
+          ...(revisionFileId ? { revision_file_id: revisionFileId } : {}),
         } : {}),
         custom_context: [{
           type: "iabt_creation_request",
@@ -658,8 +659,9 @@ export default function Studio() {
       submissionRef.current.accepted();
       setMessages((current) => [...current.filter((item) => item.id !== sent.id), sent]);
       setPrompt("");
+      setRevisionArtifact(null);
       setQuoteAccepted(false);
-      setSubmissionNotice("Request received. Read JERICHO’s response in the conversation for the result or next step.");
+      setSubmissionNotice("Request received. Your progress and files will appear here.");
       // A list refresh failure must not turn an accepted request into a send failure.
       void refreshAcceptedSubmission(refreshConversationList, () => loadResources(target.id, true));
     } catch (error) {
@@ -737,14 +739,14 @@ export default function Studio() {
     return (
       <div className="creator-loading">
         <div className="creator-loading-mark"><Sparkles /></div>
-        <strong>Opening your AI project operator</strong>
-        <span>Loading your project context, capabilities and deliverables…</span>
+        <strong>Opening your workspace</strong>
+        <span>Loading your saved work…</span>
       </div>
     );
   }
 
   return (
-    <div className="creator-shell">
+    <div className={"creator-shell creator-simple" + (hasResults ? " has-results" : "")}>
       <AnimatePresence>
         {mobileNavOpen && (
           <motion.button
@@ -759,24 +761,24 @@ export default function Studio() {
         )}
       </AnimatePresence>
 
-      <aside className={"creator-sidebar " + (mobileNavOpen ? "is-open" : "")}>
+      {mobileNavOpen && <aside className="creator-sidebar is-open" aria-label="Saved work">
         <div className="creator-sidebar-brand">
           <Link to="/" className="creator-brand-link" aria-label="Return to IABT home">
             <img className="creator-brand-mark" src="/iabt-mark.svg" alt="" />
-            <span><strong>Intelligent Application Building Tool</strong><small>IABT · JERICHO Studio</small></span>
+            <span><strong>IABT</strong><small>Your workspace</small></span>
           </Link>
-          <button type="button" className="creator-mobile-close" onClick={() => setMobileNavOpen(false)} aria-label="Close menu">
+          <button type="button" className="creator-mobile-close" onClick={() => { setMobileNavOpen(false); menuButtonRef.current?.focus(); }} aria-label="Close saved work">
             <X />
           </button>
         </div>
 
-        <Button className="creator-new-button" onClick={createConversation} disabled={conversationBusy || attachmentStatus.busy || attachmentStatus.pending > 0}>
+        <Button className="creator-new-button" onClick={createConversation} disabled={sending || conversationBusy || attachmentStatus.busy || attachmentStatus.pending > 0}>
           {conversationBusy ? <Loader2 className="animate-spin" /> : <MessageSquarePlus />}
-          New project conversation
+          New creation
         </Button>
 
         <div className="creator-history-heading">
-          <span>Project conversations</span>
+          <span>Recent work</span>
           <small>{conversations.length}</small>
         </div>
         <nav className="creator-history" aria-label="Creation conversations">
@@ -786,6 +788,7 @@ export default function Studio() {
               type="button"
               className={item.id === conversation?.id ? "is-active" : ""}
               onClick={() => openConversation(item.id)}
+              disabled={sending || conversationBusy}
             >
               <Bot />
               <span>
@@ -804,30 +807,28 @@ export default function Studio() {
             <Gauge />
             <span>
               <strong>{remainingCredits} credits available</strong>
-              <small>{readable(entitlement?.plan || "free")} plan · IABT credits fund private creation</small>
+              <small>{readable(entitlement?.plan || "free")} plan</small>
             </span>
           </div>
-          <Link to="/deliverables"><Download /> Deliverable library</Link>
-          <Link to="/integrations"><PlugZap /> Integrations</Link>
-          <Link to="/"><ArrowLeft /> App projects</Link>
+          <Link to="/deliverables"><Download /> Saved files</Link>
+          <Link to="/"><ArrowLeft /> Your apps</Link>
+          {platformRuntime.backend === "standalone" && <details className="creator-optional-details"><summary>Help &amp; activity</summary><JerichoLearningPanel /><JerichoMaintenancePanel /></details>}
         </div>
-      </aside>
+      </aside>}
 
       <main className="creator-main">
         <header className="creator-topbar">
-          <button type="button" className="creator-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Open conversation menu">
+          <button ref={menuButtonRef} type="button" className="creator-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Open saved work" aria-expanded={mobileNavOpen}>
             <Menu />
           </button>
           <div className="creator-topbar-title">
-            <span className="creator-live-dot" />
-            <div><strong>JERICHO Studio</strong><small>{targetProjectId ? "Revision mode · updates stay with this app project." : "One objective from idea through verified delivery."}</small></div>
+            <img className="creator-simple-mark" src="/iabt-mark.svg" alt="" />
+            <div><strong>IABT · Jericho</strong></div>
           </div>
           <div className="creator-topbar-actions">
             <span className="creator-credit-chip"><Sparkles /> {remainingCredits} credits</span>
-            <Link to="/deliverables" className="creator-builder-link"><Download /> Deliverables</Link>
-            <Link to="/integrations" className="creator-builder-link"><PlugZap /> Integrations</Link>
-            <Link to="/" className="creator-builder-link"><AppWindow /> App projects</Link>
-            <span className="creator-user">{user?.full_name || user?.email || "Creator"}</span>
+            <Link to="/deliverables" className="creator-builder-link"><Download /> Saved files</Link>
+            <button type="button" className="creator-builder-link" onClick={createConversation} disabled={sending || conversationBusy || attachmentStatus.busy || attachmentStatus.pending > 0}><MessageSquarePlus /> New</button>
           </div>
         </header>
 
@@ -836,7 +837,7 @@ export default function Studio() {
             <div className="creator-system-alert" role="status">
               <Gauge />
               <div>
-                <strong>IABT diagnosed this failure</strong>
+                <strong>This creation needs attention</strong>
                 <p>{systemAlert.message}</p>
                 <small>
                   {readable(systemAlert.category)} · Recovery: {readable(systemAlert.recovery)}
@@ -850,7 +851,7 @@ export default function Studio() {
           {loadError ? (
             <div className="creator-error-state">
               <Bot />
-              <h1>Your AI project operator needs attention</h1>
+              <h1>Your workspace could not open</h1>
               <p>{loadError}</p>
               <Button onClick={() => window.location.reload()}><RefreshCw /> Try again</Button>
             </div>
@@ -861,43 +862,13 @@ export default function Studio() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35 }}
             >
-              <div className="creator-welcome-orb"><img src="/iabt-mark.svg" alt="" /></div>
-              <p className="creator-kicker">Intelligent Application Building Tool · JERICHO Studio</p>
-              <h1>Tell JERICHO what you want to create.</h1>
-              <p className="creator-welcome-copy">
-                Describe your deliverable and attach supported files. Eligible private work can run automatically
-                using IABT credits, with no external provider charge. Paid services and consequential actions need your approval.
-              </p>
-              <div className="creator-fabric-strip">
-                <Network />
-                <div>
-                  <strong>Available tools and connection options</strong>
-                  <span>
-                    {connectionFabric?.adapters?.length
-                      ? connectionFabric.adapters.length + " registered options · availability depends on setup"
-                      : "Check integrations for available providers and setup"}
-                  </span>
-                  <small>
-                    Creation uses the tools available in Studio. Connection settings do not establish a working integration.
-                  </small>
-                </div>
-              </div>
-
-              <div className="creator-auto-route">
-                <span><Sparkles /></span>
-                <div>
-                  <strong>Automatic output and tool selection</strong>
-                  <p>Describe the outcome in plain language. JERICHO identifies whether it needs an app, website, document, media file, code, automation, or a combination.</p>
-                  <small>{capabilities.length ? capabilities.length + " creation options" : "Creation availability not confirmed"} · review each plan’s availability and limits</small>
-                </div>
-                <Link to="/integrations"><PlugZap /> Integrations</Link>
-              </div>
-
+              <p className="creator-kicker">Your idea, taking shape</p>
+              <h1>{targetProjectId ? "What would you like to change?" : "What would you like to build?"}</h1>
+              <p className="creator-welcome-copy">Describe your app or website. See the result here, make changes, and keep your files.</p>
               <div className="creator-starters">
-                <span>Or start with an example</span>
-                {(targetProjectId ? STARTERS.app : AUTO_STARTERS).map((starter) => (
-                  <button type="button" key={starter} onClick={() => { setPrompt(starter); promptRef.current?.focus(); }}>
-                    {starter}<ArrowUpRight />
+                {(targetProjectId ? REVISION_STARTERS : AUTO_STARTERS).map((starter) => (
+                  <button type="button" key={starter.label} onClick={() => { setPrompt(starter.prompt); promptRef.current?.focus(); }}>
+                    {starter.label}<ArrowUpRight />
                   </button>
                 ))}
               </div>
@@ -915,11 +886,11 @@ export default function Studio() {
               }}
             >
               <div className="creator-thread-intro">
-                <span className="creator-thread-mode">{React.createElement(currentMode.icon)} {activePlan ? readable(activePlan.intent) : "Automatic routing"}</span>
-                <button type="button" onClick={createConversation}><MessageSquarePlus /> Start another</button>
+                <span className="creator-thread-mode">{React.createElement(currentMode.icon)} {currentMode.label}</span>
+                {visibleMessages.length > 2 && <button type="button" onClick={() => { followLatestRef.current = false; setHistoryOpen(!historyOpen); }}>{historyOpen ? "Show latest" : "Earlier conversation (" + (visibleMessages.length - 2) + ")"}</button>}
               </div>
               <AnimatePresence initial={false}>
-                {visibleMessages.map((message, index) => (
+                {recentMessages.map((message, index) => (
                   <motion.article
                     key={message.id || message.created_date || index}
                     className={"creator-message creator-message-" + message.role}
@@ -933,18 +904,18 @@ export default function Studio() {
                     <div className="creator-message-body">
                       <div className="creator-message-meta">
                         <strong>{message.role === "user" ? "You" : "JERICHO"}</strong>
-                        <span>{formatDate(message.created_date)}</span>
+
                       </div>
                       <p>{contentText(message.content)}</p>
                       {message.tool_calls?.length > 0 && (
-                        <div className="creator-tool-list">
+                        <details className="creator-optional-details"><summary>Activity details</summary><div className="creator-tool-list">
                           {message.tool_calls.map((tool, toolIndex) => (
                             <span key={tool.id || toolIndex} className={"tool-" + tool.status}>
                               {tool.status === "running" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />}
                               {readable(tool.name)} · {readable(tool.status)}
                             </span>
                           ))}
-                        </div>
+                        </div></details>
                       )}
                     </div>
                   </motion.article>
@@ -953,20 +924,53 @@ export default function Studio() {
               {assistantWorking && (
                 <div className="creator-message creator-message-assistant creator-thinking">
                   <div className="creator-message-avatar"><Sparkles /></div>
-                  <div><span /><span /><span /><small>JERICHO is planning the work and checking connected capabilities…</small></div>
+                  <div><span /><span /><span /><small>Working on your request…</small></div>
                 </div>
               )}
             </div>
           )}
 
           <form className="creator-composer creator-composer-auto" onSubmit={sendPrompt}>
-            <div className="creator-composer-mode">
-              <span><Sparkles /> {targetProjectId ? "Revision mode" : "Automatic routing"}</span>
-              <Link to="/integrations"><PlugZap /> Connections</Link>
-            </div>
 
+
+            {revisionArtifact && <div className="creator-revision-note">
+              <AppWindow /><span>Changing <strong>{revisionArtifact.name}</strong></span>
+              <button type="button" disabled={sending} onClick={() => setRevisionArtifact(null)} aria-label="Stop changing this app"><X /></button>
+            </div>}
+            <textarea
+              ref={promptRef}
+              aria-label={revisionArtifact ? "Changes to your app" : "What would you like to build?"}
+              aria-describedby={submissionError ? "creator-submission-error" : "creator-submission-status"}
+              value={prompt}
+              readOnly={sending}
+              onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void sendPrompt(event);
+              }}
+              placeholder={revisionArtifact || targetProjectId ? "Describe the change you want…" : "Describe your idea…"}
+              rows={4}
+              maxLength={12000}
+            />
+            {submissionError && (
+              <div id="creator-submission-error" className="creator-submission-error" role="alert" tabIndex={-1} ref={submissionErrorRef}>
+                <strong>Your request needs attention</strong>
+                <p>{submissionError}</p>
+                <small>Your draft is kept here. Review the conversation before retrying if the connection was interrupted.</small>
+              </div>
+            )}
+            <p id="creator-submission-status" className="creator-submission-status" role="status">
+              {sending ? "Sending your request and checking the next step…" : submissionNotice ||
+                (conversationBusy ? "Loading your conversation…" : attachmentTracker.current.planningError())}
+            </p>
+            <div className="creator-composer-tools">
+              <button type="button" className="creator-attach-toggle" onClick={() => setAttachmentsOpen(!attachmentsOpen)} aria-expanded={attachmentsOpen}>
+                <Paperclip /> {assets.length ? assets.length + " attached" : "Attach files"}
+              </button>
+              <label className="creator-quote-first"><input type="checkbox" disabled={sending} checked={!softwareAdvancementEnabled}
+                onChange={(event) => setSoftwareAdvancementEnabled(!event.target.checked)} /> Show a quote first</label>
+            </div>
             {assetScopeId && (
-              <div className="creator-upload-dock">
+              <div className="creator-upload-dock" hidden={!attachmentsOpen && !attachmentStatus.pending && !attachmentStatus.error}>
                 <div className="creator-upload-head">
                   <span><Paperclip /> Reference files</span>
                   <small>{assets.length ? assets.length + " attached" : "Attach files before planning"}</small>
@@ -978,7 +982,7 @@ export default function Studio() {
                   assetScope={targetProjectId ? "project" : "conversation"}
                   compact
                   description={platformRuntime.backend === "standalone"
-                    ? "Reports read UTF-8 text, Markdown, JSON, CSV and source code: up to 12 files, 128 KiB each, 256 KiB total. Photo animation accepts one JPEG or PNG up to 5 MiB; describe the motion in your objective. Other formats are storage only."
+                    ? "For source review: text, Markdown, CSV, JSON or code. Up to 12 files, 128 KB each, 256 KB total. Other formats are saved only."
                     : undefined}
                   disabled={sending || conversationBusy || !attachmentStatus.ready || Boolean(attachmentStatus.error)}
                   onStatusChange={(status) => {
@@ -988,10 +992,7 @@ export default function Studio() {
                     if (attachmentTracker.current.mergeUploaded(assetScopeId, conversation?.id || "", uploaded)) publishAttachments();
                   }}
                 />
-                <p className="creator-media-readiness">
-                  Image generation: {mediaReadiness(capabilities, "image")}. Video rendering: {mediaReadiness(capabilities, "video")}.<br />
-                  Image retouching is not available in Studio.
-                </p>
+
                 {!attachmentStatus.ready && attachmentStatus.loading && !attachmentStatus.error && (
                   <p role="status">Loading your saved attachments before creating…</p>
                 )}
@@ -1007,7 +1008,7 @@ export default function Studio() {
                         <div key={asset.id} className="creator-upload-item">
                           <Icon />
                           <span><strong title={asset.name}>{asset.name}</strong><small>{readable(asset.kind || "file")} · {formatFileSize(asset.size_bytes)}</small></span>
-                          <button type="button" onClick={() => removeAttachedAsset(asset)} aria-label={"Remove " + asset.name}>
+                          <button type="button" disabled={sending} onClick={() => removeAttachedAsset(asset)} aria-label={"Remove " + asset.name}>
                             <Trash2 />
                           </button>
                         </div>
@@ -1019,71 +1020,87 @@ export default function Studio() {
               </div>
             )}
 
-            <label className={"creator-advancement-toggle " + (softwareAdvancementEnabled ? "is-on" : "") }>
-              <input
-                type="checkbox"
-                disabled={sending}
-                checked={softwareAdvancementEnabled}
-                onChange={(event) => setSoftwareAdvancementEnabled(event.target.checked)}
-              />
-              <span><ShieldCheck /></span>
-              <strong>Automatically create safe private work</strong>
-              <small>Reserve existing IABT credits for reversible work with no external provider cost. Spending and consequential actions require approval. Turn off for a quote first.</small>
-            </label>
-
-            <textarea
-              ref={promptRef}
-              aria-label="Objective"
-              aria-describedby={submissionError ? "creator-submission-error" : "creator-submission-status"}
-              value={prompt}
-              readOnly={sending}
-              onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void sendPrompt(event);
-              }}
-              placeholder={targetProjectId
-                ? "Describe what should change. JERICHO will inspect this project before planning the revision…"
-                : "What do you want to accomplish? Describe the outcome; JERICHO will choose the correct format and tools…"}
-              rows={4}
-              maxLength={12000}
-            />
-            {submissionError && (
-              <div id="creator-submission-error" className="creator-submission-error" role="alert" tabIndex={-1} ref={submissionErrorRef}>
-                <strong>Your request needs attention</strong>
-                <p>{submissionError}</p>
-                <small>Your draft is kept here. Review the conversation before retrying if the connection was interrupted.</small>
-              </div>
-            )}
-            <p id="creator-submission-status" className="creator-submission-status" role="status">
-              {sending ? "Sending your request and checking the next step…" : submissionNotice ||
-                (conversationBusy ? "Loading your conversation…" : attachmentTracker.current.planningError())}
-            </p>
             <div className="creator-composer-foot">
-              <span><Check /> Private creation uses IABT credits. External costs require your approval.</span>
+              <span>Uses IABT credits. Extra charges need your approval.</span>
               <Button type="submit" disabled={!prompt.trim() || sending || conversationBusy || Boolean(attachmentTracker.current.planningError())}>
                 {sending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                {sending ? "Sending request…" : softwareAdvancementEnabled ? "Create outcome" : "Plan objective"}
+                {sending ? "Sending…" : !softwareAdvancementEnabled ? "Get quote" : revisionArtifact ? "Make changes" : "Create"}
               </Button>
             </div>
           </form>
         </section>
       </main>
 
-      <aside className="creator-deliverables">
+      {hasResults && <aside className="creator-deliverables" aria-label="Your results">
         <div className="creator-panel-heading">
-          <div><span>Production desk</span><small>Plan, quote and deliverables</small></div>
-          <button type="button" onClick={() => conversation?.id && loadResources(conversation.id)} aria-label="Refresh production desk">
+          <div><span>Your results</span><small>Saved in your workspace</small></div>
+          <button type="button" onClick={() => conversation?.id && loadResources(conversation.id)} aria-label="Refresh your results">
             <RefreshCw />
           </button>
         </div>
 
-        {!activePlan ? (
-          <div className="creator-plan-empty">
-            <div><Braces /></div>
-            <strong>Your plan will appear here</strong>
-            <p>JERICHO starts eligible private work automatically and shows a quote when your approval is required.</p>
-          </div>
-        ) : (
+        {artifacts.length > 0 && (
+          <section className="creator-artifacts">
+            <div className="creator-section-title"><span>Deliverables</span><small>{artifacts.length} ready</small></div>
+            {artifacts.map((artifact) => {
+              const cachedAccess = artifactAccessUrls[artifact.id];
+              const signedUrlReady = cachedAccess?.url &&
+                new Date(cachedAccess.expires_at || 0).getTime() > Date.now();
+              const deliveryUrl = artifact.file_url || (signedUrlReady ? cachedAccess.url : "");
+              const previewArtifact = {
+                name: artifact.name,
+                kind: artifact.kind,
+                mime_type: artifact.mime_type,
+                content: platformRuntime.backend === "standalone" && String(artifact.mime_type || "").split(";")[0] === "text/html"
+                  ? appPreviews[artifact.id]?.content : artifact.content,
+                file_url: deliveryUrl,
+              };
+              const isApp = String(artifact.mime_type || "").split(";")[0] === "text/html";
+              return (
+                <article key={artifact.id} className={isApp ? "creator-app-result" : ""}>
+                  <div className="creator-artifact-info">
+                    <strong>{artifact.name}</strong>
+                    {artifact.metadata?.rendered === false && (
+                      <p className="creator-artifact-limitation">
+                        This is a {artifact.metadata?.requested_kind || "media"} preproduction document. No playable media file was rendered.
+                      </p>
+                    )}
+                    <div>
+                      {platformRuntime.backend === "standalone" && storedFileId(artifact) && (
+                        <button type="button" onClick={() => downloadStoredArtifact(artifact)}>
+                          <Download /> Download
+                        </button>
+                      )}
+                      {deliveryUrl && platformRuntime.backend !== "standalone" && (
+                        <a href={deliveryUrl} target="_blank" rel="noreferrer">
+                          <ArrowUpRight /> Open
+                        </a>
+                      )}
+                      {deliveryUrl && platformRuntime.backend !== "standalone" && (
+                        <a href={deliveryUrl} download>
+                          <Download /> Download
+                        </a>
+                      )}
+                      {!deliveryUrl && artifact.content && (
+                        <button type="button" onClick={() => downloadInlineArtifact(artifact)}>
+                          <Download /> Download file
+                        </button>
+                      )}
+                      {isApp && platformRuntime.backend === "standalone" && <button type="button" disabled={sending || conversationBusy} onClick={() => { setRevisionArtifact(artifact); setPrompt(""); promptRef.current?.focus(); promptRef.current?.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" }); }}><Sparkles /> Make a change</button>}
+                      {artifact.project_id && (
+                        <Link to={"/projects/" + artifact.project_id}><AppWindow /> Open app project</Link>
+                      )}
+                    </div>
+                  </div>
+                  <ArtifactPreview artifact={previewArtifact} previewLoading={appPreviews[artifact.id]?.loading}
+                    previewError={appPreviews[artifact.id]?.error} onPreview={() => loadAppPreview(artifact, true)} />
+                  {isApp && <p className="creator-preview-note">Preview — review and test your app before publishing.</p>}
+                </article>
+              );
+            })}
+          </section>
+        )}
+        {activePlan && <details className="creator-result-plan" open={activePlan.status === "quoted"}><summary>{activePlan.status === "quoted" ? "Review before creating" : "Creation details"}</summary>
           <motion.section
             className="creator-plan-card"
             initial={reduceMotion ? false : { opacity: 0, x: 10 }}
@@ -1096,30 +1113,7 @@ export default function Studio() {
             </div>
             {activePlan.assistant_summary && <p className="creator-plan-summary">{activePlan.assistant_summary}</p>}
 
-            <div className="creator-readiness">
-              <div>
-                <span className={activePlan.provider_ready ? "is-ready" : "is-limited"}>
-                  {activePlan.provider_ready ? <CheckCircle2 /> : <Clock3 />}
-                </span>
-                <p><strong>{activePlan.provider_ready ? (activePlan.render_ready ? "IABT production route configured" : "IABT preproduction configured") : "Production setup required"}</strong><small>IABT managed production</small></p>
-              </div>
-              <div>
-                <span className={activePlan.render_ready ? "is-ready" : "is-prepare"}>{activePlan.render_ready ? <Play /> : <FileText />}</span>
-                <p><strong>{activePlan.render_ready ? "Output route configured" : "Preparation package available"}</strong><small>{activePlan.render_ready ? "Configured tools still need successful execution and file checks" : "Produces planning documents for review"}</small></p>
-              </div>
-            </div>
-
-            {(!activePlan.provider_ready || !activePlan.render_ready) && (
-              <div className="creator-honesty-note">
-                {activePlan.intent === "video" ? <Video /> : <FileText />}
-                <p>
-                  <strong>{activePlan.intent === "video" ? "VIDEO RENDERER OFFLINE — no MP4 will be created." : "No pretend output."}</strong>
-                  {activePlan.intent === "video"
-                    ? " JERICHO will create the complete renderer-ready production package only. IABT's managed renderer and paid-media gates must be active before final video rendering becomes available."
-                    : <> Approval creates the complete preproduction package described below. It will not label a script, storyboard or plan as a finished {activePlan.intent}.</>}
-                </p>
-              </div>
-            )}
+            {(!activePlan.provider_ready || !activePlan.render_ready) && <div className="creator-honesty-note"><FileText /><p><strong>Preparation only.</strong> This creates the documents listed below, not a finished {activePlan.intent}.</p></div>}
 
             {activePlan.clarification_questions?.length > 0 && (
               <div className="creator-question-note">
@@ -1130,14 +1124,7 @@ export default function Studio() {
             )}
 
             <div className="creator-quote creator-quote-compact">
-              <div className="creator-quote-title">
-                <span><CircleDollarSign /> {activePlan.autonomy_policy?.automatic && activePlan.status !== "quoted" ? "Execution summary" : "Approval summary"}</span>
-              </div>
-              <dl>
-                <div className="is-total"><dt>IABT cost</dt><dd>{Number(activePlan.credit_cost || 0)} credits</dd></div>
-                <div><dt>Provider route</dt><dd>{activePlan.provider_ready ? "Configured" : "Setup required"}</dd></div>
-                <div><dt>Charge rule</dt><dd>Capture after verified delivery</dd></div>
-              </dl>
+              <dl><div className="is-total"><dt>Cost</dt><dd>{Number(activePlan.credit_cost || 0)} credits</dd></div></dl>
               <p>{activePlan.consent_summary || "No billing action occurs until you explicitly approve."}</p>
               {activePlan.status === "quoted" && <small className={quoteExpired ? "is-expired" : ""}>
                 {quoteExpired ? "This quote has expired. Ask JERICHO to refresh it." : "Valid until " + formatDate(activePlan.quote_expires_at)}
@@ -1146,7 +1133,7 @@ export default function Studio() {
 
             <details className="creator-plan-details">
               <summary>
-                <span>Plan details</span>
+                <span>Details &amp; limitations</span>
                 <small>{activePlan.steps?.length || 0} steps · {activePlan.deliverables?.length || 0} deliverables</small>
               </summary>
               {activePlan.steps?.length > 0 && (
@@ -1184,7 +1171,7 @@ export default function Studio() {
               <div className="creator-approval">
                 <label>
                   <input type="checkbox" checked={quoteAccepted} onChange={(event) => setQuoteAccepted(event.target.checked)} />
-                  <span>I approve this plan and the exact IABT credit quote shown above.</span>
+                  <span>I approve this work for {Number(activePlan.credit_cost || 0)} IABT credits.</span>
                 </label>
                 <Button
                   onClick={approvePlan}
@@ -1192,32 +1179,32 @@ export default function Studio() {
                 >
                   {approvalBusy ? <Loader2 className="animate-spin" /> : executionMode === "render" ? <Play /> : <FileText />}
                   {executionMode === "render"
-                    ? "Approve & produce"
+                    ? "Approve & create"
                     : activePlan.intent === "video"
                       ? "Approve video brief only"
                       : activePlan.intent === "audio"
                         ? "Approve audio brief only"
-                        : "Approve preparation package"}
+                        : "Approve documents only"}
                 </Button>
                 <small>{activePlan.intent === "video" && !activePlan.render_ready ? "This approval cannot generate an MP4 while the renderer is offline." : "Approval is recorded. IABT will not silently start a paid tool."}</small>
               </div>
             )}
           </motion.section>
-        )}
+        </details>}
 
         {jobs.length > 0 && (
           <section className="creator-jobs">
-            <div className="creator-section-title"><span>Production progress</span><small>{jobs.length} job{jobs.length === 1 ? "" : "s"}</small></div>
+            <div className="creator-section-title"><span>Progress</span></div>
             {jobs.map((job) => (
               <article key={job.id}>
                 <div className="creator-job-head">
                   <span className="creator-job-kind">{job.intent === "video" ? <Video /> : job.mode === "prepare" ? <FileText /> : <Rocket />}</span>
-                  <div><strong>{job.stage || readable(job.intent) + " production"}</strong><small>IABT managed production · {readable(job.mode)}</small></div>
+                  <div><strong>{job.status === "succeeded" ? "Files saved" : job.status === "failed" ? "Could not finish" : job.status === "queued" ? "Waiting to start" : "Creating your result"}</strong></div>
                   <StatusPill status={job.status} />
                 </div>
-                <div className="creator-progress-track"><span style={{ width: Math.max(3, Number(job.progress || 0)) + "%" }} /></div>
+                {ACTIVE_JOB_STATUSES.has(job.status) && <div className="creator-progress-track"><span style={{ width: Math.min(100, Math.max(3, Number(job.progress || 0))) + "%" }} /></div>}
                 <div className="creator-job-foot">
-                  <span>{Number(job.progress || 0)}% complete</span>
+                  <span>{ACTIVE_JOB_STATUSES.has(job.status) ? Number(job.progress || 0) + "% complete" : ""}</span>
                   {job.intent === "video" && ACTIVE_JOB_STATUSES.has(job.status) && (
                     <button type="button" onClick={() => refreshJob(job)} disabled={refreshingJobs[job.id]}>
                       <RefreshCw className={refreshingJobs[job.id] ? "animate-spin" : ""} /> Refresh render
@@ -1225,73 +1212,14 @@ export default function Studio() {
                   )}
                 </div>
                 {job.error_message && <p className="creator-job-error">{job.error_message}</p>}
+                <details className="creator-optional-details"><summary>Activity details</summary><p>{job.stage || readable(job.intent)}</p></details>
               </article>
             ))}
           </section>
         )}
 
-        {platformRuntime.backend === "standalone" && <JerichoLearningPanel />}
-        {platformRuntime.backend === "standalone" && <JerichoMaintenancePanel />}
 
-        {artifacts.length > 0 && (
-          <section className="creator-artifacts">
-            <div className="creator-section-title"><span>Deliverables</span><small>{artifacts.length} ready</small></div>
-            {artifacts.map((artifact) => {
-              const cachedAccess = artifactAccessUrls[artifact.id];
-              const signedUrlReady = cachedAccess?.url &&
-                new Date(cachedAccess.expires_at || 0).getTime() > Date.now();
-              const deliveryUrl = artifact.file_url || (signedUrlReady ? cachedAccess.url : "");
-              const previewArtifact = {
-                name: artifact.name,
-                kind: artifact.kind,
-                mime_type: artifact.mime_type,
-                content: artifact.content,
-                file_url: deliveryUrl,
-              };
-              return (
-                <article key={artifact.id}>
-                  <ArtifactPreview artifact={previewArtifact} />
-                  <div className="creator-artifact-info">
-                    <span className="creator-artifact-kind">{readable(artifact.kind)}</span>
-                    <strong>{artifact.name}</strong>
-                    <small>{artifact.mime_type || "IABT deliverable"} · Private saved file</small>
-                    {artifact.metadata?.rendered === false && (
-                      <p className="creator-artifact-limitation">
-                        This is a {artifact.metadata?.requested_kind || "media"} preproduction document. No playable media file was rendered.
-                      </p>
-                    )}
-                    <div>
-                      {platformRuntime.backend === "standalone" && storedFileId(artifact) && (
-                        <button type="button" onClick={() => downloadStoredArtifact(artifact)}>
-                          <Download /> Download
-                        </button>
-                      )}
-                      {deliveryUrl && platformRuntime.backend !== "standalone" && (
-                        <a href={deliveryUrl} target="_blank" rel="noreferrer">
-                          <ArrowUpRight /> Open
-                        </a>
-                      )}
-                      {deliveryUrl && platformRuntime.backend !== "standalone" && (
-                        <a href={deliveryUrl} download>
-                          <Download /> Download
-                        </a>
-                      )}
-                      {!deliveryUrl && artifact.content && (
-                        <button type="button" onClick={() => downloadInlineArtifact(artifact)}>
-                          <Download /> Download file
-                        </button>
-                      )}
-                      {artifact.project_id && (
-                        <Link to={"/projects/" + artifact.project_id}><AppWindow /> Open app project</Link>
-                      )}
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
-        )}
-      </aside>
+      </aside>}
     </div>
   );
 }

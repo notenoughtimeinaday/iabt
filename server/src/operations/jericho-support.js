@@ -2,7 +2,7 @@
 // persisted records and current configuration. This module never runs jobs,
 // calls providers, changes permissions, or updates model weights.
 import { loadLearningContext } from "../learning/service.js";
-import { capabilityRegistry } from "../autonomy/capabilities.js";
+import { capabilityRegistry, orchestrationConfigured } from "../autonomy/capabilities.js";
 import { readMaintenanceStatus } from "../maintenance/service.js";
 export const SUPPORTED_AGENT_NAMES = Object.freeze(["iabt_creator", "iabt_exchange"]);
 
@@ -96,7 +96,7 @@ export const buildJerichoKnowledge = async ({ repository, user, providers, stora
     maintenance,
     capabilities: {
       planning: "deterministic_intent_routing_with_server_signed_quotes",
-      interactive: "bounded_templates_with_html_preview_and_react_source_zip",
+      interactive: "named_starters_and_approved_html_app_creation_with_owned_source_revisions",
       documents: "markdown_docx_pdf_exports",
       code: "bounded_javascript_scaffolds_with_limitation_reports",
       design: "tokens_and_svg_review_boards",
@@ -151,6 +151,19 @@ export const respondToSupportRequest = async (context) => {
   const exchange = context.agentName === "iabt_exchange";
   if (!exchange && !isSupportRequest(context.requestText)) return null;
   const knowledge = await buildJerichoKnowledge(context);
+  if (!exchange && !(context.config.creation?.profile === "advanced" && context.user?.role === "admin")) {
+    const mediaQuestion = /\b(?:video|animation|animate|photo|image|audio|music|manufacturing|automation)\b/i.test(context.requestText);
+    const recent = knowledge.recent_jobs[0];
+    const content = [
+      mediaQuestion ? "Media generation and advanced automation are paused while Jericho focuses on useful apps and websites. Your saved work is still available."
+        : orchestrationConfigured(context.config) ? "Describe the app or website you want. You can try the result, request changes and download its source. I'll show the cost before custom creation."
+          : "You can try a task-list starter, piano, or storefront demo and download the result. Custom app creation is not available right now.",
+      ...knowledge.recurring_failure_patterns.slice(0, 1).map((failure) => describeFailure(failure.code).category === "provider_balance" ? "The recorded failure was a supplier balance problem." : "There is an unresolved failure in your saved work; its details are available in account diagnostics."),
+      ...(recent ? ["Your latest task is " + recent.status.replace(/_/g, " ") + (recent.released_credits !== null ? "; " + recent.released_credits + " credits were restored." : ".")] : []),
+      "This answer did not start a task or use credits."
+    ].join("\n\n");
+    return { content, metadata: { response_kind: "operational_support", knowledge_version: knowledge.version, knowledge } };
+  }
   const content = [
     exchange
       ? "I can explain the standalone runtime and review your account's recorded failures. Use the authenticated Exchange workflows to manage your profile, find matches, approve mutual introductions, and enter private rooms. This chat response is read-only and has not contacted anyone or changed your Exchange records."

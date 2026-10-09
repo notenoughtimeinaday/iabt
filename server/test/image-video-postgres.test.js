@@ -57,7 +57,7 @@ test("postgres: signed image quote, one approved submission and private video de
     await repository.ready();
     return repository;
   };
-  const config = loadConfig({ NODE_ENV: "test", IABT_AUTH_SECRET: randomUUID(), LUMA_API_KEY: "local-test-only", IABT_ENABLE_PAID_MEDIA: "true", IABT_MEDIA_BILLING_READY: "true", IABT_LUMA_COST_PER_5_SECONDS_CENTS: "3" });
+  const config = loadConfig({ NODE_ENV: "test", IABT_CREATION_PROFILE: "advanced", IABT_AUTH_SECRET: randomUUID(), LUMA_API_KEY: "local-test-only", IABT_ENABLE_PAID_MEDIA: "true", IABT_MEDIA_BILLING_READY: "true", IABT_LUMA_COST_PER_5_SECONDS_CENTS: "3" });
   const storage = new LocalObjectStorage({ rootDirectory: directory, apiOrigin: "http://127.0.0.1", signingSecret: config.authSecret });
   await storage.ready();
   const calls = [];

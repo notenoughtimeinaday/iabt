@@ -5,9 +5,9 @@ import { buildJerichoKnowledge, describeFailure, respondToSupportRequest } from 
 
 const user = { id: "owner-1", role: "admin", email_verified: true };
 const secret = "THIS_SHOULD_NEVER_APPEAR_IN_DIAGNOSTICS";
-const context = ({ jobs = [], incidents = [], readiness = {} } = {}) => ({
+const context = ({ jobs = [], incidents = [], readiness = {}, profile = "core" } = {}) => ({
   user,
-  config: loadConfig({ NODE_ENV: "test", OPENAI_API_KEY: secret, RESEND_API_KEY: secret }),
+  config: loadConfig({ NODE_ENV: "test", IABT_CREATION_PROFILE: profile, OPENAI_API_KEY: secret, RESEND_API_KEY: secret }),
   storage: { kind: "local" },
   providers: {
     readiness: () => readiness,
@@ -101,19 +101,20 @@ test("unknown provider text is never echoed as operational advice", () => {
   assert.match(result.next_action, /outcome is reconciled/);
 });
 
-test("video support explains the actual configuration gate without claiming a render or starting work", async () => {
+test("public video support explains the pause; explicitly enabled administrator diagnostics retain provider evidence", async () => {
   const request = { requestText: "Why does my image not become a video?", agentName: "iabt_creator" };
   const missing = await respondToSupportRequest({ ...context(), ...request });
-  assert.match(missing.content, /Video generation is not ready/);
-  assert.match(missing.content, /Buying IABT credits alone does not complete/);
-  assert.match(missing.content, /Image cleanup and photo editing are not implemented/);
+  assert.match(missing.content, /generation and advanced automation are paused/);
+  assert.doesNotMatch(missing.content, /buy|configure|Luma/i);
+  const advanced = await respondToSupportRequest({ ...context({ profile: "advanced" }), ...request });
+  assert.match(advanced.content, /Video generation is not ready/);
   const blocked = await respondToSupportRequest({
-    ...context({ readiness: { luma: { configured: true, commercial_ready: false } } }),
+    ...context({ profile: "advanced", readiness: { luma: { configured: true, commercial_ready: false } } }),
     user: { ...user, role: "user" }, ...request
   });
-  assert.match(blocked.content, /blocked for this account until commercial/);
+  assert.match(blocked.content, /generation and advanced automation are paused/);
   const configured = await respondToSupportRequest({
-    ...context({ readiness: { luma: { configured: true, commercial_ready: true } } }), ...request
+    ...context({ profile: "advanced", readiness: { luma: { configured: true, commercial_ready: true } } }), ...request
   });
   assert.match(configured.content, /sent to Luma only after paid-quote approval/);
   assert.match(configured.content, /provider balance and output quality still require live verification/);

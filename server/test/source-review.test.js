@@ -208,7 +208,7 @@ test("attachments cannot silently fall through to unsupported creation intents o
   for (const prompt of ["Build a piano app", "Create a photo", "Write a code script", "Create an automation"]) {
     const result = await f.plan(alice.token, [upload.payload.file_id], prompt);
     assert.equal(result.status, 422);
-    assert.equal(result.payload.error, "source_intent_unsupported");
+    assert.equal(result.payload.error, /photo|automation/.test(prompt) ? "creation_feature_paused" : "source_intent_unsupported");
   }
   const result = await f.plan(alice.token, [upload.payload.file_id], request, { uploaded_assets: [{ file_url: "http://127.0.0.1/private-secret" }] });
   assert.equal(result.status, 200);

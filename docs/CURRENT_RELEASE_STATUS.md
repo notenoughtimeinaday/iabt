@@ -1,6 +1,38 @@
 # Current IABT release status — October 9, 2026
 
-## October 9 Studio usability and image-to-video repair
+## Current scope: useful core creation and a simpler interface
+
+The owner's latest direction supersedes the media expansion below. Jericho's
+public focus is apps, websites and documents. New image/video, audio,
+manufacturing and automation creation is paused by the default server profile,
+before quoting or reserving credits. Existing files and already accepted jobs
+remain accessible. Luma is not a prerequisite for this release.
+
+The candidate replaces the busy home and Studio experience with one request
+box, saved work, a result preview and a Make a change action. Technical details
+are expandable. Saved and imported projects remain available. App revisions
+bind the selected owned HTML file and its hash into the approved plan, inspect
+that source, and create a new version. Self-contained apps are exported as HTML
+and a ZIP containing the identical index.html. This is not a hosted multiuser
+backend, and generated code is not executed on the server.
+
+Named piano, storefront-demo and task-list starters work without an external AI
+provider. Custom app creation and revisions require the configured Responses
+provider and the existing cost approval. Missing setup is an explicit error
+before charging, not a generic replacement app or a success claim.
+
+The implementation is undergoing full repository and browser acceptance.
+At the start of this work, both isolated services were Live at
+`67d904558a9d612b9ccc8fc95482d84ec4d45126`; this candidate is not yet deployed.
+See [the simplified release scope](SIMPLIFIED_CORE_RELEASE.md) for acceptance
+evidence and the remaining public-release gates.
+
+TreEbay remains a separate web-first product. The owner deferred app-store
+work and can retain its existing Base44 backend for monetization. A Base44
+migration is not an IABT dependency or a TreEbay launch prerequisite. Apocalypse
+is deferred until the existing products are useful.
+
+## Historical October 9 Studio usability and image-to-video repair
 
 The owner reported scrolling failures and no visible result from Create outcome.
 Hosted inspection reproduced generic non-task replies to “clear up the image”
@@ -76,8 +108,12 @@ the correct standalone Stripe Dashboard, grant only the read permission required
 by the account endpoint if authorized, then re-run the read-only Builder check.
 Do not broaden to an unrestricted key or disable account verification. The
 current connector exposes no request-log/key-permission operation and the cloud
-Stripe Dashboard requires sign-in. The provider's exact permission identifier
-was not captured; inspect its request log rather than guessing its UI label.
+Stripe Dashboard requires sign-in. The October 7 Dashboard checkpoint captured
+the specific missing permission, `connected_account_read` (Accounts Read), from
+request `req_FS6vioYFVq1Gx1`. No permission was changed. The later October 9 probe
+independently confirmed the account-read denial; its smaller diagnostic output
+did not retain that identifier. Reinspect the existing restricted test key
+before changing access.
 Then validate selected price access and actual test Checkout separately. A
 passing account read alone will not establish new-offer purchase acceptance.
 See [the diagnostic procedure](PRICING_OFFER_ROLLOUT.md#read-only-verification-diagnosis-october-9).

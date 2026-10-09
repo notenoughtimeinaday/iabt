@@ -41,7 +41,7 @@ const request = "Animate the attached image into a 5-second non-explicit portrai
 const approval = (plan) => ({ plan_id: plan.id, approved: true, pricing_version: plan.pricing_version, accepted_total_cents: plan.total_estimated_cost_cents });
 const fixture = async (t, overrides = {}) => {
   const directory = await mkdtemp(join(tmpdir(), "iabt-image-video-"));
-  const config = loadConfig({ NODE_ENV: "test", IABT_AUTH_SECRET: "image-video-tests-only", IABT_JOB_LEASE_MS: "1000", LUMA_API_KEY: "test-only", IABT_ENABLE_PAID_MEDIA: "true", IABT_MEDIA_BILLING_READY: "true", IABT_LUMA_COST_PER_5_SECONDS_CENTS: "3", ...overrides });
+  const config = loadConfig({ NODE_ENV: "test", IABT_CREATION_PROFILE: "advanced", IABT_AUTH_SECRET: "image-video-tests-only", IABT_JOB_LEASE_MS: "1000", LUMA_API_KEY: "test-only", IABT_ENABLE_PAID_MEDIA: "true", IABT_MEDIA_BILLING_READY: "true", IABT_LUMA_COST_PER_5_SECONDS_CENTS: "3", ...overrides });
   const repository = new MemoryRepository();
   const storage = new LocalObjectStorage({ rootDirectory: directory, apiOrigin: "http://127.0.0.1", signingSecret: config.authSecret });
   await storage.ready();

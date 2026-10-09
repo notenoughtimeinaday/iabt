@@ -10,24 +10,22 @@ import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import {
   ArchiveRestore,
+  ChevronDown,
+  UserRound,
   ArrowRight,
-  Bot,
   Cloud,
   Copy,
   CreditCard,
-  Download,
   FolderOpen,
   LayoutTemplate,
   LifeBuoy,
   Loader2,
   LogOut,
-  PlugZap,
   Search,
   ShieldCheck,
   Sparkles,
   Trash2,
   Upload,
-  UsersRound,
 } from "lucide-react";
 import {
   cloneValue,
@@ -35,7 +33,7 @@ import {
   normalizeAppDefinition,
 } from "@/lib/appDefinition";
 import { legacyTag, readLegacyProjects } from "@/lib/legacyProjects";
-import "@/home-exchange.css";
+import "@/home-simple.css";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -43,6 +41,9 @@ export default function Home() {
   const { user, logout } = useAuth();
   const importRef = useRef(null);
   const [projects, setProjects] = useState([]);
+  const [recentWork, setRecentWork] = useState([]);
+  const [request, setRequest] = useState("");
+  const [workError, setWorkError] = useState("");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [query, setQuery] = useState("");
@@ -55,15 +56,19 @@ export default function Home() {
 
   async function load() {
     setLoading(true);
+    setWorkError("");
     try {
-      const [records, entitlementResponse] = await Promise.all([
+      const [records, entitlementResponse, conversations] = await Promise.all([
         base44.entities.Project.list("-updated_date", 250),
         user?.id
           ? base44.functions.invoke("get-account-entitlement", {})
           : Promise.resolve(null),
+        base44.agents.listConversations({ q: { agent_name: "iabt_creator" }, sort: "-updated_date", limit: 30, skip: 0 })
+          .catch(() => { setWorkError("Recent work could not load. Open your workspace to try again."); return []; }),
       ]);
       const entitlementPayload = entitlementResponse?.data || entitlementResponse;
       setProjects(records);
+      setRecentWork(Array.isArray(conversations) ? conversations.filter((item) => item.messages?.some((message) => message.role === "user")).slice(0, 6) : []);
       setEntitlement(entitlementPayload?.entitlement || entitlementPayload || null);
       setBillingStatus(entitlementPayload?.billing || null);
       const importedTags = new Set(records.flatMap((project) => project.tags || []).filter((tag) => String(tag).startsWith("legacy:")));
@@ -84,9 +89,9 @@ export default function Home() {
     const billing = url.searchParams.get("billing");
     if (!billing) return;
     if (billing === "success") {
-      toast({ title: "Stripe checkout completed", description: "Your plan will update after the verified webhook is processed." });
+      toast({ title: "Stripe checkout completed", description: "Your plan is updating. Your credits will appear shortly." });
     } else if (billing === "credits_success") {
-      toast({ title: "Stripe credit purchase completed", description: "Your extra IABT credits will appear after the verified webhook is processed." });
+      toast({ title: "Stripe credit purchase completed", description: "Your extra credits will appear shortly." });
     } else if (billing === "canceled") {
       toast({ title: "Checkout canceled", description: "No changes were made to your plan." });
     }
@@ -248,93 +253,70 @@ export default function Home() {
     }
   }
 
+  function startRequest(event) {
+    event.preventDefault();
+    if (request.trim()) navigate("/studio?prompt=" + encodeURIComponent(request.trim()));
+  }
+
   return (
-    <div className="iabt-home">
+    <div className="iabt-home home-simple">
       <header className="iabt-home-nav">
         <div className="iabt-home-brand">
           <img className="iabt-mark" src="/iabt-mark.svg" alt="" />
-          <div><strong>Intelligent Application Building Tool</strong><span>IABT · Powered by JERICHO Studio</span></div>
+          <div><strong>Jericho</strong><span>by IABT</span></div>
         </div>
-        <div className="iabt-home-user">
-          <Button size="sm" onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-1" /> JERICHO Studio</Button>
-          <Button variant="outline" size="sm" onClick={() => navigate("/deliverables")}><Download className="h-4 w-4 mr-1" /> Deliverables</Button>
-          <Button variant="outline" size="sm" onClick={() => navigate("/integrations")}><PlugZap className="h-4 w-4 mr-1" /> Integrations</Button>
-          <Button variant="outline" size="sm" onClick={() => navigate("/exchange")}><UsersRound className="h-4 w-4 mr-1" /> Exchange</Button>
-          <Button variant="outline" size="sm" onClick={() => navigate("/connect")}><Bot className="h-4 w-4 mr-1" /> Connect AI</Button>
-          <Button variant="outline" size="sm" onClick={() => navigate("/support")}><LifeBuoy className="h-4 w-4 mr-1" /> Support</Button>
-          {entitlement && <span className="iabt-plan-badge">{entitlement.plan} plan</span>}
-          {entitlement && <span className="iabt-credit-badge">{Number(entitlement.total_iabt_credits_remaining || 0).toLocaleString()} credits</span>}
-          <Button variant="outline" size="sm" onClick={() => setBillingOpen(true)}>
-            <CreditCard className="h-4 w-4 mr-1" /> Plans & billing
-          </Button>
-          {user?.role === "admin" && (
-            <Button variant="outline" size="sm" onClick={() => navigate("/admin/compliance")}>
-              <ShieldCheck className="h-4 w-4 mr-1" /> Profit & compliance
-            </Button>
-          )}
-          <span>{user?.full_name || user?.email || "Creator"}</span>
-          <Button variant="ghost" size="sm" onClick={() => logout(true)}><LogOut className="h-4 w-4 mr-1" /> Sign out</Button>
-        </div>
+        <nav className="home-simple-nav" aria-label="Main navigation">
+          <Button variant="ghost" onClick={() => navigate("/studio?new=1")}>Create</Button>
+          <Button variant="ghost" onClick={() => navigate("/deliverables")}>My files</Button>
+          <details className="home-account">
+            <summary><UserRound size={17} /> <span>Account</span><ChevronDown size={14} /></summary>
+            <div className="home-account-menu">
+              <strong>{user?.full_name || "Your account"}</strong>
+              {entitlement && <span>{Number(entitlement.total_iabt_credits_remaining || 0).toLocaleString()} credits available</span>}
+              <button type="button" onClick={() => setBillingOpen(true)}><CreditCard size={16} /> Plans & billing</button>
+              <button type="button" onClick={() => navigate("/support")}><LifeBuoy size={16} /> Help</button>
+              {user?.role === "admin" && <button type="button" onClick={() => navigate("/admin/compliance")}><ShieldCheck size={16} /> Administration</button>}
+              <button type="button" onClick={() => logout(true)}><LogOut size={16} /> Sign out</button>
+            </div>
+          </details>
+        </nav>
       </header>
 
       <main className="iabt-home-main">
-        <section className="iabt-hero">
-          <div>
-            <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> Intelligent Application Building Tool</p>
-            <h1>Bring an objective. Create and review your deliverables.</h1>
-            <p>Describe what you want to create. Eligible private work can start automatically using your IABT credits, with no external provider charge. JERICHO asks before paid services or consequential actions.</p>
-            <div className="iabt-hero-actions">
-              <Button size="lg" onClick={() => navigate("/studio")}>
-                <Sparkles className="h-4 w-4 mr-2" /> Open JERICHO Studio
-              </Button>
-              <Button size="lg" variant="outline" onClick={() => navigate("/deliverables")}>
-                <Download className="h-4 w-4 mr-2" /> View deliverables
-              </Button>
-            </div>
-          </div>
-          <div className="iabt-hero-visual" aria-hidden="true">
-            <div className="iabt-orbit orbit-one" />
-            <div className="iabt-orbit orbit-two" />
-            <div className="iabt-hero-card">
-              <img className="iabt-hero-emblem" src="/iabt-mark.svg" alt="" />
-              <strong>Describe → create → review</strong>
-              <span>Saved files, clear progress and remaining checks.</span>
-            </div>
+        <section className="home-create" aria-labelledby="home-create-title">
+          <span className="home-create-kicker">Your next idea starts here</span>
+          <h1 id="home-create-title">What would you like to make?</h1>
+          <p>Describe your app. Preview it, make changes, and take the files with you.</p>
+          <form className="home-request" onSubmit={startRequest}>
+            <label className="sr-only" htmlFor="home-request">Describe what you want to make</label>
+            <textarea id="home-request" value={request} onChange={(event) => setRequest(event.target.value)} maxLength={12000}
+              placeholder="I want to build…" rows={3} />
+            <div><span>Start with a few sentences.</span><Button type="submit" disabled={!request.trim()}>Start creating <ArrowRight size={17} /></Button></div>
+          </form>
+          <div className="home-starters" aria-label="Ideas to get started">
+            <button type="button" onClick={() => setRequest("Create a task-list starter with add, complete, delete, search and filter controls.")}>A task tracker</button>
+            <button type="button" onClick={() => setRequest("Create a playable piano starter with computer keyboard controls and octave buttons.")}>A playable piano</button>
+            <button type="button" onClick={() => setRequest("Create a website for my business. I will provide its name, services and contact details.")}>A business website</button>
           </div>
         </section>
 
-        <section className="iabt-operator-flow" aria-labelledby="iabt-operator-flow-title">
-          <div className="iabt-operator-flow-heading">
-            <div>
-              <p className="iabt-eyebrow"><Sparkles className="h-4 w-4" /> A simpler way to create</p>
-              <h2 id="iabt-operator-flow-title">Three clear steps. No complicated setup.</h2>
-            </div>
-            <p>JERICHO keeps the technical details in the background and asks for your approval only when it matters.</p>
-          </div>
-          <div className="iabt-operator-steps">
-            <article><span>01</span><strong>Describe the outcome</strong><p>Explain what you want to create and add any important details or files.</p></article>
-            <article><span>02</span><strong>Follow the work</strong><p>Eligible private tasks run automatically. Review a quote when paid services or consequential actions need your approval.</p></article>
-            <article><span>03</span><strong>Review saved files</strong><p>Open your Deliverables library and review remaining checks. Verified file delivery and tested software behavior are separate milestones.</p></article>
-          </div>
+        <section className="home-recent" aria-labelledby="home-recent-title">
+          <div className="home-section-heading"><h2 id="home-recent-title">Pick up where you left off</h2><button type="button" onClick={() => navigate("/studio")}>View all <ArrowRight size={15} /></button></div>
+          {workError && <p role="status">{workError}</p>}
+          {loading ? <p>Loading your work…</p> : recentWork.length ? <div className="home-recent-grid">
+            {recentWork.map((item) => {
+              const content = item.messages?.find((message) => message.role === "user")?.content;
+              const title = item.metadata?.title || (typeof content === "string" ? content : content?.text) || "Untitled app";
+              return <button className="home-work-card" type="button" key={item.id} onClick={() => navigate("/studio?conversation=" + encodeURIComponent(item.id))}>
+                <span className="home-work-icon"><LayoutTemplate size={20} /></span>
+                <strong>{title}</strong><span>Open workspace <ArrowRight size={15} /></span>
+              </button>;
+            })}
+          </div> : <p className="home-recent-empty">Your saved work will appear here.</p>}
         </section>
 
-        <section className="iabt-exchange-callout" aria-labelledby="iabt-exchange-title">
-          <div className="iabt-exchange-callout-copy">
-            <p className="iabt-eyebrow"><UsersRound className="h-4 w-4" /> IABT Exchange beta</p>
-            <h2 id="iabt-exchange-title">Find the missing capability. Form the right team.</h2>
-            <p>Create a match-safe professional profile, map what a project still needs, review explainable collaborator matches, and open a private room only after both people accept the introduction.</p>
-            <div className="iabt-exchange-callout-actions">
-              <Button onClick={() => navigate("/exchange")}><UsersRound className="h-4 w-4 mr-2" /> Open Exchange</Button>
-              <Button variant="outline" onClick={() => navigate("/exchange/assistant")}><Bot className="h-4 w-4 mr-2" /> Ask Exchange AI</Button>
-            </div>
-          </div>
-          <div className="iabt-exchange-principles">
-            <article><Sparkles /><div><strong>Capability-gap analysis</strong><span>JERICHO helps identify the expertise, credentials, and institutional relationships a project is missing.</span></div></article>
-            <article><Search /><div><strong>Explainable matching</strong><span>Deterministic scores show why a profile fits. There is no random ranking or public contact directory.</span></div></article>
-            <article><ShieldCheck /><div><strong>Mutual consent</strong><span>Identity and selected contact details remain concealed until an introduction is accepted by both members.</span></div></article>
-          </div>
-        </section>
-
+        <details className="home-imported" open={projects.length > 0 || legacyProjects.length > 0 || undefined}>
+          <summary>Saved & imported projects <span>{projects.length || ""}</span></summary>
         <section className="iabt-projects">
           {legacyProjects.length > 0 && (
             <div className="iabt-legacy-banner">
@@ -372,7 +354,7 @@ export default function Home() {
             <div className="iabt-project-empty">
               <div><FolderOpen /></div>
               <h3>{query ? "No projects match that search" : "Create your first app project"}</h3>
-              <p>{query ? "Try a different name or clear the search." : "Start in JERICHO Studio to create a private preview or source package. Review its limitations and test the software before use."}</p>
+              <p>{query ? "Try a different name or clear the search." : "Import a saved IABT project, or start something new above."}</p>
               {!query && (
                 <div className="iabt-empty-actions">
                   <Button onClick={() => navigate("/studio")}><Sparkles className="h-4 w-4 mr-2" /> Create with JERICHO Studio</Button>
@@ -397,7 +379,7 @@ export default function Home() {
                         <div><dt>Components</dt><dd>{definition.pages.reduce((sum, page) => sum + page.components.length, 0)}</dd></div>
                         <div><dt>Updated</dt><dd>{project.updated_date ? new Date(project.updated_date).toLocaleDateString() : "Today"}</dd></div>
                       </dl>
-                      <span className="iabt-open-link">View generated project <ArrowRight /></span>
+                      <span className="iabt-open-link">Open project <ArrowRight /></span>
                     </button>
                     <div className="iabt-project-actions">
                       <button type="button" onClick={() => setNameDialog({ mode: "rename", project })}>Rename</button>
@@ -410,12 +392,13 @@ export default function Home() {
             </div>
           )}
         </section>
+        </details>
       </main>
 
       <footer className="iabt-home-footer">
-        <span>© 2026 Intelligent Application Building Tool (IABT) · Powered by JERICHO Studio.</span>
+        <span>© 2026 IABT · Jericho</span>
         <nav aria-label="Legal">
-          <button type="button" onClick={() => navigate("/legal")}>Trust & Legal Center</button>
+          <button type="button" onClick={() => navigate("/legal")}>About & policies</button>
           <button type="button" onClick={() => navigate("/privacy")}>Privacy</button>
           <button type="button" onClick={() => navigate("/terms")}>Terms</button>
           <button type="button" onClick={() => navigate("/acceptable-use")}>Acceptable Use</button>

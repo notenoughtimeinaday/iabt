@@ -3,6 +3,7 @@ import { buildDocumentArtifactSet } from "../creation/document-export.js";
 import { createZip } from "../creation/zip.js";
 import { readTextSources } from "../files/text-sources.js";
 import { evaluateAction } from "./policy.js";
+import { buildWebAppArtifacts } from "../creation/web-app.js";
 
 const objectSchema = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 const string = { type: "string" };
@@ -31,8 +32,8 @@ export function registeredTools({ job, repository, storage, user }) {
   return [
     {
       ...common, name: "plan_execution", risk_class: "plan",
-      description: "Propose a bounded dependency graph before calling any execution tool. Nodes use only inspect_file, create_document or create_source. Preserve completed and running nodes when replanning. Each subsequent call names its ready node_id. Planning does not grant new permissions.",
-      input_schema: objectSchema({ objective: string, nodes: { type: "array", minItems: 1, maxItems: 16, items: objectSchema({ id: string, tool: { type: "string", enum: ["inspect_file", "create_document", "create_source"] }, objective: string, depends_on: { type: "array", maxItems: 16, items: string } }) } }),
+      description: "Propose a bounded dependency graph before execution using inspect_file, create_document, create_web_app or create_source. Preserve completed and running nodes when replanning. Each call names its ready node_id. Planning grants no additional permission.",
+      input_schema: objectSchema({ objective: string, nodes: { type: "array", minItems: 1, maxItems: 16, items: objectSchema({ id: string, tool: { type: "string", enum: ["inspect_file", "create_document", "create_web_app", "create_source"] }, objective: string, depends_on: { type: "array", maxItems: 16, items: string } }) } }),
       execute: async (execution_plan) => ({ execution_plan })
     },
     {
@@ -54,6 +55,16 @@ export function registeredTools({ job, repository, storage, user }) {
       execute: async ({ title, markdown }) => {
         if (!safeName(title) || markdown.length < 20 || markdown.length > 100_000) throw fail("invalid_tool_input", "Use a simple title and substantive Markdown up to 100000 characters");
         const result = buildDocumentArtifactSet({ title, markdown });
+        return { artifacts: result.artifacts.map(({ bytes, ...item }) => ({ ...item, content_base64: bytes.toString("base64") })) };
+      }
+    },
+    {
+      ...common, name: "create_web_app",
+      description: "Create a complete working browser app as self-contained HTML plus an identical standalone source ZIP. Use inline CSS/JavaScript and local interactions, no external dependencies, network requests, account services or payment promises. Implement the requested behavior, do not substitute a generic list. Inspect the prior HTML first when revising; preserve its useful behavior. Browser storage may be unavailable in the sandbox and must be guarded. This checks format and network defaults, not runtime correctness.",
+      input_schema: objectSchema({ node_id: string, title: string, html: string }),
+      execute: async ({ title, html }) => {
+        if (!safeName(title)) throw fail("invalid_tool_input", "Use a simple app title.");
+        const result = buildWebAppArtifacts({ title, html, revision: job.input.revision_source || null });
         return { artifacts: result.artifacts.map(({ bytes, ...item }) => ({ ...item, content_base64: bytes.toString("base64") })) };
       }
     },
@@ -81,7 +92,8 @@ export function registeredTools({ job, repository, storage, user }) {
 
 export function toolDefinitions(tools, user, job) {
   if (!user?.email_verified || user.id !== job.owner_id) return [];
-  return tools.filter((tool) => evaluateAction(tool, { authorized: true }).automatic).map((tool) => ({ type: "function", name: tool.name, description: tool.description, parameters: tool.input_schema, strict: true }));
+  const appOnly = job.input?.app_output_contract === "self_contained_html_v1";
+  return tools.filter((tool) => (!appOnly || ["plan_execution", "inspect_file", "create_web_app"].includes(tool.name)) && evaluateAction(tool, { authorized: true }).automatic).map((tool) => ({ type: "function", name: tool.name, description: tool.description, parameters: tool.input_schema, strict: true }));
 }
 
 function validateInput(schema, value) {

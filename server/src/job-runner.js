@@ -307,8 +307,16 @@ export const runClaimedJob = async ({
         const deferred = await repository.deferJob({ jobId: job.id, workerId, outputPatch: step.outputPatch, availableAt: step.availableAt });
         return { job: deferred, deferred: true, artifacts: [], released_credits: 0 };
       }
-      if (step.result) result = step.result;
+      if (step.result) {
+        if (job.input.app_output_contract === "self_contained_html_v1" && step.result.metadata?.orchestration?.incomplete) {
+          throw Object.assign(new Error("The app could not be completed. Your existing version is unchanged and reserved credits were restored."), { code: "app_creation_incomplete" });
+        }
+        result = step.result;
+      }
       else if (step.fallback) {
+        if (job.input.app_output_contract === "self_contained_html_v1") {
+          throw Object.assign(new Error("The app could not be completed. Your existing version is unchanged and reserved credits were restored."), { code: "app_creation_incomplete" });
+        }
         // Attached-file integrity and intent constraints remain authoritative.
         if (job.input?.file_references?.length) {
           const user = await repository.getUser(job.owner_id);
