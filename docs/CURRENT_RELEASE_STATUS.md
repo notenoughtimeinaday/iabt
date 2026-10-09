@@ -16,6 +16,14 @@ Missing provider setup stops before a job or credit reservation. Photo cleanup
 remains unsupported and now explains that limitation directly. Both changes
 are taught in the versioned Jericho curriculum.
 
+The first source-bound revision passed the complete suite again and was
+published as a9c1b829b039e329ef30cb402d27fd39449f18b7 with identical tree
+57aad957b5a997a0ecd259533727fd83250a0b2e; CI run 689 passed. A predeployment
+supplier-pricing review then found the old linear duration estimate understated
+10-second Luma clips. The follow-up uses a shared 1x/3x estimator, rejects
+underfunded stale approvals before submission, and preserves polling of already
+paid generations. Its final verification and staging evidence are pending.
+
 Initial complete local verification passed **453 tests, zero failed/skipped**,
 including 71 observed PostgreSQL checks, plus lint, type checking, Exchange and
 creation checks, frontend isolation and the production build. That run covered

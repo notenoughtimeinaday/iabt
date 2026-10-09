@@ -1,4 +1,5 @@
 import { inspectImageSource } from "../files/image-sources.js";
+import { estimateLumaVideoCostCents } from "./luma-pricing.js";
 
 export class ProviderCallError extends Error {
   constructor(code, message, { status = 409, retryable = false, providerRequestId = "" } = {}) {
@@ -201,6 +202,17 @@ export class ProviderRegistry {
         ? "openai_image"
         : provider;
     this.assertProviderReady(readinessProvider, approval);
+
+    if (provider === "luma" && operation === "submit_video") {
+      // Recompute from server configuration at the spending boundary: old
+      // queued jobs or understated payload estimates cannot lower approval.
+      // Poll/download must keep recovering an existing paid generation even
+      // when configuration prices increase after its original submission.
+      if ((payload.model || "ray-3.2") !== "ray-3.2" || (payload.resolution || "720p") !== "720p") {
+        throw new ProviderCallError("luma_video_profile_unsupported", "The quoted video profile supports Ray 3.2 at 720p SDR only", { status: 422 });
+      }
+      requireApproval(context, Math.max(expectedCost, estimateLumaVideoCostCents(this.config.providers.luma.costPerFiveSecondsCents, payload.duration_seconds ?? 5)));
+    }
 
     if (provider === "openai" && operation === "response") {
       return this.openaiResponse(payload, context);

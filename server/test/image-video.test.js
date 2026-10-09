@@ -110,16 +110,58 @@ test("image video is a signed paid quote; approval sends actual image bytes once
   assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 19);
 });
 
-test("ten-second image quote uses compatible keyframes and its larger existing cost ceiling", async (t) => {
+test("ten-second image quote uses compatible keyframes and the documented three-times cost ceiling", async (t) => {
   const f = await fixture(t);
   const { plan } = await f.plan({ requestText: "Make a 10 second video from the image" });
-  assert.equal(plan.provider_cost_cents, 6);
-  assert.equal(plan.credit_cost, 2);
+  assert.equal(plan.provider_cost_cents, 9);
+  assert.equal(plan.credit_cost, 3);
   await f.execute(plan);
   await f.worker.runOnce();
   assert.equal(f.calls[0].body.video.duration, "10s");
   assert.deepEqual(f.calls[0].body.video.keyframe_indexes, [0]);
   assert.equal(f.calls[0].body.video.start_frame, undefined);
+});
+
+test("configured 30-cent 720p rate quotes 30/90 cents for both text and image video and binds duration/cost into approval", async (t) => {
+  const f = await fixture(t, { IABT_LUMA_COST_PER_5_SECONDS_CENTS: "30" });
+  for (const fileIds of [[], [f.file.id]]) {
+    for (const [duration, expectedCents] of [[5, 30], [10, 90]]) {
+      const { plan } = await f.plan({ fileIds, requestText: `Create a ${duration}-second video from the image` });
+      assert.equal(plan.provider_cost_cents, expectedCents);
+      assert.equal(plan.total_estimated_cost_cents, expectedCents);
+      assert.equal(plan.normalized_spec.estimated_cost_cents, expectedCents);
+      assert.equal(plan.credit_cost, expectedCents / 3);
+      await assert.rejects(f.execute(plan, { body: { ...approval(plan), accepted_total_cents: expectedCents - 1 } }), { code: "quote_mismatch" });
+    }
+  }
+  assert.equal(f.calls.length, 0);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).reserved_credits, 0);
+});
+
+test("provider boundary rejects an old two-times estimate or unsupported expensive profile before any paid POST", async (t) => {
+  const f = await fixture(t, { IABT_LUMA_COST_PER_5_SECONDS_CENTS: "30" });
+  const context = { approval: { approved: true, approval_id: "old-quote", scope: "owner_demo", max_cost_cents: 60 }, idempotencyKey: "old-ten-second-job" };
+  await assert.rejects(f.providers.execute("luma", "submit_video", { duration_seconds: 10, estimated_cost_cents: 60 }, context), { code: "cost_ceiling_exceeded" });
+  await assert.rejects(f.providers.execute("luma", "submit_video", { duration_seconds: 10, estimated_cost_cents: 0 }, context), { code: "cost_ceiling_exceeded" });
+  for (const payload of [{ duration_seconds: 20 }, { resolution: "1080p" }, { model: "different-model" }]) {
+    await assert.rejects(f.providers.execute("luma", "submit_video", payload, { ...context, approval: { ...context.approval, max_cost_cents: 9999 } }), { code: "luma_video_profile_unsupported" });
+  }
+  assert.equal(f.calls.length, 0);
+});
+
+test("a price increase requires a new quote before reservation while submitted jobs still finish under their original approval", async (t) => {
+  const f = await fixture(t);
+  const { plan } = await f.plan({ requestText: "Make a 10-second video" });
+  const increased = { ...f.config, providers: { ...f.config.providers, luma: { ...f.config.providers.luma, costPerFiveSecondsCents: 30 } } };
+  await assert.rejects(f.execute(plan, { config: increased }), { code: "quote_mismatch" });
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).reserved_credits, 0);
+  await f.execute(plan);
+  assert.equal((await f.worker.runOnce()).deferred, true);
+  f.providers.config = increased;
+  const completed = await f.worker.runOnce();
+  assert.equal(completed.job.status, "succeeded");
+  assert.equal(f.calls.filter((call) => call.method === "POST").length, 1);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 17);
 });
 
 test("unconfigured image video and unimplemented image editing return actionable blockers without jobs or reservations", async (t) => {

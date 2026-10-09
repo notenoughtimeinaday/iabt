@@ -1,10 +1,11 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { normalizeFileIds, readTextSources, referenceBinding, sourceReferences } from "../files/text-sources.js";
 import { readImageSources } from "../files/image-sources.js";
+import { estimateLumaVideoCostCents } from "../providers/luma-pricing.js";
 import { creationPolicy } from "../autonomy/policy.js";
 import { capabilityRegistry, orchestrationConfigured } from "../autonomy/capabilities.js";
 
-export const CREATION_PRICING_VERSION = "iabt-standalone-2026-09-20.1";
+export const CREATION_PRICING_VERSION = "iabt-standalone-2026-10-09.1";
 const QUOTE_TTL_MS = 30 * 60 * 1000;
 
 const normalize = (value, max = 12000) =>
@@ -231,7 +232,7 @@ const capabilityFor = (intent, user, providers, requestText, readiness) => {
   if (intent === "video") {
     const seconds = videoDurationSeconds(requestText);
     const unitCost = Number(providers?.config?.providers?.luma?.costPerFiveSecondsCents || 0);
-    const providerCost = unitCost > 0 ? Math.ceil(seconds / 5) * unitCost : 0;
+    const providerCost = unitCost > 0 ? estimateLumaVideoCostCents(unitCost, seconds) : 0;
     const technical = Boolean(readiness.luma?.configured);
     const ownerDemo = user.role === "admin" && technical;
     const ready = Boolean(readiness.luma?.commercial_ready || ownerDemo);
@@ -645,6 +646,11 @@ export const executeCreationPlan = async ({
       status: 410,
       code: "quote_expired"
     });
+  }
+
+  if (plan.job_type === "provider.luma.video" && Number(config.providers?.luma?.costPerFiveSecondsCents) > 0 &&
+      estimateLumaVideoCostCents(config.providers.luma.costPerFiveSecondsCents, plan.normalized_spec.duration_seconds) > Number(plan.provider_cost_cents)) {
+    throw Object.assign(new Error("The video provider estimate has increased since this quote. Request a new plan before approving generation."), { status: 409, code: "quote_mismatch" });
   }
 
   if (plan.file_references?.length) {

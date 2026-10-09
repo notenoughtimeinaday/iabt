@@ -101,6 +101,15 @@ keyframe. It creates no public source URL and does not retain base64 image bytes
 in the job input. The adapter uses the documented
 [Luma Agents video keyframes contract](https://docs.agents.lumalabs.ai/api/typescript/resources/generations/).
 
+The priced profile is Ray 3.2, 720p SDR, 5 or 10 seconds. The shared server
+estimator uses the configured five-second cost once for 5 seconds and three
+times for 10 seconds. The [supplier pricing table](https://docs.agents.lumalabs.ai/guides/pricing/)
+listed $0.30 and $0.90 respectively when checked October 9, 2026; operators
+must verify current rates before enabling media. These are estimates, not
+supplier-enforced spending caps. Approval and the spending boundary reject
+underfunded stale quotes before a new provider submission. Polling an existing
+paid generation remains recoverable after an estimate change.
+
 If Luma setup or the applicable usage approval is missing, image-to-video stops
 with an explicit setup message before creating a plan, job or credit reservation.
 It does not substitute a document brief. Image cleanup and photo editing remain
