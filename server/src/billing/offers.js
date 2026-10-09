@@ -99,7 +99,7 @@ const errorCodes = new Set(["resource_missing", "api_key_expired", "invalid_api_
 const getStripe = async (config, path, endpoint, fetchImpl) => {
   const stripe = config.providers.stripe;
   const diagnostic = { endpoint, failure: "configuration", http_status: null,
-    stripe_request_id: null, stripe_error_type: null, stripe_error_code: null };
+    stripe_request_id: null, stripe_error_type: null, stripe_error_code: null, stripe_error_reason: null, required_permission: null };
   if (!new RegExp(`^[sr]k_${stripe.mode}_`).test(stripe.secretKey)) throw verificationFailure(diagnostic);
   const signal = AbortSignal.timeout(15000);
   let response;
@@ -115,6 +115,14 @@ const getStripe = async (config, path, endpoint, fetchImpl) => {
       const body = await response.json().catch(() => null);
       diagnostic.stripe_error_type = errorTypes.has(body?.error?.type) ? body.error.type : null;
       diagnostic.stripe_error_code = errorCodes.has(body?.error?.code) ? body.error.code : null;
+      // Classify Stripe's permission explanation without retaining its message,
+      // which can contain the credential and account identity.
+      const message = typeof body?.error?.message === "string" ? body.error.message : "";
+      if (/does not have the required permissions for this endpoint/.test(message)) {
+        diagnostic.stripe_error_reason = "insufficient_permissions";
+        const permission = message.match(/Having the ['`](rak_[a-z_]{1,60})['`] permission/);
+        diagnostic.required_permission = permission?.[1] || null;
+      }
       throw verificationFailure(diagnostic);
     }
     const body = await response.json();

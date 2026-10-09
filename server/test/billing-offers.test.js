@@ -408,7 +408,8 @@ test("verification diagnostics identify each failed GET without Checkout or secr
         assert.deepEqual(error.billingVerification, { endpoint, failure,
           http_status: ["http", "invalid_response"].includes(failure) ? (failure === "http" ? 403 : 200) : null,
           stripe_request_id: ["http", "invalid_response"].includes(failure) ? "req_fixture123" : null,
-          stripe_error_type: failure === "http" ? "invalid_request_error" : null, stripe_error_code: null });
+          stripe_error_type: failure === "http" ? "invalid_request_error" : null, stripe_error_code: null,
+          stripe_error_reason: null, required_permission: null });
         assert.doesNotMatch(JSON.stringify(error), /secret|rk_test|price_new|coupon_intro/);
         return true;
       });
@@ -476,4 +477,17 @@ test("HTTP verification failure logs correlation metadata but keeps the client r
   assert.equal(record.http_status, 403); assert.equal(record.stripe_request_id, "req_support123");
   assert.doesNotMatch(JSON.stringify(body), /stripe_request_id|http_status|billingVerification|rk_test|support123/);
   assert.doesNotMatch(JSON.stringify(record), /rk_test_private/); assert.equal(f.calls.length, 0);
+});
+
+
+test("Stripe permission explanation is classified without retaining its credential-bearing message", async (t) => {
+  const f = await fixture(t);
+  f.providers.fetch = async () => ({ ok: false, status: 403, json: async () => ({ error: { type: "invalid_request_error",
+    message: "The provided key 'rk_test_DO_NOT_LOG' does not have the required permissions for this endpoint on account 'acct_PRIVATE'. Having the 'rak_account_read' permission would allow this request to continue." } }) });
+  await assert.rejects(f.create(), (error) => {
+    assert.equal(error.billingVerification.stripe_error_reason, "insufficient_permissions");
+    assert.equal(error.billingVerification.required_permission, "rak_account_read");
+    assert.doesNotMatch(JSON.stringify(error), /DO_NOT_LOG|acct_PRIVATE|provided key/); return true;
+  });
+  assert.equal(f.calls.length, 0);
 });

@@ -197,7 +197,7 @@ coupon only for Meet Jericho. A failed check submits no new Checkout.
 
 The API now logs a `billing_offer_verification_failed` event with the app
 request ID, a fixed endpoint template, failure category, upstream HTTP status,
-validated Stripe request ID and allowlisted error type/code. Provider messages,
+validated Stripe request ID, allowlisted error type/code and constrained permission-denial classification. Provider messages,
 bodies, credentials, account/price IDs and headers are excluded. The client
 continues receiving the same generic 503 response. Existing account/price/coupon
 checks, legacy allowances, subscription state and fulfillment are unchanged.
