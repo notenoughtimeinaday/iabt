@@ -269,7 +269,7 @@ export default function Home() {
           <Button variant="ghost" onClick={() => navigate("/studio?new=1")}>Create</Button>
           <Button variant="ghost" onClick={() => navigate("/deliverables")}>My files</Button>
           <details className="home-account">
-            <summary><UserRound size={17} /> <span>Account</span><ChevronDown size={14} /></summary>
+            <summary aria-label="Account"><UserRound size={17} /> <span>Account</span><ChevronDown size={14} /></summary>
             <div className="home-account-menu">
               <strong>{user?.full_name || "Your account"}</strong>
               {entitlement && <span>{Number(entitlement.total_iabt_credits_remaining || 0).toLocaleString()} credits available</span>}

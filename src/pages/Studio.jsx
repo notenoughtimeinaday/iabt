@@ -87,6 +87,20 @@ function readable(value = "") {
   return String(value).replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function artifactsWithAppFirst(rows) {
+  // Reorder only siblings from the same job. Keep each job's existing place
+  // in the newest-first history, including files without a known source job.
+  const siblings = new Map();
+  const isApp = (artifact) => String(artifact.mime_type || "").split(";")[0] === "text/html";
+  for (const artifact of rows) {
+    if (!artifact.job_id) continue;
+    if (!siblings.has(artifact.job_id)) siblings.set(artifact.job_id, []);
+    siblings.get(artifact.job_id).push(artifact);
+  }
+  for (const group of siblings.values()) group.sort((left, right) => Number(isApp(right)) - Number(isApp(left)));
+  return rows.map((artifact) => artifact.job_id ? siblings.get(artifact.job_id).shift() : artifact);
+}
+
 function assetScopeFor(conversationId, projectId) {
   return projectId || (conversationId ? "conversation:" + conversationId : "");
 }
@@ -1042,7 +1056,7 @@ export default function Studio() {
         {artifacts.length > 0 && (
           <section className="creator-artifacts">
             <div className="creator-section-title"><span>Deliverables</span><small>{artifacts.length} ready</small></div>
-            {artifacts.map((artifact) => {
+            {artifactsWithAppFirst(artifacts).map((artifact) => {
               const cachedAccess = artifactAccessUrls[artifact.id];
               const signedUrlReady = cachedAccess?.url &&
                 new Date(cachedAccess.expires_at || 0).getTime() > Date.now();
