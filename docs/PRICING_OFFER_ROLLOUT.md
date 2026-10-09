@@ -187,3 +187,31 @@ revoke accepted purchases. Existing invoices and renewals retain purchased terms
 - [Coupon object and expanded product restrictions](https://docs.stripe.com/api/coupons/object)
 - [Price object](https://docs.stripe.com/api/prices/object)
 - [Checkout Session creation](https://docs.stripe.com/api/checkout/sessions/create)
+
+
+## Read-only verification diagnosis (October 9)
+
+A generic `billing_offer_verification_failed` is not a confirmed permission
+problem. The verifier checks account first, selected price second, and the
+coupon only for Meet Jericho. A failed check submits no new Checkout.
+
+The API now logs a `billing_offer_verification_failed` event with the app
+request ID, a fixed endpoint template, failure category, upstream HTTP status,
+validated Stripe request ID and allowlisted error type/code. Provider messages,
+bodies, credentials, account/price IDs and headers are excluded. The client
+continues receiving the same generic 503 response. Existing account/price/coupon
+checks, legacy allowances, subscription state and fulfillment are unchanged.
+
+On a test host without Shell/SSH, temporarily set `IABT_BILLING_OFFER_PROBE` to
+an existing offer ID (for example `builder-2026-10`). At process startup, the
+opt-in probe reuses the verifier and emits one `billing_offer_startup_probe`
+result. It performs only Stripe GETs, has no repository or Checkout executor,
+is skipped unless new offers are enabled in test mode, and does not block
+server startup. Remove/empty the variable after collecting evidence. Each GET
+retains the existing 15-second deadline. No public diagnostic endpoint exists.
+
+A failed account check stops before price access; therefore fixing that check
+still requires re-verifying price access. HTTP 401/403 must be investigated
+using the exact Stripe request log before changing keys or permissions. A
+successful read-only probe verifies configured provider terms, not payment,
+subscription renewal, credit delivery or full checkout acceptance.

@@ -1352,6 +1352,10 @@ export const createIabtHandler = ({
     const expected = Number.isInteger(declaredStatus) && declaredStatus >= 400 && declaredStatus <= 599;
     const status = expected ? declaredStatus : 500;
     const code = expected ? error.code || "request_failed" : "internal_error";
+    if (code === "billing_offer_verification_failed" && error.billingVerification) {
+      console.error(JSON.stringify({ event: "billing_offer_verification_failed", request_id: requestId,
+        ...error.billingVerification }));
+    }
     if (!expected) {
       // Driver errors can contain connection details, SQL, or submitted values.
       // Preserve a correlation ID without exposing those values in API/logs.

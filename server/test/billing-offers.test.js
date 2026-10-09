@@ -10,7 +10,7 @@ import { ensureBillingPriceCatalog } from "../src/billing/price-catalog.js";
 import { createSubscriptionCheckout, pendingOfferSummary } from "../src/billing/stripe-checkout.js";
 import { processStripeWebhook } from "../src/billing/stripe-webhook.js";
 import { introEligibility } from "../src/billing/intro-eligibility.js";
-import { OFFER_CATALOG_VERSION, OFFER_TERMS_VERSION, INTRO_OFFER_ID, publicBillingOffers } from "../src/billing/offers.js";
+import { OFFER_CATALOG_VERSION, OFFER_TERMS_VERSION, INTRO_OFFER_ID, publicBillingOffers, probeOfferProviderTerms } from "../src/billing/offers.js";
 import { createProjectsWithinQuota } from "../src/billing/project-quota.js";
 import { PLAN_DEFAULTS } from "../src/billing/plans.js";
 import { createIabtHandler } from "../src/app.js";
@@ -384,4 +384,96 @@ test("authenticated billing offers require versioned acceptance and private clai
   const other = await f.repository.createUser({ email: "offer-other@example.test", passwordHash: "unused", emailVerified: true });
   assert.equal(await pendingOfferSummary({ ...f, user: other }), null);
   assert.equal((await introEligibility({ ...f, user: other })).eligible, true);
+});
+
+
+test("verification diagnostics identify each failed GET without Checkout or secret disclosure", async (t) => {
+  for (const [path, endpoint] of [["/account", "/v1/account"], ["/prices/", "/v1/prices/:id"], ["/coupons/", "/v1/coupons/:id"]]) {
+    for (const failure of ["http", "timeout", "network", "invalid_response"]) {
+      const f = await fixture(t);
+      const good = f.providers.fetch;
+      f.providers.fetch = async (url, options) => {
+        if (!url.includes(path)) return good(url, options);
+        if (failure === "timeout") throw Object.assign(new Error("secret provider timeout"), { name: "TimeoutError" });
+        if (failure === "network") throw new Error("secret network details");
+        return { ok: failure !== "http", status: failure === "http" ? 403 : 200,
+          headers: new Headers({ "request-id": "req_fixture123" }),
+          json: async () => {
+            if (failure === "invalid_response") throw new SyntaxError("secret response body");
+            return { error: { type: "invalid_request_error", code: "secret_code", message: "secret permissions and credential" } };
+          } };
+      };
+      await assert.rejects(f.create(), (error) => {
+        assert.equal(error.code, "billing_offer_verification_failed"); assert.equal(error.status, 503);
+        assert.deepEqual(error.billingVerification, { endpoint, failure,
+          http_status: ["http", "invalid_response"].includes(failure) ? (failure === "http" ? 403 : 200) : null,
+          stripe_request_id: ["http", "invalid_response"].includes(failure) ? "req_fixture123" : null,
+          stripe_error_type: failure === "http" ? "invalid_request_error" : null, stripe_error_code: null });
+        assert.doesNotMatch(JSON.stringify(error), /secret|rk_test|price_new|coupon_intro/);
+        return true;
+      });
+      assert.equal(f.calls.length, 0);
+      for (const entity of ["BillingCheckoutAttempt", "BillingOfferAcceptance", "BillingIntroClaim"])
+        assert.deepEqual(await f.repository.listRecords(entity, f.user), []);
+    }
+  }
+});
+
+test("verification preserves HTTP status for malformed errors and rejects unsafe diagnostic values", async (t) => {
+  const f = await fixture(t);
+  for (const body of [null, { error: { type: "rk_test_secret", code: "resource_missing", message: "private" } }]) {
+    f.providers.fetch = async () => ({ ok: false, status: 404, headers: new Headers({ "request-id": "unsafe private value" }),
+      json: async () => { if (!body) throw new SyntaxError("private"); return body; } });
+    await assert.rejects(f.create(), (error) => {
+      assert.equal(error.billingVerification.http_status, 404);
+      assert.equal(error.billingVerification.failure, "http");
+      assert.equal(error.billingVerification.stripe_request_id, null);
+      assert.equal(error.billingVerification.stripe_error_type, null);
+      assert.equal(error.billingVerification.stripe_error_code, body ? "resource_missing" : null);
+      assert.doesNotMatch(JSON.stringify(error), /private|rk_test/); return true;
+    });
+  }
+  await assert.rejects(f.create({ config: configFor({ STRIPE_SECRET_KEY: "invalid" }) }), (error) => {
+    assert.equal(error.billingVerification.failure, "configuration"); return true;
+  });
+});
+
+test("host probe is read-only, opt-in, test-only and retains verification guards", async (t) => {
+  const f = await fixture(t);
+  const run = (config = f.config, offerId = "builder-2026-10") => probeOfferProviderTerms({ config, offerId, fetchImpl: f.providers.fetch });
+  assert.deepEqual(await run(f.config, ""), { status: "skipped" });
+  assert.deepEqual(await run(configFor({ IABT_NEW_OFFERS_ENABLED: "false" })), { status: "skipped" });
+  assert.deepEqual(await run(configFor({ IABT_STRIPE_MODE: "live", STRIPE_SECRET_KEY: "rk_live_fixture" })), { status: "skipped" });
+  assert.equal(f.reads.length, 0);
+  assert.deepEqual(await run(), { status: "verified" });
+  assert.equal(f.reads.length, 2);
+  f.transform((x) => ({ ...x, id: "acct_wrong" }));
+  assert.deepEqual(await run(), { status: "failed", code: "billing_offer_account_mismatch" });
+  f.providers.fetch = async () => ({ ok: false, status: 401, json: async () => ({ error: { type: "authentication_error" } }) });
+  const result = await run();
+  assert.equal(result.status, "failed"); assert.equal(result.verification.endpoint, "/v1/account");
+  assert.equal(result.verification.http_status, 401); assert.equal(f.calls.length, 0);
+  assert.deepEqual(await f.repository.listRecords("BillingCheckoutAttempt", f.user), []);
+});
+
+test("HTTP verification failure logs correlation metadata but keeps the client response generic", async (t) => {
+  const f = await fixture(t);
+  f.providers.fetch = async () => ({ ok: false, status: 403, headers: new Headers({ "request-id": "req_support123" }),
+    json: async () => ({ error: { type: "invalid_request_error", message: "rk_test_private" } }) });
+  const log = t.mock.method(console, "error", () => {});
+  const token = createOpaqueToken();
+  await f.repository.createSession({ userId: f.user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 600000).toISOString() });
+  const server = createServer(createIabtHandler({ repository: f.repository, config: f.config, providers: f.providers }));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/functions/stripe-create-checkout`, {
+    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ offer_id: "builder-2026-10", disclosure_acceptance: { accepted: true, version: OFFER_TERMS_VERSION } }) });
+  const body = await response.json();
+  assert.equal(response.status, 503); assert.equal(body.error, "billing_offer_verification_failed");
+  const record = JSON.parse(log.mock.calls[0].arguments[0]);
+  assert.equal(record.request_id, body.request_id); assert.equal(record.endpoint, "/v1/account");
+  assert.equal(record.http_status, 403); assert.equal(record.stripe_request_id, "req_support123");
+  assert.doesNotMatch(JSON.stringify(body), /stripe_request_id|http_status|billingVerification|rk_test|support123/);
+  assert.doesNotMatch(JSON.stringify(record), /rk_test_private/); assert.equal(f.calls.length, 0);
 });

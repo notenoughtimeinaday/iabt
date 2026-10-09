@@ -88,21 +88,50 @@ export const publicBillingOffers = (config) => {
   });
 };
 
-const getStripe = async (config, path, fetchImpl) => {
+// Only bounded, allowlisted metadata reaches operator logs. Never retain the
+// response body, provider message, actual resource path, key or request headers.
+const verificationFailure = (diagnostic) => Object.assign(new Error(
+  "Stripe offer terms could not be verified. No new Checkout was submitted."
+), { code: "billing_offer_verification_failed", status: 503,
+  billingVerification: Object.freeze(diagnostic) });
+const errorTypes = new Set(["invalid_request_error", "authentication_error", "permission_error", "api_error", "rate_limit_error"]);
+const errorCodes = new Set(["resource_missing", "api_key_expired", "invalid_api_key", "parameter_unknown", "parameter_missing", "rate_limit"]);
+const getStripe = async (config, path, endpoint, fetchImpl) => {
   const stripe = config.providers.stripe;
-  if (!new RegExp(`^[sr]k_${stripe.mode}_`).test(stripe.secretKey)) fail("billing_offer_verification_failed", "Stripe account verification is unavailable.", 503);
+  const diagnostic = { endpoint, failure: "configuration", http_status: null,
+    stripe_request_id: null, stripe_error_type: null, stripe_error_code: null };
+  if (!new RegExp(`^[sr]k_${stripe.mode}_`).test(stripe.secretKey)) throw verificationFailure(diagnostic);
+  const signal = AbortSignal.timeout(15000);
+  let response;
   try {
-    const response = await fetchImpl("https://api.stripe.com/v1" + path, { method: "GET", redirect: "error",
-      signal: AbortSignal.timeout(15000), headers: { Authorization: "Bearer " + stripe.secretKey, "Stripe-Version": "2026-08-26.dahlia" } });
-    if (!response.ok) throw new Error("unavailable");
-    return await response.json();
-  } catch { fail("billing_offer_verification_failed", "Stripe offer terms could not be verified. No new Checkout was submitted.", 503); }
+    response = await fetchImpl("https://api.stripe.com/v1" + path, { method: "GET", redirect: "error",
+      signal, headers: { Authorization: "Bearer " + stripe.secretKey, "Stripe-Version": "2026-08-26.dahlia" } });
+    const requestId = response.headers?.get?.("request-id");
+    diagnostic.stripe_request_id = typeof requestId === "string" && /^req_[a-zA-Z0-9]{1,100}$/.test(requestId) ? requestId : null;
+    diagnostic.http_status = Number.isInteger(response.status) && response.status >= 100 && response.status <= 599 ? response.status : null;
+    if (!response.ok) {
+      diagnostic.failure = "http";
+      // A malformed error body must not hide the upstream HTTP status.
+      const body = await response.json().catch(() => null);
+      diagnostic.stripe_error_type = errorTypes.has(body?.error?.type) ? body.error.type : null;
+      diagnostic.stripe_error_code = errorCodes.has(body?.error?.code) ? body.error.code : null;
+      throw verificationFailure(diagnostic);
+    }
+    const body = await response.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new SyntaxError("invalid response");
+    return body;
+  } catch (error) {
+    if (error?.billingVerification === diagnostic) throw error;
+    diagnostic.failure = signal.aborted || error?.name === "TimeoutError" || error?.name === "AbortError"
+      ? "timeout" : response ? "invalid_response" : "network";
+    throw verificationFailure(diagnostic);
+  }
 };
 
 export const verifyOfferProviderTerms = async ({ config, offer, fetchImpl = globalThis.fetch }) => {
-  const account = await getStripe(config, "/account", fetchImpl);
+  const account = await getStripe(config, "/account", "/v1/account", fetchImpl);
   if (account.id !== offer.stripe_account_id) fail("billing_offer_account_mismatch", "The configured Stripe account does not match this offer.");
-  const price = await getStripe(config, "/prices/" + offer.price_id, fetchImpl);
+  const price = await getStripe(config, "/prices/" + offer.price_id, "/v1/prices/:id", fetchImpl);
   if (price.id !== offer.price_id || price.livemode !== false || price.active !== true ||
       price.type !== "recurring" || price.currency !== offer.currency ||
       price.unit_amount !== offer.renewal_amount_cents || price.billing_scheme !== "per_unit" ||
@@ -111,12 +140,28 @@ export const verifyOfferProviderTerms = async ({ config, offer, fetchImpl = glob
     fail("billing_offer_price_mismatch", "Stripe price terms differ from the selected offer.");
   }
   if (offer.introductory) {
-    const coupon = await getStripe(config, "/coupons/" + offer.coupon_id + "?expand%5B%5D=applies_to", fetchImpl);
+    const coupon = await getStripe(config, "/coupons/" + offer.coupon_id + "?expand%5B%5D=applies_to", "/v1/coupons/:id", fetchImpl);
     const productId = typeof price.product === "string" ? price.product : price.product?.id;
     if (coupon.id !== offer.coupon_id || coupon.livemode !== false || coupon.valid !== true ||
         coupon.duration !== "once" || coupon.amount_off !== 701 || coupon.currency !== "usd" ||
         coupon.percent_off != null || coupon.applies_to?.products?.length !== 1 || coupon.applies_to.products[0] !== productId) {
       fail("billing_offer_discount_mismatch", "The introductory discount does not match the accepted offer.");
     }
+  }
+};
+
+// Optional host-only probe for free staging hosts without Shell/SSH. No
+// repository, provider executor or Checkout operation is reachable here.
+export const probeOfferProviderTerms = async ({ config, offerId, fetchImpl = globalThis.fetch }) => {
+  if (!offerId || !newOffersAvailable(config)) return { status: "skipped" };
+  try {
+    const offer = configuredOffer(config, offerId);
+    await verifyOfferProviderTerms({ config, offer, fetchImpl });
+    return { status: "verified" };
+  } catch (error) {
+    const codes = ["billing_offer_verification_failed", "billing_offer_account_mismatch", "billing_offer_price_mismatch",
+      "billing_offer_discount_mismatch", "billing_offer_disabled", "billing_offer_unknown", "billing_offer_not_configured"];
+    return { status: "failed", code: codes.includes(error.code) ? error.code : "internal_error",
+      ...(error.billingVerification ? { verification: error.billingVerification } : {}) };
   }
 };
