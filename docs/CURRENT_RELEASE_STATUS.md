@@ -1,5 +1,35 @@
 # Current IABT release status — October 9, 2026
 
+## October 9 Studio usability and image-to-video repair
+
+The owner reported scrolling failures and no visible result from Create outcome.
+Hosted inspection reproduced generic non-task replies to “clear up the image”
+and “animate the attached image”; a conventional video request with an image
+failed at the attachment gate with only temporary UI feedback. The live
+capability response also reported image and video providers unconfigured.
+
+The candidate repairs the overlapping composer, persistent submission feedback,
+capability-map parsing and media setup disclosure. A new owner-checked image
+route prepares a paid Luma quote from one JPEG/PNG, binds source hash and video
+settings, and revalidates bytes before an inline first-keyframe submission.
+Missing provider setup stops before a job or credit reservation. Photo cleanup
+remains unsupported and now explains that limitation directly. Both changes
+are taught in the versioned Jericho curriculum.
+
+Initial complete local verification passed **453 tests, zero failed/skipped**,
+including 71 observed PostgreSQL checks, plus lint, type checking, Exchange and
+creation checks, frontend isolation and the production build. That run covered
+a changing working copy; final source binding and deployment evidence must be
+recorded separately. Local browser tests reached the submit/error controls on
+a 390×844 viewport and the paid image-video quote through the actual Studio
+components. The local video transport is simulated and its placeholder MP4 is
+not a playable generated video. It establishes workflow wiring only.
+
+**No real image-to-video render is accepted.** Luma configuration, approved
+supplier spending and a successful real output remain required. No provider
+charge, production cutover or paid hosting upgrade is authorized by these tests.
+Use the isolated staging services below for the UI deployment and acceptance.
+
 ## October 9 checkout diagnosis and continuation
 
 The October 7 [release report](https://drive.google.com/file/d/1wphiGWaq7Z67vtLtfZkva8wDFFsNLEul/view)

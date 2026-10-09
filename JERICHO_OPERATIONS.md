@@ -87,7 +87,32 @@ Download buttons request `GET /v1/files/:id/access?download=1`. Ordinary access
 and media previews retain their existing storage links, content types and range
 behavior; the attachment gateway does not implement video seeking or resume.
 
-This flow performs no model call, paid-provider operation, uploaded-code execution, external-link fetch or repository edit. It extracts literal candidate requirements, not general semantic conclusions or proof of implementation. Attached-file requests for other creation intents remain unsupported by the current planner. The lower-level orchestration inspection tool also uses the verified text reader, but this is not a claim that all uploaded formats or creation modes work together.
+This flow performs no model call, paid-provider operation, uploaded-code execution, external-link fetch or repository edit. It extracts literal candidate requirements, not general semantic conclusions or proof of implementation. The separate approved image-to-video route below accepts one still image. Other attachment/output combinations remain unsupported. The lower-level orchestration inspection tool also uses the verified text reader, but this is not a claim that all uploaded formats or creation modes work together.
+
+## Image-to-video and Studio feedback
+
+An affirmative request such as “Animate this photo into a 5-second video” can
+prepare a paid Luma quote from one owned JPEG or PNG up to 5 MiB, 8,192 pixels
+per side and 16 megapixels. The source size, checksum and container are checked
+at planning, approval and worker submission. Portrait photos default to 9:16;
+explicit supported aspect ratios and 5/10-second durations are quote-bound.
+Approval permits sending the verified image inline to Luma as the first
+keyframe. It creates no public source URL and does not retain base64 image bytes
+in the job input. The adapter uses the documented
+[Luma Agents video keyframes contract](https://docs.agents.lumalabs.ai/api/typescript/resources/generations/).
+
+If Luma setup or the applicable usage approval is missing, image-to-video stops
+with an explicit setup message before creating a plan, job or credit reservation.
+It does not substitute a document brief. Image cleanup and photo editing remain
+unsupported and now say so directly. Provider moderation, account balance,
+visual quality and a real MP4 render require separate acceptance; simulated
+provider tests do not establish those outcomes.
+
+Studio retains a failed request's text and persistent error, shows submission
+progress, and refreshes accepted plans. Its composer no longer overlays the
+conversation; narrow screens use page scrolling. Retrieved unchanged messages
+do not force readers back to the latest message. The visible image/video setup
+status describes configuration, not a successful provider call.
 
 ## Access, email and policy acceptance
 

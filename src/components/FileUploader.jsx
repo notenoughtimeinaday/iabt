@@ -35,6 +35,7 @@ export default function FileUploader({
   conversationId = "",
   assetScope = "project",
   compact = false,
+  description,
   onUploaded,
   onStatusChange,
   disabled = false,
@@ -127,12 +128,12 @@ export default function FileUploader({
           {uploading ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <UploadCloud className="h-5 w-5 text-primary" />}
         </div>
         <div className={compact ? "min-w-0 flex-1 text-left" : ""}>
-          <p className="text-sm font-medium">
+          <p className="file-uploader-title text-sm font-medium">
             {uploading ? "Uploading..." : compact ? "Attach files for JERICHO" : "Drag & drop files or browse"}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">{platformRuntime.backend === "standalone"
+          <p className="file-uploader-description text-xs text-muted-foreground mt-1">{description || (platformRuntime.backend === "standalone"
             ? "Reports can read UTF-8 text, Markdown, JSON, CSV and source code: up to 12 files, 128 KiB each, 256 KiB total. Other formats are storage only."
-            : compact ? "Docs, images, code, data, audio, or video" : "Any file type — documents, images, code, audio, video"}</p>
+            : compact ? "Docs, images, code, data, audio, or video" : "Any file type — documents, images, code, audio, video")}</p>
         </div>
         <Button type="button" variant="outline" size="sm" disabled={disabled || uploading || pendingFiles.length > 0} onClick={() => inputRef.current?.click()}>
           {compact ? "Attach" : "Browse Files"}

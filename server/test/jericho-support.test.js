@@ -100,3 +100,23 @@ test("unknown provider text is never echoed as operational advice", () => {
   assert.equal(result.category, "needs_investigation");
   assert.match(result.next_action, /outcome is reconciled/);
 });
+
+test("video support explains the actual configuration gate without claiming a render or starting work", async () => {
+  const request = { requestText: "Why does my image not become a video?", agentName: "iabt_creator" };
+  const missing = await respondToSupportRequest({ ...context(), ...request });
+  assert.match(missing.content, /Video generation is not ready/);
+  assert.match(missing.content, /Buying IABT credits alone does not complete/);
+  assert.match(missing.content, /Image cleanup and photo editing are not implemented/);
+  const blocked = await respondToSupportRequest({
+    ...context({ readiness: { luma: { configured: true, commercial_ready: false } } }),
+    user: { ...user, role: "user" }, ...request
+  });
+  assert.match(blocked.content, /blocked for this account until commercial/);
+  const configured = await respondToSupportRequest({
+    ...context({ readiness: { luma: { configured: true, commercial_ready: true } } }), ...request
+  });
+  assert.match(configured.content, /sent to Luma only after paid-quote approval/);
+  assert.match(configured.content, /provider balance and output quality still require live verification/);
+  assert.equal(configured.metadata.knowledge.providers.luma.live_probe_performed, false);
+  assert.equal(JSON.stringify(configured).includes(secret), false);
+});

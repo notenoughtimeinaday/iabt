@@ -10,6 +10,7 @@ import {
   buildGcodeSimulationArtifacts
 } from "./creation/specialized-artifacts.js";
 import { readTextSources } from "./files/text-sources.js";
+import { readImageSources } from "./files/image-sources.js";
 import { buildSourceReviewArtifacts } from "./creation/source-review.js";
 import { orchestrationStep } from "./autonomy/orchestrator.js";
 import { classifyFailure } from "./autonomy/recovery.js";
@@ -165,17 +166,27 @@ const providerContext = (job) => ({
   idempotencyKey: job.idempotency_key
 });
 
-const lumaStep = async (job, providers, pollDelayMs, repository, workerId, assertLease) => {
+const lumaStep = async (job, providers, pollDelayMs, repository, storage, workerId, assertLease) => {
   let providerJobId = String(job.input.provider_job_id || job.output?.luma_submission?.provider_job_id || "");
   let providerResult;
   if (!providerJobId) {
     if (job.output?.luma_submission?.phase === "submitting") throw Object.assign(new Error("Provider submission needs reconciliation"), { code: "provider_outcome_unknown" });
+    let sourceImage;
+    if (job.input.source_kind === "image") {
+      const user = await repository.getUser(job.owner_id);
+      const [source] = await readImageSources({ repository, storage, user,
+        fileIds: (job.input.file_references || []).map((reference) => reference.file_id),
+        expectedReferences: job.input.file_references || [] });
+      sourceImage = { bytes: source.bytes, contentType: source.contentType };
+    } else if (job.input.file_references?.length) {
+      throw Object.assign(new Error("Video attachment kind is missing"), { code: "source_intent_unsupported" });
+    }
     await assertLease();
     await checkpointOutput(repository, job, workerId, { luma_submission: { phase: "submitting" } });
     providerResult = await providers.execute(
       "luma",
       "submit_video",
-      job.input,
+      { ...job.input, ...(sourceImage ? { source_image: sourceImage } : {}) },
       providerContext(job)
     );
     providerJobId = String(providerResult.providerJobId || "");
@@ -222,7 +233,9 @@ const lumaStep = async (job, providers, pollDelayMs, repository, workerId, asser
           provider_state: "succeeded",
           poll_count: Number(job.input.provider_poll_count || 0)
         },
-        artifacts: [{ ...video, kind: "video", metadata: video.metadata || {} }]
+        artifacts: [{ ...video, kind: "video", metadata: { ...video.metadata,
+          ...(job.input.source_kind === "image" ? { source_integrity_verified: true, source_references: job.input.file_references } : {})
+        } }]
       }
     };
   }
@@ -306,7 +319,7 @@ export const runClaimedJob = async ({
           limitations: ["Responses orchestration did not complete. This is an internal template deliverable, not a verified completion of the full requested objective."] };
         for (const artifact of result.artifacts) artifact.metadata = { ...artifact.metadata, delivery_mode: "template_fallback", objective_completed: false };
       }
-    } else if (job.input?.file_references?.length) {
+    } else if (job.input?.file_references?.length && job.job_type !== "provider.luma.video") {
       if (job.job_type !== "creation.document" || job.input.intent !== "document") {
         throw Object.assign(new Error("Attached sources require the source-review document workflow"), { code: "source_intent_unsupported" });
       }
@@ -318,7 +331,7 @@ export const runClaimedJob = async ({
       });
       result = buildSourceReviewArtifacts({ requestText: job.input.request_text, sources });
     } else if (job.job_type === "provider.luma.video") {
-      const step = await lumaStep(job, providers, pollDelayMs, repository, workerId, assertLease);
+      const step = await lumaStep(job, providers, pollDelayMs, repository, storage, workerId, assertLease);
       if (step.deferred) {
         await assertLease();
         const deferred = await repository.deferJob({

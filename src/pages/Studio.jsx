@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { base44, platformRuntime } from "@/api/iabtClient";
 import { storedFileId, resolveFileDownload, openFileDownload } from "@/lib/stored-files";
 import { createAttachmentTracker } from "@/lib/upload-batch";
+import { createStudioSubmissionGate, mediaReadiness, normalizeCreationCapabilities, refreshAcceptedSubmission, studioErrorMessage as errorMessage } from "@/lib/studio-state";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
@@ -111,10 +112,6 @@ const STARTERS = {
     "Design a reliable content workflow with approvals and delivery checks.",
   ],
 };
-
-function errorMessage(error, fallback = "Something went wrong.") {
-  return error?.response?.data?.error || error?.data?.error || error?.message || fallback;
-}
 
 function contentText(content) {
   if (typeof content === "string") return content;
@@ -260,11 +257,14 @@ export default function Studio() {
   const targetProjectId = (searchParams.get("project_id") || "").trim().slice(0, 200);
   const setupProvider = (searchParams.get("setup") || "").trim().slice(0, 80);
   const reduceMotion = useReducedMotion();
-  const messageEndRef = useRef(null);
+  const messageListRef = useRef(null);
+  const followLatestRef = useRef(true);
+  const promptRef = useRef(null);
+  const submissionErrorRef = useRef(null);
   const artifactAccessRef = useRef({});
   const attachmentTracker = useRef(createAttachmentTracker());
   const switchingConversationRef = useRef(false);
-  const submissionRef = useRef(null);
+  const submissionRef = useRef(createStudioSubmissionGate());
   const [prompt, setPrompt] = useState(() => setupProvider
     ? "Help me connect " + readable(setupProvider) + " to my IABT projects. Use the safest authorization method, keep credentials out of prompts and generated code, explain who pays provider costs, and verify the connection before using it."
     : "");
@@ -291,6 +291,8 @@ export default function Studio() {
   const [loading, setLoading] = useState(true);
   const [conversationBusy, setConversationBusy] = useState(false);
   const [sending, setSending] = useState(false);
+  const [submissionError, setSubmissionError] = useState("");
+  const [submissionNotice, setSubmissionNotice] = useState("");
   const [approvalBusy, setApprovalBusy] = useState(false);
   const [quoteAccepted, setQuoteAccepted] = useState(false);
   const [refreshingJobs, setRefreshingJobs] = useState({});
@@ -397,6 +399,7 @@ export default function Studio() {
   }, [publishAttachments, resolvePrivateArtifacts, targetProjectId, toast]);
 
   const canSwitchConversation = useCallback(() => {
+    if (submissionRef.current.busy) return false;
     const status = attachmentTracker.current.snapshot();
     if (status.busy || status.pending) {
       toast({ title: "Finish your attachments first", description: "Wait for uploads to finish, then retry or discard any unfinished attachments before switching conversations.", variant: "destructive" });
@@ -415,6 +418,9 @@ export default function Studio() {
       attachmentTracker.current.switchScope(assetScopeFor(conversationId, targetProjectId), conversationId);
       publishAttachments();
       setConversation(full);
+      followLatestRef.current = true;
+      setSubmissionError("");
+      setSubmissionNotice("");
       setMessages(full.messages || []);
       setQuoteAccepted(false);
       await loadResources(conversationId, quiet);
@@ -450,6 +456,9 @@ export default function Studio() {
       attachmentTracker.current.switchScope(assetScopeFor(created.id, targetProjectId), created.id, targetProjectId ? null : []);
       publishAttachments();
       setConversation(created);
+      followLatestRef.current = true;
+      setSubmissionError("");
+      setSubmissionNotice("");
       setMessages(created.messages || []);
       setPlans([]);
       setJobs([]);
@@ -486,7 +495,7 @@ export default function Studio() {
 
         setConversations(conversationRows || []);
         const capabilityPayload = capabilityResponse?.data || capabilityResponse;
-        setCapabilities(Array.isArray(capabilityPayload?.capabilities) ? capabilityPayload.capabilities : []);
+        setCapabilities(normalizeCreationCapabilities(capabilityPayload?.capabilities));
 
         const fabricPayload = fabricResponse?.data || fabricResponse;
         setConnectionFabric(fabricPayload?.fabric || null);
@@ -573,8 +582,15 @@ export default function Studio() {
   }, [activeVideoKey, refreshJob]);
 
   useEffect(() => {
-    messageEndRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "end" });
-  }, [visibleMessages.length, assistantWorking, reduceMotion]);
+    const list = messageListRef.current;
+    if (list && followLatestRef.current) {
+      list.scrollTo({ top: list.scrollHeight, behavior: reduceMotion ? "auto" : "smooth" });
+    }
+  }, [conversation?.id, visibleMessages.length, assistantWorking, reduceMotion]);
+
+  useEffect(() => {
+    if (submissionError) submissionErrorRef.current?.focus();
+  }, [submissionError]);
 
   useEffect(() => {
     setQuoteAccepted(false);
@@ -583,17 +599,21 @@ export default function Studio() {
   async function sendPrompt(event) {
     event?.preventDefault();
     const request = prompt.trim();
-    if (!request || sending) return;
+    if (!request || submissionRef.current.busy) return;
     const attachmentError = attachmentTracker.current.planningError();
     if (attachmentError || switchingConversationRef.current) {
-      toast({ title: "Attachments are not ready", description: attachmentError || "Wait for the conversation to finish loading.", variant: "destructive" });
+      setSubmissionError(attachmentError || "Wait for the conversation to finish loading.");
       return;
     }
 
+    if (!submissionRef.current.acquire()) return;
     setSending(true);
+    setSubmissionError("");
+    setSubmissionNotice("");
+    followLatestRef.current = true;
     try {
-      const target = conversation || await createConversation();
-      if (!target) return;
+      const target = conversation;
+      if (!target) throw new Error("Wait for your conversation to finish loading, then try again.");
 
       const scopeId = assetScopeFor(target.id, targetProjectId);
       const attachmentSnapshot = attachmentTracker.current.snapshot();
@@ -611,14 +631,14 @@ export default function Studio() {
         throw new Error("An older attachment has no permanent file reference. Remove it from this conversation and upload it again before requesting a file report.");
       }
       const submissionKey = JSON.stringify([target.id, request, uploadedAssets.map((asset) => asset.file_id), softwareAdvancementEnabled]);
-      if (submissionRef.current?.key !== submissionKey) submissionRef.current = { key: submissionKey, id: crypto.randomUUID() };
+      const submissionId = submissionRef.current.idFor(submissionKey);
 
       const sent = await base44.agents.addMessage(target, {
         role: "user",
         content: request,
         ...(platformRuntime.backend === "standalone" ? {
           file_ids: uploadedAssets.map((asset) => asset.file_id),
-          submission_id: submissionRef.current.id,
+          submission_id: submissionId,
           quote_only: !softwareAdvancementEnabled,
         } : {}),
         custom_context: [{
@@ -635,17 +655,17 @@ export default function Studio() {
           },
         }],
       });
-      submissionRef.current = null;
+      submissionRef.current.accepted();
       setMessages((current) => [...current.filter((item) => item.id !== sent.id), sent]);
       setPrompt("");
-      setPlans([]);
-      setJobs([]);
-      setArtifacts([]);
       setQuoteAccepted(false);
-      await refreshConversationList();
+      setSubmissionNotice("Request received. Read JERICHO’s response in the conversation for the result or next step.");
+      // A list refresh failure must not turn an accepted request into a send failure.
+      void refreshAcceptedSubmission(refreshConversationList, () => loadResources(target.id, true));
     } catch (error) {
-      toast({ title: "Your request was not sent", description: errorMessage(error), variant: "destructive" });
+      setSubmissionError(errorMessage(error));
     } finally {
+      submissionRef.current.release();
       setSending(false);
     }
   }
@@ -868,7 +888,7 @@ export default function Studio() {
                 <div>
                   <strong>Automatic output and tool selection</strong>
                   <p>Describe the outcome in plain language. JERICHO identifies whether it needs an app, website, document, media file, code, automation, or a combination.</p>
-                  <small>{capabilities.length || "Available"} creation options · review each plan’s availability and limits</small>
+                  <small>{capabilities.length ? capabilities.length + " creation options" : "Creation availability not confirmed"} · review each plan’s availability and limits</small>
                 </div>
                 <Link to="/integrations"><PlugZap /> Integrations</Link>
               </div>
@@ -876,14 +896,24 @@ export default function Studio() {
               <div className="creator-starters">
                 <span>Or start with an example</span>
                 {(targetProjectId ? STARTERS.app : AUTO_STARTERS).map((starter) => (
-                  <button type="button" key={starter} onClick={() => setPrompt(starter)}>
+                  <button type="button" key={starter} onClick={() => { setPrompt(starter); promptRef.current?.focus(); }}>
                     {starter}<ArrowUpRight />
                   </button>
                 ))}
               </div>
             </motion.div>
           ) : (
-            <div className="creator-message-list">
+            <div
+              className="creator-message-list"
+              ref={messageListRef}
+              tabIndex={0}
+              role="region"
+              aria-label="Conversation messages"
+              onScroll={(event) => {
+                const list = event.currentTarget;
+                followLatestRef.current = list.scrollHeight - list.scrollTop - list.clientHeight < 64;
+              }}
+            >
               <div className="creator-thread-intro">
                 <span className="creator-thread-mode">{React.createElement(currentMode.icon)} {activePlan ? readable(activePlan.intent) : "Automatic routing"}</span>
                 <button type="button" onClick={createConversation}><MessageSquarePlus /> Start another</button>
@@ -926,7 +956,6 @@ export default function Studio() {
                   <div><span /><span /><span /><small>JERICHO is planning the work and checking connected capabilities…</small></div>
                 </div>
               )}
-              <div ref={messageEndRef} />
             </div>
           )}
 
@@ -948,6 +977,9 @@ export default function Studio() {
                   conversationId={conversation?.id || ""}
                   assetScope={targetProjectId ? "project" : "conversation"}
                   compact
+                  description={platformRuntime.backend === "standalone"
+                    ? "Reports read UTF-8 text, Markdown, JSON, CSV and source code: up to 12 files, 128 KiB each, 256 KiB total. Photo animation accepts one JPEG or PNG up to 5 MiB; describe the motion in your objective. Other formats are storage only."
+                    : undefined}
                   disabled={sending || conversationBusy || !attachmentStatus.ready || Boolean(attachmentStatus.error)}
                   onStatusChange={(status) => {
                     if (attachmentTracker.current.setUploadStatus(assetScopeId, conversation?.id || "", status)) publishAttachments();
@@ -956,6 +988,10 @@ export default function Studio() {
                     if (attachmentTracker.current.mergeUploaded(assetScopeId, conversation?.id || "", uploaded)) publishAttachments();
                   }}
                 />
+                <p className="creator-media-readiness">
+                  Image generation: {mediaReadiness(capabilities, "image")}. Video rendering: {mediaReadiness(capabilities, "video")}.<br />
+                  Image retouching is not available in Studio.
+                </p>
                 {!attachmentStatus.ready && attachmentStatus.loading && !attachmentStatus.error && (
                   <p role="status">Loading your saved attachments before creating…</p>
                 )}
@@ -986,6 +1022,7 @@ export default function Studio() {
             <label className={"creator-advancement-toggle " + (softwareAdvancementEnabled ? "is-on" : "") }>
               <input
                 type="checkbox"
+                disabled={sending}
                 checked={softwareAdvancementEnabled}
                 onChange={(event) => setSoftwareAdvancementEnabled(event.target.checked)}
               />
@@ -995,7 +1032,11 @@ export default function Studio() {
             </label>
 
             <textarea
+              ref={promptRef}
+              aria-label="Objective"
+              aria-describedby={submissionError ? "creator-submission-error" : "creator-submission-status"}
               value={prompt}
+              readOnly={sending}
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void sendPrompt(event);
@@ -1006,11 +1047,22 @@ export default function Studio() {
               rows={4}
               maxLength={12000}
             />
+            {submissionError && (
+              <div id="creator-submission-error" className="creator-submission-error" role="alert" tabIndex={-1} ref={submissionErrorRef}>
+                <strong>Your request needs attention</strong>
+                <p>{submissionError}</p>
+                <small>Your draft is kept here. Review the conversation before retrying if the connection was interrupted.</small>
+              </div>
+            )}
+            <p id="creator-submission-status" className="creator-submission-status" role="status">
+              {sending ? "Sending your request and checking the next step…" : submissionNotice ||
+                (conversationBusy ? "Loading your conversation…" : attachmentTracker.current.planningError())}
+            </p>
             <div className="creator-composer-foot">
               <span><Check /> Private creation uses IABT credits. External costs require your approval.</span>
               <Button type="submit" disabled={!prompt.trim() || sending || conversationBusy || Boolean(attachmentTracker.current.planningError())}>
                 {sending ? <Loader2 className="animate-spin" /> : <Sparkles />}
-                {softwareAdvancementEnabled ? "Create outcome" : "Plan objective"}
+                {sending ? "Sending request…" : softwareAdvancementEnabled ? "Create outcome" : "Plan objective"}
               </Button>
             </div>
           </form>

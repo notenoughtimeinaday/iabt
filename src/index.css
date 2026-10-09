@@ -6028,6 +6028,115 @@ input, textarea, select { color-scheme: dark; caret-color: var(--jericho-cyan); 
   line-height: 1.6;
 }
 
+/* Keep the full composer reachable as attachments, status and text grow. */
+.creator-conversation > .creator-composer {
+  position: relative;
+  inset: auto;
+  transform: none;
+  flex: 0 0 auto;
+  max-height: 65%;
+  margin: 0 auto 18px;
+  overflow-y: auto;
+}
+
+.creator-conversation > .creator-message-list,
+.creator-conversation > .creator-welcome {
+  padding-bottom: 24px;
+  overscroll-behavior-y: auto;
+}
+
+.creator-submission-status,
+.creator-submission-error {
+  margin: 8px 4px;
+  color: #c2cfdd;
+  font-size: .88rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Uploads use a light panel inside the dark composer. */
+.creator-upload-dock,
+.creator-upload-dock .file-uploader-title {
+  color: #253247;
+}
+
+.creator-upload-dock .file-uploader-description,
+.creator-upload-dock .creator-media-readiness {
+  color: #475569;
+  font-size: .82rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.creator-upload-dock .creator-media-readiness {
+  margin: 8px 4px;
+}
+
+.creator-upload-head {
+  color: #475569;
+  font-size: .75rem;
+}
+
+.creator-upload-head small,
+.creator-upload-item small,
+.creator-upload-list em {
+  color: #526078;
+  font-size: .75rem;
+}
+
+.creator-upload-item strong {
+  font-size: .8rem;
+}
+
+.creator-submission-status:empty {
+  display: none;
+}
+
+.creator-submission-error {
+  padding: 10px 12px;
+  border: 1px solid #f2a9a9;
+  border-radius: 10px;
+  color: #ffe1e1;
+  background: #3d2029;
+}
+
+.creator-submission-error p {
+  margin: 4px 0;
+}
+
+@media (max-width: 1040px) {
+  .creator-shell {
+    grid-template-rows: auto auto;
+  }
+
+  .creator-main {
+    grid-template-rows: 66px auto;
+    overflow: visible;
+  }
+
+  .creator-conversation {
+    overflow: visible;
+  }
+
+  .creator-conversation > .creator-message-list,
+  .creator-conversation > .creator-welcome {
+    flex: 0 0 auto;
+    max-height: 55dvh;
+  }
+
+  .creator-conversation > .creator-composer {
+    max-height: none;
+    overflow: visible;
+    margin-bottom: 18px;
+  }
+}
+
+@media (max-width: 760px) {
+  .creator-main {
+    grid-template-rows: 60px auto;
+  }
+}
+
 .creator-composer-auto .creator-composer-mode {
   justify-content: space-between;
   width: 100%;
@@ -6098,6 +6207,31 @@ input, textarea, select { color-scheme: dark; caret-color: var(--jericho-cyan); 
 
 .creator-quote-compact dl {
   gap: 7px;
+}
+
+.creator-deliverables .creator-readiness > div {
+  border-color: #31465f;
+  background: #0d1d31;
+  color: #f1f7ff;
+}
+
+.creator-deliverables .creator-readiness small {
+  color: #b8c8dc;
+}
+
+.creator-deliverables .creator-quote-title > span,
+.creator-deliverables .creator-quote dd,
+.creator-deliverables .creator-quote dl > div.is-total {
+  color: #eaf5ff;
+}
+
+.creator-deliverables .creator-quote dl > div,
+.creator-deliverables .creator-approval label {
+  color: #c4d2e3;
+}
+
+.creator-deliverables .creator-quote > small.is-expired {
+  color: #ffb7c4;
 }
 
 .integration-page {

@@ -54,7 +54,14 @@ export async function capabilityRegistry({ config = {}, providers, repository, s
       stripe: remote("stripe", readiness.stripe),
       elevenlabs: remote("elevenlabs", readiness.elevenlabs, "document"),
       luma: remote("luma", readiness.luma, "document"),
-      file_processing: entry("file_processing", { configured: Boolean(storage), operational: storageOk, risk: "read", blockers: storageOk === true ? [] : ["storage_not_verified"], limitations: ["Bounded UTF-8 text/code extraction only."] }),
+      image_to_video: {
+        ...remote("image_to_video", readiness.luma),
+        input_formats: ["image/jpeg", "image/png"],
+        max_input_files: 1,
+        max_input_bytes: 5 * 1024 * 1024,
+        limitations: ["One owned, verified JPEG or PNG becomes the first video keyframe only after approval of a paid Luma quote.", "No image editing, face restoration or guarantee of visual fidelity. Provider configuration does not establish a funded account or a verified video."]
+      },
+      file_processing: entry("file_processing", { configured: Boolean(storage), operational: storageOk, risk: "read", blockers: storageOk === true ? [] : ["storage_not_verified"], limitations: ["Bounded UTF-8 text/code extraction for source reviews; one verified JPEG/PNG input for approved image-to-video. Image editing, PDF/Office interpretation and uploaded-code execution remain unsupported."] }),
       background_jobs: entry("background_jobs", { configured: Boolean(repository), operational: null, blockers: ["worker_heartbeat_not_observed"] }),
       scheduled_maintenance: entry("scheduled_maintenance", { configured: Boolean(repository?.claimDueMaintenance && config.maintenance?.enabled), operational: null, risk: "validate", blockers: ["maintenance_pass_not_observed"], implementation: "durable_account_schedule", limitations: ["Requires a running worker; inspect the account maintenance snapshot for actual progress.", "Repairs derived records and checks bounded private files using existing infrastructure; does not charge credits or execute paid generation.", "Cannot edit code, deploy or certify launch readiness."] }),
       artifact_verification: entry("artifact_verification", { configured: Boolean(storage), operational: storageOk, risk: "validate", blockers: storageOk === true ? [] : ["storage_not_verified"] })

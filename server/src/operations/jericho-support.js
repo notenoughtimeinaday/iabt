@@ -134,7 +134,7 @@ export const buildJerichoKnowledge = async ({ repository, user, providers, stora
       "Paid production requires a valid quote, explicit approval, credits, and provider gates; chat cannot bypass them.",
       "Provider outcomes must be reconciled before repeating an ambiguous paid submission.",
       "Credit restoration is reported only when the job records it; IABT credit restoration is not a supplier or cash refund.",
-      "Attached UTF-8 text, Markdown, JSON, CSV, and common code files support bounded source reviews. PDF, Office, media interpretation and uploaded-code execution are unsupported. Approved Responses orchestration may send verified attached text to OpenAI; the zero-provider-cost source-review path does not.",
+      "Attached UTF-8 text, Markdown, JSON, CSV, and common code files support bounded source reviews. One owned JPEG/PNG can provide the first frame for an approved paid Luma video. Image cleanup/editing, PDF/Office interpretation and uploaded-code execution are unsupported. Approved Responses orchestration may send verified attached text to OpenAI; the zero-provider-cost source-review path does not.",
       "External AI-client consent is unavailable. Exchange changes use authenticated Exchange workflows; this support responder does not perform them."
     ]
   };
@@ -156,6 +156,14 @@ export const respondToSupportRequest = async (context) => {
       ? "I can explain the standalone runtime and review your account's recorded failures. Use the authenticated Exchange workflows to manage your profile, find matches, approve mutual introductions, and enter private rooms. This chat response is read-only and has not contacted anyone or changed your Exchange records."
       : "I can inspect my implemented features and your account's recorded job outcomes. These are read-only observations; no production job or provider charge was started.",
     "Available creation paths include bounded app/website templates, document exports, code scaffolds, design boards, simulation-only G-code, and disabled automation runbooks. Media production depends on provider configuration, commercial gates, and an approved quote.",
+    ...(/\b(?:video|animation|animate|photo|image)\b/i.test(context.requestText) ? [
+      !knowledge.providers.luma.technically_configured
+        ? "Video generation is not ready: the Luma provider setup, billing authorization and cost settings must be completed before a video can run. Buying IABT credits alone does not complete that setup."
+        : !knowledge.providers.luma.commercial_ready && !knowledge.providers.luma.owner_demo_available
+          ? "Video generation is blocked for this account until commercial provider approval is configured. No video has been submitted."
+          : "Video generation is configured for an approved quote. Attach one JPEG or PNG (up to 5 MiB) and ask to animate it. The image is sent to Luma only after paid-quote approval; provider balance and output quality still require live verification.",
+      "Image cleanup and photo editing are not implemented. Uploading an image stores it; it does not by itself edit or animate it."
+    ] : []),
     "Latest account evidence: " + knowledge.recent_jobs.length + " job(s), " + knowledge.active_incident_count + " unresolved incident(s) in the latest 50 records.",
     "Learning curriculum: " + knowledge.learning.curriculum.version + "; " + knowledge.learning.lessons.length + " retained lesson(s), " + knowledge.learning.successful_recoveries.length + " verified recovery record(s). User corrections remain candidates until accepted against verified delivery. These records guide future work without changing permissions or model weights.",
     "Scheduled maintenance can reconcile completed job records, retain missing outcome lessons and check stored artifacts while the server is running. Inspect or pause it in Studio under Jericho maintenance. Its saved checks do not authorize paid jobs, code changes or deployment, and do not certify launch readiness.",

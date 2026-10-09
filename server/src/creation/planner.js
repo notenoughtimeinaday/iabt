@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { normalizeFileIds, readTextSources, referenceBinding, sourceReferences } from "../files/text-sources.js";
+import { readImageSources } from "../files/image-sources.js";
 import { creationPolicy } from "../autonomy/policy.js";
 import { capabilityRegistry, orchestrationConfigured } from "../autonomy/capabilities.js";
 
@@ -13,14 +14,14 @@ const normalize = (value, max = 12000) =>
 // fallback app classification must never turn conversation into billable work.
 export const creationRequestDisposition = (requestText) => {
   const text = normalize(requestText).toLowerCase().replace(/[’]/g, "'");
-  const hold = /\b(?:do not|don't|never|not yet|hold off|wait before|stop|cancel)\b.{0,65}\b(?:creat\w*|build\w*|mak\w*|writ\w*|generat\w*|produc\w*|prepar\w*|design\w*|develop\w*|implement\w*|draft\w*|compos\w*|render\w*|review\w*|summari[sz]\w*|analy[sz]\w*|convert\w*|fix\w*|repair\w*|updat\w*|improv\w*|revis\w*|packag\w*|export\w*|test\w*|execut\w*|start\w*|begin\w*|work|anything)\b/.test(text) || /\b(?:but not (?:yet|now|right now)|not until|wait for my (?:approval|permission|confirmation))\b/.test(text) ||
+  const hold = /\b(?:do not|don't|never|not yet|hold off|wait before|stop|cancel)\b.{0,65}\b(?:creat\w*|build\w*|mak\w*|writ\w*|generat\w*|produc\w*|prepar\w*|design\w*|develop\w*|implement\w*|draft\w*|compos\w*|render\w*|review\w*|summari[sz]\w*|analy[sz]\w*|convert\w*|fix\w*|repair\w*|updat\w*|improv\w*|revis\w*|packag\w*|export\w*|test\w*|execut\w*|start\w*|begin\w*|animat\w*|enhanc\w*|sharpen\w*|upscal\w*|clear\w*|clean\w*|work|anything)\b/.test(text) || /\b(?:but not (?:yet|now|right now)|not until|wait for my (?:approval|permission|confirmation))\b/.test(text) ||
     /\b(?:quote|plan|planning|explain|discussion|discuss)\s+only\b|\b(?:just|only)\s+(?:a\s+)?(?:quote|plan|explanation|discuss|explain)\b|^before\s+(?:creat\w*|build\w*|mak\w*|execut\w*|start\w*)\b|^(?:please\s+)?(?:create|make|build|generate)\s+nothing\b/.test(text);
   if (hold) return { create: false, reason: "execution_withheld", response: "I will keep this read-only and reserve no credits. Describe what you want clarified or quoted; tell me explicitly when you want creation to begin." };
   const request = text.replace(/^(?:(?:hello|hi|hey|okay|ok|thanks|thank you)[,!.\s]+)+/, "");
-  if (/^(?:can|could|do|would) you (?:create|build|make|generate) (?:apps|applications|websites|documents|images|videos|audio|software)[?.!]*$/.test(request)) {
+  if (/^(?:can|could|do|would) you (?:create|build|make|generate|animate|enhance|sharpen|upscale|clear up|clean up) (?:apps|applications|websites|documents|images|photos|videos|audio|software)[?.!]*$/.test(request)) {
     return { create: false, reason: "creation_not_requested", response: "I can explain the available creation tools and their limits. Describe a specific deliverable when you want me to begin; no credits have been reserved." };
   }
-  const direct = /^(?:(?:please|can you|could you|would you|will you|i need you to|i want you to|i'd like you to)\s+)*(?:help me\s+)?(?:create|build|make|write|generate|produce|prepare|design|develop|implement|draft|compose|render|review|summari[sz]e|analy[sz]e|convert|fix|repair|update|improve|revise|package|export|test)\b\s+\S/.test(request);
+  const direct = /^(?:(?:please|can you|could you|would you|will you|i need you to|i want you to|i'd like you to)\s+)*(?:help me\s+)?(?:create|build|make|write|generate|produce|prepare|design|develop|implement|draft|compose|render|review|summari[sz]e|analy[sz]e|convert|fix|repair|update|improve|revise|package|export|test|animate|enhance|sharpen|upscale|clear up|clean up)\b\s+\S/.test(request);
   const deliverable = /^(?:i\s+(?:need|want|would like)|i'd like)\s+(?:(?:an?|the|a new|new|some)\s+)?[^.!?]{0,100}\b(?:app|application|website|report|document|proposal|letter|manual|image|illustration|logo|poster|video|audio|song|script|source code|design|automation|runbook)\b/.test(request) && !/\b(?:help|advice|information|explanation|ideas|discuss)\b/.test(request);
   if (direct || deliverable) return { create: true, reason: "creation_requested" };
   return { create: false, reason: "creation_not_requested", response: "Describe the deliverable you want me to create, or ask about your existing work. I have not started a job or reserved credits." };
@@ -36,7 +37,7 @@ export const inferCreationIntent = (requestText) => {
   if (/\b(wireframe|design system|design tokens|interface design|brand guide|mockup)\b/.test(text)) return "design";
   if (/\b(website|web site|landing page|storefront|e-?commerce site)\b/.test(text)) return "website";
   if (/\b(app|application|mobile app|web app|software|piano app)\b/.test(text)) return "app";
-  if (/\b(video|mp4|film|animation|commercial clip)\b/.test(text)) return "video";
+  if (/\b(video|mp4|film|animation|animate|commercial clip)\b/.test(text)) return "video";
   if (/\b(audio|song|music track|mp3|voiceover|sound effect)\b/.test(text)) return "audio";
   if (/\b(document|report|proposal|letter|pdf|docx|manual)\b/.test(text)) return "document";
   if (/\b(image|photo|illustration|logo|poster|graphic)\b/.test(text)) return "image";
@@ -60,7 +61,7 @@ const titleFor = (requestText, intent) => {
 };
 
 const durationSeconds = (requestText) => {
-  const seconds = normalize(requestText).match(/\b(\d{1,3})\s*(?:second|sec|s)\b/i);
+  const seconds = normalize(requestText).match(/\b(\d{1,3})\s*[-–]?\s*(?:seconds?|secs?|s)\b/i);
   if (seconds) return Math.max(3, Math.min(600, Number(seconds[1])));
   const clock = normalize(requestText).match(/\b(\d{1,2}):(\d{2})\b/);
   return clock ? Math.max(3, Math.min(600, Number(clock[1]) * 60 + Number(clock[2]))) : 30;
@@ -68,6 +69,14 @@ const durationSeconds = (requestText) => {
 
 const videoDurationSeconds = (requestText) =>
   durationSeconds(requestText) >= 8 ? 10 : 5;
+
+const videoAspectRatio = (requestText, source) => {
+  const explicit = requestText.match(/\b(9:16|16:9|1:1)\b/);
+  if (explicit) return explicit[1];
+  if (/\b(?:portrait|vertical)\b/i.test(requestText)) return "9:16";
+  if (/\b(?:landscape|horizontal|widescreen)\b/i.test(requestText)) return "16:9";
+  return source ? (source.height > source.width ? "9:16" : source.height === source.width ? "1:1" : "16:9") : "16:9";
+};
 
 const quoteFields = (plan) => [
   plan.id,
@@ -392,22 +401,36 @@ export const createCreationPlan = async ({
   const intent = ids.length && explicitSourceReview ? "document" : inferCreationIntent(request);
   const registry = await capabilityRegistry({ config, providers, repository, storage, observe: false });
   const capability = capabilityFor(intent, user, providers, request, registry.capabilities);
-  if (ids.length && intent !== "document") {
-    throw Object.assign(new Error("Attached files currently support source-review documents only. Ask for a report or document; uploaded code is never executed or modified."), {
+  if (ids.length && intent === "image") {
+    throw Object.assign(new Error("Editing or clearing up an uploaded photo is not implemented yet. Your image is saved, but IABT cannot enhance it. You can request a video from one JPEG or PNG when the video provider is configured. No job or credit reservation was created."), {
       status: 422, code: "source_intent_unsupported"
     });
   }
-  const sources = await readTextSources({ repository, storage, user, fileIds: ids });
+  if (ids.length && !["document", "video"].includes(intent)) {
+    throw Object.assign(new Error("Attached files support text source-review documents or video from one JPEG/PNG image. Uploaded code is never executed or modified."), {
+      status: 422, code: "source_intent_unsupported"
+    });
+  }
+  const imageVideo = ids.length > 0 && intent === "video";
+  const sources = await (imageVideo ? readImageSources : readTextSources)({ repository, storage, user, fileIds: ids });
   const references = sourceReferences(sources);
+  if (imageVideo && !capability.renderReady) {
+    throw Object.assign(new Error("Image-to-video is not ready on this server. An administrator must configure the Luma key, paid-media access, billing estimate and applicable usage approval. Your photo is saved; no video job or credit reservation was created."), { status: 409, code: "image_video_not_configured" });
+  }
   if (references.length) {
     for (const [entity, id] of [["AgentConversation", conversationId], ["Project", projectId]]) {
       if (id && !await repository.getRecord(entity, id, { ...user, role: "user" })) {
         throw Object.assign(new Error("The source-review context was not found in your account."), { status: 404, code: "source_context_not_found" });
       }
     }
-    capability.id = "iabt-source-review-v1";
-    capability.deliverables = ["Source inventory and candidate requirement checklist in Markdown", "Microsoft Word-compatible DOCX source review", "Portable PDF source review"];
-    capability.warnings = ["Deterministic UTF-8 source review only: no general semantic analysis, uploaded-code execution, or repository changes."];
+    if (imageVideo) {
+      capability.id = "luma-ray-3.2-image-video-v1";
+      capability.warnings = [...capability.warnings, "After quote approval, the verified photo is sent privately to Luma as the starting frame. Provider moderation and generation quality limits still apply; video generation does not restore missing detail in a blurry image."];
+    } else {
+      capability.id = "iabt-source-review-v1";
+      capability.deliverables = ["Source inventory and candidate requirement checklist in Markdown", "Microsoft Word-compatible DOCX source review", "Portable PDF source review"];
+      capability.warnings = ["Deterministic UTF-8 source review only: no general semantic analysis, uploaded-code execution, or repository changes."];
+    }
   }
   const orchestrated = !references.length && ["app", "website", "document", "code", "design"].includes(intent) && orchestrationConfigured(config);
   if (orchestrated) {
@@ -446,7 +469,7 @@ export const createCreationPlan = async ({
     ...(projectId ? { project_id: projectId } : {}),
     request_text: request,
     request_fingerprint: requestFingerprint,
-    title: references.length ? "JERICHO Source Review" : titleFor(request, intent),
+    title: imageVideo ? "Image-to-Video Production" : references.length ? "JERICHO Source Review" : titleFor(request, intent),
     intent,
     status: "quoted",
     capability_id: capability.id,
@@ -454,7 +477,9 @@ export const createCreationPlan = async ({
     provider_ready: capability.providerReady,
     render_ready: capability.renderReady,
     fallback_available: true,
-    assistant_summary: references.length
+    assistant_summary: imageVideo
+      ? "JERICHO verified your saved image and prepared a paid video quote. Approving it permits sending that image to Luma to guide the video; no provider call has happened yet."
+      : references.length
       ? "JERICHO verified " + references.length + " private text source(s) and will create a source inventory, candidate requirement checklist, and complete source evidence. Uploaded code will not run or change."
       : "JERICHO inferred " + intent + " from your request and prepared an exact server-owned plan.",
     ...(references.length ? { file_references: references } : {}),
@@ -483,7 +508,8 @@ export const createCreationPlan = async ({
         ? {
             prompt: request,
             model: "ray-3.2",
-            aspect_ratio: "16:9",
+            aspect_ratio: videoAspectRatio(request, imageVideo ? sources[0] : null),
+            ...(imageVideo ? { source_kind: "image" } : {}),
             resolution: "720p",
             duration_seconds: videoDurationSeconds(request),
             estimated_cost_cents: capability.providerCostCents
@@ -622,7 +648,7 @@ export const executeCreationPlan = async ({
   }
 
   if (plan.file_references?.length) {
-    await readTextSources({
+    await (plan.intent === "video" && plan.normalized_spec?.source_kind === "image" ? readImageSources : readTextSources)({
       repository, storage, user,
       fileIds: plan.file_references.map((reference) => reference.file_id),
       expectedReferences: plan.file_references

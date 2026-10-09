@@ -1,3 +1,5 @@
+import { inspectImageSource } from "../files/image-sources.js";
+
 export class ProviderCallError extends Error {
   constructor(code, message, { status = 409, retryable = false, providerRequestId = "" } = {}) {
     super(message);
@@ -329,6 +331,17 @@ export class ProviderRegistry {
   }
 
   async lumaSubmit(payload, context) {
+    let keyframes;
+    if (payload.source_kind === "image") {
+      // Only the worker's revalidated in-memory bytes may become a reference.
+      // Ignore browser/provider URLs and never persist base64 in job inputs.
+      const source = payload.source_image;
+      if (!source || !Buffer.isBuffer(source.bytes)) {
+        throw new ProviderCallError("image_source_required", "The approved image bytes are required for image-to-video", { status: 422 });
+      }
+      inspectImageSource(source.bytes, source.contentType);
+      keyframes = [{ data: source.bytes.toString("base64"), media_type: source.contentType }];
+    }
     const response = await this.fetch("https://agents.lumalabs.ai/v1/generations", {
       method: "POST",
       headers: {
@@ -344,7 +357,10 @@ export class ProviderRegistry {
         aspect_ratio: payload.aspect_ratio || "16:9",
         video: {
           resolution: payload.resolution || "720p",
-          duration: Number(payload.duration_seconds) === 10 ? "10s" : "5s"
+          duration: Number(payload.duration_seconds) === 10 ? "10s" : "5s",
+          // A single keyframe at zero supports both 5s and 10s Ray 3.2
+          // generation. Legacy start_frame is limited to 5s.
+          ...(keyframes ? { keyframes, keyframe_indexes: [0] } : {})
         }
       })
     });
