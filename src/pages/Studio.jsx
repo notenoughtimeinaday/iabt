@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { base44, platformRuntime } from "@/api/iabtClient";
 import { storedFileId, resolveFileDownload, openFileDownload } from "@/lib/stored-files";
 import { createAttachmentTracker } from "@/lib/upload-batch";
-import { createStudioSubmissionGate, refreshAcceptedSubmission, studioErrorMessage as errorMessage } from "@/lib/studio-state";
+import { createStudioSubmissionGate, refreshAcceptedSubmission, studioRequestAssets, studioRequestText, studioErrorMessage as errorMessage } from "@/lib/studio-state";
 import "@/studio-simple.css";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -52,9 +52,10 @@ const MODE_OPTIONS = [
 ];
 
 const AUTO_STARTERS = [
-  { label: "Try a task-list app", prompt: "Create a task-list starter with add, complete, delete, search and filter controls." },
-  { label: "Create a website", prompt: "Create a website for my local business with services, opening hours and contact details. Use clear placeholders for details I have not provided." },
-  { label: "Review my code", prompt: "Review the source files I attach and create a report of the requirements, gaps and next steps. Distinguish code inspection from tests actually run." },
+  { label: "Build an app or website", icon: AppWindow, prompt: "I want to build an app or website that " },
+  { label: "Review existing source", icon: Code2, attach: true, prompt: "Review the source files I attach and create a report of the requirements, gaps and next steps. Distinguish code inspection from tests actually run." },
+  { label: "Create a document", icon: FileText, prompt: "Create a document about " },
+  { label: "Export my text", icon: Download, prompt: "Export this text as a document:\n" },
 ];
 
 const REVISION_STARTERS = [
@@ -223,7 +224,7 @@ export default function Studio() {
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedConversationId = (searchParams.get("conversation") || "").slice(0, 200);
   const startNew = searchParams.get("new") === "1";
-  const incomingPrompt = (searchParams.get("prompt") || "").slice(0, 12000);
+  const incomingPrompt = (searchParams.get("prompt") || "").slice(0, 100064);
   const targetProjectId = (searchParams.get("project_id") || "").trim().slice(0, 200);
   const setupProvider = (searchParams.get("setup") || "").trim().slice(0, 80);
   const reduceMotion = useReducedMotion();
@@ -272,6 +273,7 @@ export default function Studio() {
   const [softwareAdvancementEnabled, setSoftwareAdvancementEnabled] = useState(true);
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [workspaceView, setWorkspaceView] = useState("conversation");
   const menuButtonRef = useRef(null);
 
   const activePlan = plans[0] || null;
@@ -416,6 +418,7 @@ export default function Studio() {
       publishAttachments();
       setConversation(full);
       setRevisionArtifact(null);
+      setWorkspaceView("conversation");
       setHistoryOpen(false);
       setAttachmentsOpen(false);
       followLatestRef.current = true;
@@ -457,6 +460,7 @@ export default function Studio() {
       publishAttachments();
       setConversation(created);
       setRevisionArtifact(null);
+      setWorkspaceView("conversation");
       setHistoryOpen(false);
       setAttachmentsOpen(false);
       followLatestRef.current = true;
@@ -611,8 +615,8 @@ export default function Studio() {
 
   async function sendPrompt(event) {
     event?.preventDefault();
-    const request = prompt.trim();
-    if (!request || submissionRef.current.busy) return;
+    const request = studioRequestText(prompt);
+    if (!request.trim() || submissionRef.current.busy) return;
     const attachmentError = attachmentTracker.current.planningError();
     if (attachmentError || switchingConversationRef.current) {
       setSubmissionError(attachmentError || "Wait for the conversation to finish loading.");
@@ -634,16 +638,17 @@ export default function Studio() {
         throw new Error("Wait for this conversation and its saved attachments to finish loading.");
       }
       const scopedAssets = attachmentSnapshot.rows.filter((asset) => !scopeId || asset.project_id === scopeId);
-      if (platformRuntime.backend === "standalone" && scopedAssets.length > ATTACHED_ASSET_LIMIT) {
+      const revisionFileId = revisionArtifact ? storedFileId(revisionArtifact) || revisionArtifact.id : null;
+      const requestAssets = studioRequestAssets(scopedAssets, revisionFileId);
+      if (platformRuntime.backend === "standalone" && requestAssets.length > ATTACHED_ASSET_LIMIT) {
         throw new Error(`A file report can use at most ${ATTACHED_ASSET_LIMIT} attachments. Remove the extra attachments before sending your request.`);
       }
-      const uploadedAssets = scopedAssets
+      const uploadedAssets = requestAssets
         .slice(0, ATTACHED_ASSET_LIMIT)
         .map(assetForContext);
       if (platformRuntime.backend === "standalone" && uploadedAssets.some((asset) => !asset.file_id)) {
         throw new Error("An older attachment has no permanent file reference. Remove it from this conversation and upload it again before requesting a file report.");
       }
-      const revisionFileId = revisionArtifact ? storedFileId(revisionArtifact) || revisionArtifact.id : null;
       const submissionKey = JSON.stringify([target.id, request, uploadedAssets.map((asset) => asset.file_id), softwareAdvancementEnabled, revisionFileId]);
       const submissionId = submissionRef.current.idFor(submissionKey);
 
@@ -693,6 +698,20 @@ export default function Studio() {
     } catch (error) {
       toast({ title: "File could not be downloaded", description: error.message, variant: "destructive" });
     }
+  }
+
+  function focusComposer() {
+    setWorkspaceView("conversation");
+    window.requestAnimationFrame(() => {
+      promptRef.current?.focus();
+      promptRef.current?.scrollIntoView({ block: "nearest", behavior: reduceMotion ? "auto" : "smooth" });
+    });
+  }
+
+  function beginRevision(artifact) {
+    setRevisionArtifact(artifact);
+    setPrompt("");
+    focusComposer();
   }
 
   async function removeAttachedAsset(asset) {
@@ -751,7 +770,7 @@ export default function Studio() {
 
   if (loading) {
     return (
-      <div className="creator-loading">
+      <div className="creator-loading creator-workspace-loading">
         <div className="creator-loading-mark"><Sparkles /></div>
         <strong>Opening your workspace</strong>
         <span>Loading your saved work…</span>
@@ -760,7 +779,7 @@ export default function Studio() {
   }
 
   return (
-    <div className={"creator-shell creator-simple" + (hasResults ? " has-results" : "")}>
+    <div className={"creator-shell creator-simple" + (hasResults ? " has-results" : "")} data-workspace-view={workspaceView}>
       <AnimatePresence>
         {mobileNavOpen && (
           <motion.button
@@ -777,9 +796,9 @@ export default function Studio() {
 
       {mobileNavOpen && <aside className="creator-sidebar is-open" aria-label="Saved work">
         <div className="creator-sidebar-brand">
-          <Link to="/" className="creator-brand-link" aria-label="Return to IABT home">
+          <Link to="/" className="creator-brand-link" aria-label="Return to workspace home">
             <img className="creator-brand-mark" src="/iabt-mark.svg" alt="" />
-            <span><strong>IABT</strong><small>Your workspace</small></span>
+            <span><strong>JERICHO</strong><small>IABT workspace</small></span>
           </Link>
           <button type="button" className="creator-mobile-close" onClick={() => { setMobileNavOpen(false); menuButtonRef.current?.focus(); }} aria-label="Close saved work">
             <X />
@@ -825,28 +844,37 @@ export default function Studio() {
             </span>
           </div>
           <Link to="/deliverables"><Download /> Saved files</Link>
-          <Link to="/"><ArrowLeft /> Your apps</Link>
+          <Link to="/"><ArrowLeft /> Workspace &amp; projects</Link>
+          <Link to="/support"><MessageSquarePlus /> Support</Link>
           {platformRuntime.backend === "standalone" && <details className="creator-optional-details"><summary>Help &amp; activity</summary><JerichoLearningPanel /><JerichoMaintenancePanel /></details>}
         </div>
       </aside>}
 
-      <main className="creator-main">
         <header className="creator-topbar">
           <button ref={menuButtonRef} type="button" className="creator-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Open saved work" aria-expanded={mobileNavOpen}>
             <Menu />
           </button>
-          <div className="creator-topbar-title">
+          <Link to="/" className="creator-topbar-title" aria-label="Jericho workspace home">
             <img className="creator-simple-mark" src="/iabt-mark.svg" alt="" />
-            <div><strong>IABT · Jericho</strong></div>
-          </div>
+            <div><strong>JERICHO</strong><small>IABT workspace</small></div>
+          </Link>
+          <span className="creator-workspace-title" title={titleFromConversation(conversation)}>{titleFromConversation(conversation)}</span>
           <div className="creator-topbar-actions">
             <span className="creator-credit-chip"><Sparkles /> {remainingCredits} credits</span>
-            <Link to="/deliverables" className="creator-builder-link"><Download /> Saved files</Link>
-            <button type="button" className="creator-builder-link" onClick={createConversation} disabled={sending || conversationBusy || attachmentStatus.busy || attachmentStatus.pending > 0}><MessageSquarePlus /> New</button>
+            <Link to="/" className="creator-builder-link creator-home-link" aria-label="Workspace and projects"><ArrowLeft /><span>Workspace</span></Link>
+            <Link to="/deliverables" className="creator-builder-link" aria-label="Saved files"><Download /><span>Files</span></Link>
+            <button type="button" className="creator-builder-link creator-new-work" aria-label="New creation" onClick={createConversation} disabled={sending || conversationBusy || attachmentStatus.busy || attachmentStatus.pending > 0}><MessageSquarePlus /><span>New</span></button>
           </div>
         </header>
 
+      <nav className="creator-mobile-views" aria-label="Workspace view">
+        <button type="button" aria-pressed={workspaceView === "conversation"} aria-controls="creator-conversation-panel" onClick={() => setWorkspaceView("conversation")}><Bot /> Conversation</button>
+        <button type="button" aria-pressed={workspaceView === "results"} aria-controls="creator-results-panel" onClick={() => setWorkspaceView("results")}><AppWindow /> Results {activePlan?.status === "quoted" ? <span>Review quote</span> : artifacts.length > 0 ? <span>{artifacts.length}</span> : null}</button>
+      </nav>
+
+      <main id="creator-conversation-panel" className="creator-main" aria-label="Creation conversation">
         <section className="creator-conversation">
+          <div className="creator-workspace-section"><span><Bot /> Your conversation</span><small>{targetProjectId ? "Project work" : "Creation studio"}</small></div>
           {systemAlert ? (
             <div className="creator-system-alert" role="status">
               <Gauge />
@@ -876,13 +904,13 @@ export default function Studio() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.35 }}
             >
-              <p className="creator-kicker">Your idea, taking shape</p>
-              <h1>{targetProjectId ? "What would you like to change?" : "What would you like to build?"}</h1>
-              <p className="creator-welcome-copy">Describe your app or website. See the result here, make changes, and keep your files.</p>
+              <p className="creator-kicker">Build with Jericho</p>
+              <h1>{targetProjectId ? "Keep your project moving." : "Start something. Improve what exists."}</h1>
+              <p className="creator-welcome-copy">Describe an app, bring your source files, or create a document. Your conversation and saved results stay together.</p>
               <div className="creator-starters">
                 {(targetProjectId ? REVISION_STARTERS : AUTO_STARTERS).map((starter) => (
-                  <button type="button" key={starter.label} onClick={() => { setPrompt(starter.prompt); promptRef.current?.focus(); }}>
-                    {starter.label}<ArrowUpRight />
+                  <button type="button" key={starter.label} onClick={() => { setPrompt(starter.prompt); if (starter.attach) setAttachmentsOpen(true); focusComposer(); }}>
+                    {React.createElement(starter.icon || Sparkles)}<span>{starter.label}</span><ArrowUpRight />
                   </button>
                 ))}
               </div>
@@ -944,11 +972,13 @@ export default function Studio() {
             </div>
           )}
 
+          {activePlan?.status === "quoted" && <button type="button" className="creator-review-quote-link" onClick={() => { setWorkspaceView("results"); window.requestAnimationFrame(() => document.getElementById("creator-active-plan")?.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" })); }}><CheckCircle2 /><span>A quote is ready · {Number(activePlan.credit_cost || 0)} {Number(activePlan.credit_cost) === 1 ? "credit" : "credits"}</span><ChevronRight /></button>}
+
           <form className="creator-composer creator-composer-auto" onSubmit={sendPrompt}>
 
 
             {revisionArtifact && <div className="creator-revision-note">
-              <AppWindow /><span>Changing <strong>{revisionArtifact.name}</strong></span>
+              <AppWindow /><span>Changing <strong>{revisionArtifact.name}</strong><small>Uses this saved app only. Original attachments stay in this conversation.</small></span>
               <button type="button" disabled={sending} onClick={() => setRevisionArtifact(null)} aria-label="Stop changing this app"><X /></button>
             </div>}
             <textarea
@@ -961,9 +991,9 @@ export default function Studio() {
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void sendPrompt(event);
               }}
-              placeholder={revisionArtifact || targetProjectId ? "Describe the change you want…" : "Describe your idea…"}
+              placeholder={revisionArtifact || targetProjectId ? "Describe the change you want…" : "What are you building or improving?"}
               rows={4}
-              maxLength={12000}
+              maxLength={/^Export this text as a document:/i.test(prompt) ? 100064 : 12000}
             />
             {submissionError && (
               <div id="creator-submission-error" className="creator-submission-error" role="alert" tabIndex={-1} ref={submissionErrorRef}>
@@ -978,7 +1008,7 @@ export default function Studio() {
             </p>
             <div className="creator-composer-tools">
               <button type="button" className="creator-attach-toggle" onClick={() => setAttachmentsOpen(!attachmentsOpen)} aria-expanded={attachmentsOpen}>
-                <Paperclip /> {assets.length ? assets.length + " attached" : "Attach files"}
+                <Paperclip /> {revisionArtifact ? "Saved attachments" : assets.length ? assets.length + " attached" : "Attach files"}
               </button>
               <label className="creator-quote-first"><input type="checkbox" disabled={sending} checked={!softwareAdvancementEnabled}
                 onChange={(event) => setSoftwareAdvancementEnabled(!event.target.checked)} /> Show a quote first</label>
@@ -998,7 +1028,7 @@ export default function Studio() {
                   description={platformRuntime.backend === "standalone"
                     ? "For source review: text, Markdown, CSV, JSON or code. Up to 12 files, 128 KB each, 256 KB total. Other formats are saved only."
                     : undefined}
-                  disabled={sending || conversationBusy || !attachmentStatus.ready || Boolean(attachmentStatus.error)}
+                  disabled={Boolean(revisionArtifact) || sending || conversationBusy || !attachmentStatus.ready || Boolean(attachmentStatus.error)}
                   onStatusChange={(status) => {
                     if (attachmentTracker.current.setUploadStatus(assetScopeId, conversation?.id || "", status)) publishAttachments();
                   }}
@@ -1045,13 +1075,22 @@ export default function Studio() {
         </section>
       </main>
 
-      {hasResults && <aside className="creator-deliverables" aria-label="Your results">
+      <aside id="creator-results-panel" className="creator-deliverables" aria-label="Your results">
         <div className="creator-panel-heading">
-          <div><span>Your results</span><small>Saved in your workspace</small></div>
-          <button type="button" onClick={() => conversation?.id && loadResources(conversation.id)} aria-label="Refresh your results">
+          <div><span>Results &amp; files</span><small>{artifacts.length ? "Saved to this conversation" : "Your working canvas"}</small></div>
+          <button type="button" disabled={!conversation?.id || conversationBusy} onClick={() => conversation?.id && loadResources(conversation.id)} aria-label="Refresh your results">
             <RefreshCw />
           </button>
         </div>
+
+        {!hasResults && <div className="creator-results-empty">
+          <div className="creator-canvas-mark" aria-hidden="true"><img src="/iabt-mark.svg" alt="" /><span /></div>
+          <p className="creator-kicker">From idea to something you can use</p>
+          <h2>A workspace for your next step.</h2>
+          <p>App previews, source downloads, and documents appear here as your work is saved.</p>
+          <div className="creator-output-types"><span><AppWindow /> Apps &amp; websites</span><span><Code2 /> Source files</span><span><FileText /> Documents</span></div>
+          <Link to="/deliverables">Browse your saved files <ArrowUpRight /></Link>
+        </div>}
 
         {artifacts.length > 0 && (
           <section className="creator-artifacts">
@@ -1100,7 +1139,7 @@ export default function Studio() {
                           <Download /> Download file
                         </button>
                       )}
-                      {isApp && platformRuntime.backend === "standalone" && <button type="button" disabled={sending || conversationBusy} onClick={() => { setRevisionArtifact(artifact); setPrompt(""); promptRef.current?.focus(); promptRef.current?.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" }); }}><Sparkles /> Make a change</button>}
+                      {isApp && platformRuntime.backend === "standalone" && <button type="button" disabled={sending || conversationBusy} onClick={() => beginRevision(artifact)}><Sparkles /> Make a change</button>}
                       {artifact.project_id && (
                         <Link to={"/projects/" + artifact.project_id}><AppWindow /> Open app project</Link>
                       )}
@@ -1114,7 +1153,7 @@ export default function Studio() {
             })}
           </section>
         )}
-        {activePlan && <details className="creator-result-plan" open={activePlan.status === "quoted"}><summary>{activePlan.status === "quoted" ? "Review before creating" : "Creation details"}</summary>
+        {activePlan && <details id="creator-active-plan" className="creator-result-plan" open={activePlan.status === "quoted"}><summary>{activePlan.status === "quoted" ? "Review before creating" : "Creation details"}</summary>
           <motion.section
             className="creator-plan-card"
             initial={reduceMotion ? false : { opacity: 0, x: 10 }}
@@ -1138,7 +1177,7 @@ export default function Studio() {
             )}
 
             <div className="creator-quote creator-quote-compact">
-              <dl><div className="is-total"><dt>Cost</dt><dd>{Number(activePlan.credit_cost || 0)} credits</dd></div></dl>
+              <dl><div className="is-total"><dt>Cost</dt><dd>{Number(activePlan.credit_cost || 0)} {Number(activePlan.credit_cost) === 1 ? "credit" : "credits"}</dd></div></dl>
               <p>{activePlan.consent_summary || "No billing action occurs until you explicitly approve."}</p>
               {activePlan.status === "quoted" && <small className={quoteExpired ? "is-expired" : ""}>
                 {quoteExpired ? "This quote has expired. Ask JERICHO to refresh it." : "Valid until " + formatDate(activePlan.quote_expires_at)}
@@ -1185,7 +1224,7 @@ export default function Studio() {
               <div className="creator-approval">
                 <label>
                   <input type="checkbox" checked={quoteAccepted} onChange={(event) => setQuoteAccepted(event.target.checked)} />
-                  <span>I approve this work for {Number(activePlan.credit_cost || 0)} IABT credits.</span>
+                  <span>I approve this work for {Number(activePlan.credit_cost || 0)} IABT {Number(activePlan.credit_cost) === 1 ? "credit" : "credits"}.</span>
                 </label>
                 <Button
                   onClick={approvePlan}
@@ -1233,7 +1272,7 @@ export default function Studio() {
         )}
 
 
-      </aside>}
+      </aside>
     </div>
   );
 }

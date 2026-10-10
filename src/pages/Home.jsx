@@ -17,6 +17,8 @@ import {
   Copy,
   CreditCard,
   FolderOpen,
+  FileText,
+  Code2,
   LayoutTemplate,
   LifeBuoy,
   Loader2,
@@ -40,10 +42,15 @@ export default function Home() {
   const { toast } = useToast();
   const { user, logout } = useAuth();
   const importRef = useRef(null);
+  const requestRef = useRef(null);
   const [projects, setProjects] = useState([]);
   const [recentWork, setRecentWork] = useState([]);
   const [request, setRequest] = useState("");
   const [workError, setWorkError] = useState("");
+  const [projectError, setProjectError] = useState("");
+  const [capabilities, setCapabilities] = useState(null);
+  const [workflow, setWorkflow] = useState("build");
+  const [documentMode, setDocumentMode] = useState("export");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [query, setQuery] = useState("");
@@ -57,17 +64,25 @@ export default function Home() {
   async function load() {
     setLoading(true);
     setWorkError("");
+    setProjectError("");
     try {
-      const [records, entitlementResponse, conversations] = await Promise.all([
+      const [projectResult, entitlementResult, workResult, capabilityResult] = await Promise.allSettled([
         base44.entities.Project.list("-updated_date", 250),
         user?.id
           ? base44.functions.invoke("get-account-entitlement", {})
           : Promise.resolve(null),
-        base44.agents.listConversations({ q: { agent_name: "iabt_creator" }, sort: "-updated_date", limit: 30, skip: 0 })
-          .catch(() => { setWorkError("Recent work could not load. Open your workspace to try again."); return []; }),
+        base44.agents.listConversations({ q: { agent_name: "iabt_creator" }, sort: "-updated_date", limit: 30, skip: 0 }),
+        base44.functions.invoke("get-capability-registry", {}),
       ]);
+      const records = projectResult.status === "fulfilled" && Array.isArray(projectResult.value) ? projectResult.value : [];
+      const entitlementResponse = entitlementResult.status === "fulfilled" ? entitlementResult.value : null;
+      const conversations = workResult.status === "fulfilled" ? workResult.value : [];
       const entitlementPayload = entitlementResponse?.data || entitlementResponse;
-      setProjects(records);
+      if (projectResult.status === "fulfilled") setProjects(records);
+      else setProjectError("Projects could not load. Your saved work has not been changed.");
+      if (workResult.status === "rejected") setWorkError("Recent work could not load. Please try again.");
+      const capabilityPayload = capabilityResult.status === "fulfilled" ? (capabilityResult.value?.data || capabilityResult.value) : null;
+      setCapabilities(capabilityPayload?.capabilities || null);
       setRecentWork(Array.isArray(conversations) ? conversations.filter((item) => item.messages?.some((message) => message.role === "user")).slice(0, 6) : []);
       setEntitlement(entitlementPayload?.entitlement || entitlementPayload || null);
       setBillingStatus(entitlementPayload?.billing || null);
@@ -255,8 +270,20 @@ export default function Home() {
 
   function startRequest(event) {
     event.preventDefault();
-    if (request.trim()) navigate("/studio?prompt=" + encodeURIComponent(request.trim()));
+    if (!request.trim()) return;
+    const submission = workflow === "document" && documentMode === "export"
+      ? "Export this text as a document:\n" + request
+      : workflow === "document" ? "Create a document: " + request.trim() : request.trim();
+    navigate("/studio?prompt=" + encodeURIComponent(submission));
   }
+
+  const workflows = [
+    { id: "build", icon: Code2, label: "Build an app or website", detail: "Shape an idea, preview it, keep the source.", placeholder: "Describe who it is for, what it should do, and how it should look…" },
+    { id: "review", icon: FolderOpen, label: "Work with existing files", detail: "Bring your source or brief into the conversation.", placeholder: "Describe the files you want to review or improve. Attach them in the studio…" },
+    { id: "document", icon: FileText, label: "Create a document", detail: "Write something new or export your own text.", placeholder: documentMode === "export" ? "Paste the complete text you want to export. Your wording will be preserved…" : "Describe the document you want Jericho to write…" },
+  ];
+  const selectedWorkflow = workflows.find((item) => item.id === workflow);
+  const customReady = capabilities?.openai_responses?.configured === true;
 
   return (
     <div className="iabt-home home-simple">
@@ -266,7 +293,8 @@ export default function Home() {
           <div><strong>Jericho</strong><span>by IABT</span></div>
         </div>
         <nav className="home-simple-nav" aria-label="Main navigation">
-          <Button variant="ghost" onClick={() => navigate("/studio?new=1")}>Create</Button>
+          <span className="home-current-nav" aria-current="page">Workspace</span>
+          <Button variant="ghost" onClick={() => navigate("/studio")}>Studio</Button>
           <Button variant="ghost" onClick={() => navigate("/deliverables")}>My files</Button>
           <details className="home-account">
             <summary aria-label="Account"><UserRound size={17} /> <span>Account</span><ChevronDown size={14} /></summary>
@@ -283,41 +311,58 @@ export default function Home() {
       </header>
 
       <main className="iabt-home-main">
+        <div className="home-workspace-heading">
+          <div><span className="home-create-kicker">YOUR CREATIVE WORKSPACE</span><h1>Make something that matters.</h1><p>Build on your ideas. Keep your work moving.</p></div>
+          <button className="home-files-shortcut" type="button" onClick={() => navigate("/deliverables")}><FolderOpen size={18} /> Open my files <ArrowRight size={16} /></button>
+        </div>
         <section className="home-create" aria-labelledby="home-create-title">
-          <span className="home-create-kicker">Your next idea starts here</span>
-          <h1 id="home-create-title">What would you like to make?</h1>
-          <p>Describe your app. Preview it, make changes, and take the files with you.</p>
+          <div className="home-workflow-list" aria-label="Choose a starting point">
+            <h2 id="home-create-title">Where do you want to start?</h2>
+            {workflows.map((item) => {
+              const Icon = item.icon;
+              return <button key={item.id} type="button" aria-pressed={workflow === item.id} onClick={() => { setWorkflow(item.id); requestRef.current?.focus(); }}>
+                <span className="home-workflow-icon"><Icon size={21} /></span><span><strong>{item.label}</strong><small>{item.detail}</small></span><ArrowRight size={16} />
+              </button>;
+            })}
+          </div>
+          <div className="home-request-area">
+          <div className="home-request-heading"><Sparkles size={18} /><strong>{selectedWorkflow.label}</strong><span>JERICHO STUDIO</span></div>
+          {workflow === "document" && <div className="home-document-mode" aria-label="Document action"><button type="button" aria-pressed={documentMode === "export"} onClick={() => setDocumentMode("export")}>Export my text</button><button type="button" aria-pressed={documentMode === "write"} onClick={() => setDocumentMode("write")}>Write with Jericho</button></div>}
           <form className="home-request" onSubmit={startRequest}>
             <label className="sr-only" htmlFor="home-request">Describe what you want to make</label>
-            <textarea id="home-request" value={request} onChange={(event) => setRequest(event.target.value)} maxLength={12000}
-              placeholder="I want to build…" rows={3} />
-            <div><span>Start with a few sentences.</span><Button type="submit" disabled={!request.trim()}>Start creating <ArrowRight size={17} /></Button></div>
+            <textarea ref={requestRef} id="home-request" value={request} onChange={(event) => setRequest(event.target.value)} maxLength={12000}
+              placeholder={selectedWorkflow.placeholder} rows={4} />
+            <div><span>{workflow === "document" && documentMode === "export" ? "Word, PDF, and Markdown files." : "You can attach files in the studio."}</span><Button type="submit" disabled={!request.trim()}>Continue <ArrowRight size={17} /></Button></div>
           </form>
-          <div className="home-starters" aria-label="Ideas to get started">
-            <button type="button" onClick={() => setRequest("Create a task-list starter with add, complete, delete, search and filter controls.")}>A task tracker</button>
-            <button type="button" onClick={() => setRequest("Create a playable piano starter with computer keyboard controls and octave buttons.")}>A playable piano</button>
-            <button type="button" onClick={() => setRequest("Create a website for my business. I will provide its name, services and contact details.")}>A business website</button>
+          <div className="home-workflow-status" role="status">
+            <span className={customReady ? "is-ready" : ""} aria-hidden="true" />
+            {loading ? "Checking available tools…" : !capabilities ? "Tool availability could not load." : customReady ? "Custom creation is configured. Review the plan and cost before it starts." : "File reviews and text exports are available. Custom apps and AI writing await activation."}
+            {!loading && !capabilities && <button type="button" onClick={load}>Retry</button>}
+          </div>
           </div>
         </section>
 
         <section className="home-recent" aria-labelledby="home-recent-title">
-          <div className="home-section-heading"><h2 id="home-recent-title">Pick up where you left off</h2><button type="button" onClick={() => navigate("/studio")}>View all <ArrowRight size={15} /></button></div>
-          {workError && <p role="status">{workError}</p>}
+          <div className="home-section-heading"><div><h2 id="home-recent-title">Your recent work</h2><p>Conversations, results, and the next change.</p></div><button type="button" onClick={() => navigate("/studio")}>Open studio <ArrowRight size={15} /></button></div>
+          {workError && <p className="home-load-error" role="alert">{workError} <button type="button" onClick={load}>Retry</button></p>}
           {loading ? <p>Loading your work…</p> : recentWork.length ? <div className="home-recent-grid">
             {recentWork.map((item) => {
               const content = item.messages?.find((message) => message.role === "user")?.content;
-              const title = item.metadata?.title || (typeof content === "string" ? content : content?.text) || "Untitled app";
+              const title = item.metadata?.title || (typeof content === "string" ? content : content?.text) || "Untitled work";
+              const updated = item.updated_date ? new Date(item.updated_date) : null;
+              const dateLabel = updated && !Number.isNaN(updated.getTime()) ? updated.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Saved conversation";
               return <button className="home-work-card" type="button" key={item.id} onClick={() => navigate("/studio?conversation=" + encodeURIComponent(item.id))}>
-                <span className="home-work-icon"><LayoutTemplate size={20} /></span>
-                <strong>{title}</strong><span>Open workspace <ArrowRight size={15} /></span>
+                <span className="home-work-card-top"><span className="home-work-icon"><LayoutTemplate size={20} /></span><span>{dateLabel}</span></span>
+                <strong>{title}</strong><span>Continue working <ArrowRight size={15} /></span>
               </button>;
             })}
-          </div> : <p className="home-recent-empty">Your saved work will appear here.</p>}
+          </div> : !workError && <div className="home-recent-empty"><FolderOpen size={25} /><div><strong>A place for work worth keeping.</strong><p>Your conversations and results appear here after you start.</p></div><button type="button" onClick={() => requestRef.current?.focus()}>Start your first project <ArrowRight size={16} /></button></div>}
         </section>
 
         <details className="home-imported" open={projects.length > 0 || legacyProjects.length > 0 || undefined}>
           <summary>Saved & imported projects <span>{projects.length || ""}</span></summary>
         <section className="iabt-projects">
+          {projectError && <p className="home-load-error" role="alert">{projectError} <button type="button" onClick={load}>Retry</button></p>}
           {legacyProjects.length > 0 && (
             <div className="iabt-legacy-banner">
               <div className="iabt-project-icon"><ArchiveRestore /></div>

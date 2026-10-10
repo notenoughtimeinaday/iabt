@@ -62,6 +62,8 @@ test("Responses background tools resume across durable leases and capture only v
   const result = await context.drain();
   assert.equal(result.job.status, "succeeded");
   assert.equal(result.artifacts.length, 3);
+  const markdown = result.artifacts.find((artifact) => artifact.original_name.endsWith(".md"));
+  assert.equal((await context.storage.read(markdown.storage_key)).toString("utf8"), "# Bookstore report\n\nA substantive report with a reproducible review checklist.");
   assert.equal(result.job.output.orchestration.phase, "complete");
   assert.equal(result.job.output.orchestration.spent_cents, 4);
   assert.equal(result.job.output.orchestration.calls.length, 2);
@@ -80,12 +82,14 @@ test("Responses background tools resume across durable leases and capture only v
   await context.worker.stop();
 });
 
-test("orchestration is disabled without operator cost acceptance and never silently spends", async () => {
+test("disabled document composition restores credits without spending or a template substitute", async () => {
   const context = await fixture({ env: { IABT_ORCHESTRATION_BUDGET_ACCEPTED: "false" } });
   const result = await context.drain();
   assert.equal(context.requests.length, 0);
-  assert.equal(result.job.output.provider_metadata.delivery_mode, "template_fallback");
-  assert.equal(result.job.output.provider_metadata.objective_completed, false);
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.job.last_error_code, "document_creation_incomplete");
+  assert.equal(result.released_credits, 1);
+  assert.equal(context.objects.size, 0);
   await context.worker.stop();
 });
 
@@ -104,17 +108,23 @@ test("ambiguous POST recovery never submits another billable request", async () 
   const result = await context.drain();
   assert.equal(context.requests.length, 1);
   assert.equal(result.job.output.orchestration.phase, "fallback");
-  assert.equal(result.job.output.provider_metadata.objective_completed, false);
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.job.last_error_code, "document_creation_incomplete");
+  assert.equal(result.released_credits, 1);
+  assert.equal(context.objects.size, 0);
   assert.equal(await context.step(), null);
   await context.worker.stop();
 });
 
-test("a worker recovered after submission checkpoint falls back without duplicate spend", async () => {
+test("a worker recovered after submission checkpoint fails without a template or duplicate spend", async () => {
   const context = await fixture();
   context.repository.jobs.get(context.queued.id).output.orchestration = { version: 1, phase: "submitting", turn: 0, polls: 0, spent_cents: 2, calls: [], artifacts: [], failures: [], execution_graph: [], inspected_file_ids: [] };
   const result = await context.drain();
   assert.equal(context.requests.length, 0);
   assert.equal(result.job.output.orchestration.failures[0].code, "provider_submission_outcome_unknown");
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.released_credits, 1);
+  assert.equal(context.objects.size, 0);
   await context.worker.stop();
 });
 
@@ -133,7 +143,7 @@ test("GET outage retries the saved response instead of submitting the prompt aga
 });
 
 test("invalid tools return bounded repair feedback without granting new capabilities", async () => {
-  const context = await fixture({ replies: [response("resp_first", [call("run_shell", { command: "secret" })]), response("resp_repair", [document()]), completed()] });
+  const context = await fixture({ replies: [response("resp_first", [call("run_shell", { command: "secret" }, "rejected_shell")]), response("resp_repair", [document()]), completed()] });
   const result = await context.drain();
   assert.equal(result.job.status, "succeeded");
   assert.equal(result.job.output.orchestration.calls[0].status, "failed");
@@ -149,8 +159,12 @@ test("run budget cannot expand when operator configuration increases after appro
   const result = await context.drain();
   assert.equal(context.requests.length, 1);
   assert.equal(result.job.output.orchestration.phase, "fallback");
-  assert.equal(result.job.output.provider_metadata.orchestration.incomplete, true);
-  assert.equal(result.artifacts.length, 3);
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.job.last_error_code, "document_creation_incomplete");
+  assert.equal(result.job.output.orchestration.artifacts.length, 3, "Partial work is preserved in its existing checkpoint");
+  assert.equal(result.job.output.artifact_manifest?.length || 0, 0);
+  assert.equal(result.released_credits, 1);
+  assert.equal(context.objects.size, 0);
   await context.worker.stop();
 });
 
@@ -189,11 +203,25 @@ test("source tools reject foreign ownership and source path traversal", async ()
 });
 
 test("missing storage readback prevents credit capture in every environment", async () => {
-  const context = await fixture({ env: { IABT_ENABLE_ORCHESTRATION: "false" } });
+  const context = await fixture({ replies: [response("resp_first", [document()]), completed()] });
   delete context.storage.read;
   const result = await context.drain();
   assert.equal(result.job.status, "needs_setup");
   assert.equal(result.job.last_error_code, "storage_readback_not_configured");
+  assert.equal(context.repository.creditEntries.some((entry) => entry.entry_type === "capture"), false);
+  await context.worker.stop();
+});
+
+test("completed source packaging cannot stand in for the requested document", async () => {
+  const sourcePlan = call("plan_execution", { objective: "Create a report", nodes: [{ id: "document", tool: "create_source", objective: "Package source", depends_on: [] }] }, "source_plan");
+  const source = call("create_source", { title: "Not a document", files: [{ name: "README.md", content: "Only a source package, not the requested report." }, { name: "test.js", content: "// Review before use." }] }, "source_package");
+  const context = await fixture({ replies: [response("resp_wrong", [sourcePlan, source]), completed()] });
+  const result = await context.drain();
+  assert.equal(result.job.output.orchestration.phase, "complete");
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.job.last_error_code, "document_creation_incomplete");
+  assert.equal(result.released_credits, 1);
+  assert.equal(context.objects.size, 0);
   assert.equal(context.repository.creditEntries.some((entry) => entry.entry_type === "capture"), false);
   await context.worker.stop();
 });

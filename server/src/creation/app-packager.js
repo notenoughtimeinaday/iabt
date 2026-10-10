@@ -144,7 +144,15 @@ export const buildInteractiveArtifacts = ({ title, requestText, spec = {} }) => 
   };
 };
 
-export const buildDocumentArtifacts = ({ title, requestText, intent }) => {
+export const buildDocumentArtifacts = ({ title, requestText, intent, documentMarkdown }) => {
+  if (intent === "document") {
+    if (typeof documentMarkdown !== "string" || !documentMarkdown.trim() || documentMarkdown.length > 100_000) {
+      throw Object.assign(new Error("A local document export requires the complete supplied text. A request summary is not a finished document."), { code: "document_content_required" });
+    }
+    const result = buildDocumentArtifactSet({ title: safeName(title), markdown: documentMarkdown });
+    const evidence = { delivery_mode: "supplied_text_export", original_writing: false, provider_called: false, supplied_text_preserved_in_markdown: true };
+    return { ...result, metadata: { ...result.metadata, ...evidence }, artifacts: result.artifacts.map((artifact) => ({ ...artifact, metadata: { ...artifact.metadata, ...evidence } })) };
+  }
   const heading = intent === "audio"
     ? "Audio Preproduction Package"
     : intent === "video"

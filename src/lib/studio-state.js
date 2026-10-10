@@ -19,6 +19,17 @@ export function studioErrorMessage(error, fallback = "Something went wrong.") {
     .find((value) => typeof value === "string" && value.trim()) || fallback;
 }
 
+// A saved HTML revision is the complete source for that request. Retained
+// conversation attachments remain available for a later, non-revision request.
+export function studioRequestAssets(assets, revisionFileId) {
+  return revisionFileId ? [] : assets;
+}
+
+// An export body is user content, including its trailing spaces and newlines.
+export function studioRequestText(prompt) {
+  return /^Export this text as a document:[ \t]*\r?\n/i.test(prompt) ? prompt : prompt.trim();
+}
+
 // Keep the id through an uncertain response; only confirmed acceptance retires it.
 // The synchronous gate also covers clicks before React renders its busy state.
 export function createStudioSubmissionGate(newId = () => crypto.randomUUID()) {

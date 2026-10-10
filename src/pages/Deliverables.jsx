@@ -64,15 +64,18 @@ export default function Deliverables() {
   const [artifacts, setArtifacts] = useState([]);
   const [accessUrls, setAccessUrls] = useState({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [resolving, setResolving] = useState({});
   const [query, setQuery] = useState("");
 
   async function load() {
     setLoading(true);
+    setLoadError("");
     try {
       const rows = await base44.entities.CreationArtifact.list("-created_date", 250);
       setArtifacts(Array.isArray(rows) ? rows : []);
     } catch (error) {
+      setLoadError("Your files could not load. They have not been changed. Please try Refresh.");
       toast({
         title: "Could not load deliverables",
         description: error?.message || "Please try again.",
@@ -173,6 +176,8 @@ export default function Deliverables() {
 
         {loading ? (
           <div className="iabt-library-empty"><Loader2 className="animate-spin" /><span>Loading files…</span></div>
+        ) : loadError ? (
+          <div className="iabt-library-empty" role="alert"><AlertTriangle /><strong>Files are temporarily unavailable</strong><span>{loadError}</span><Button variant="outline" onClick={load}>Try again</Button></div>
         ) : filtered.length === 0 ? (
           <div className="iabt-library-empty">
             <FileText />

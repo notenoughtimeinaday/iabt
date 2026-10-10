@@ -1,4 +1,45 @@
-# Current IABT release status — October 9, 2026
+# Current IABT release status — October 10, 2026
+
+## October 10: restore a useful professional workspace
+
+The owner rejected the overly reduced October 9 interface. The current candidate
+restores a dark navy/violet workspace with readable contrast, existing-source
+work, documents, saved projects, and a conversation beside a results canvas.
+Mobile controls switch between conversation and results. Detailed activity and
+learning remain accessible without dominating the main view. Toy starter apps
+are no longer the primary invitation.
+
+The underlying creation repair allows approved custom app/website jobs to use
+owned bounded UTF-8 source and requirements attachments. Sources and hashes are
+bound into the quote, revalidated before provider work, and inspected before a
+new HTML/ZIP result. Original files are preserved. Selected-HTML revisions use
+that version alone while keeping earlier attachments in conversation history.
+Explicit source review remains a local inspection report; this is not general
+repository execution, deployed multiuser software, or autonomous integrations.
+
+Browser output inspection also caught generic document jobs saving only the
+request and delivery boilerplate. The correction distinguishes original writing
+from supplied-text export: writing needs approved AI and complete document
+outputs; local exports preserve the supplied Markdown body and provide DOCX/PDF
+reading copies. Failed or partial writing cannot fall back to a request-record
+success. Original generic pending jobs fail and release credits. Earlier output
+counts remain historical delivery evidence, not proof of useful composition.
+
+Independent review and full local verification passed: 481 tests, including
+71 PostgreSQL integration checks and eight Studio checks, with no failures or
+skips. Lint, type checking and build passed. Browser checks covered desktop,
+tablet and phone navigation, quotes and unchanged-text downloads; the PDF also
+contained the supplied material. A disabled-AI writing request preserved the
+draft and credits. Isolated staging acceptance is pending. The deployed
+October 9 commits below are still the current rollback points. Paid AI remains
+off pending the already requested bounded test authorization; no activation,
+supplier charge, live billing or production release is implied by this repair.
+
+Relevant chats are being preserved under the owner's private task outputs,
+including fresh handoffs and exact history coverage. Some ChatGPT histories
+expose only recent messages, and remote library references are not equivalent
+to local file backups. No old chat should be described as fully preserved until
+those coverage gaps are resolved. Existing source and release work is reused.
 
 ## Current scope: useful core creation and a simpler interface
 

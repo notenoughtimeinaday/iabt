@@ -13,9 +13,16 @@ const QUOTE_TTL_MS = 30 * 60 * 1000;
 const normalize = (value, max = 12000) =>
   String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
 
+// This exact prefix separates an export instruction from the supplied content.
+// Read it before normalization so line breaks and literal whitespace survive.
+export const suppliedDocumentText = (value) => typeof value === "string"
+  ? value.match(/^Export this text as a document:[ \t]*\r?\n([\s\S]*)$/i)?.[1] ?? null
+  : null;
+
 // Intent is an authorization precondition, separate from output routing. A
 // fallback app classification must never turn conversation into billable work.
 export const creationRequestDisposition = (requestText) => {
+  if (suppliedDocumentText(requestText) !== null) return { create: true, reason: "creation_requested" };
   const text = normalize(requestText).toLowerCase().replace(/[’]/g, "'");
   const hold = /\b(?:do not|don't|never|not yet|hold off|wait before|stop|cancel)\b.{0,65}\b(?:creat\w*|build\w*|mak\w*|writ\w*|generat\w*|produc\w*|prepar\w*|design\w*|develop\w*|implement\w*|draft\w*|compos\w*|render\w*|review\w*|summari[sz]\w*|analy[sz]\w*|convert\w*|fix\w*|repair\w*|updat\w*|improv\w*|revis\w*|packag\w*|export\w*|test\w*|execut\w*|start\w*|begin\w*|animat\w*|enhanc\w*|sharpen\w*|upscal\w*|clear\w*|clean\w*|work|anything)\b/.test(text) || /\b(?:but not (?:yet|now|right now)|not until|wait for my (?:approval|permission|confirmation))\b/.test(text) ||
     /\b(?:quote|plan|planning|explain|discussion|discuss)\s+only\b|\b(?:just|only)\s+(?:a\s+)?(?:quote|plan|explanation|discuss|explain)\b|^before\s+(?:creat\w*|build\w*|mak\w*|execut\w*|start\w*)\b|^(?:please\s+)?(?:create|make|build|generate)\s+nothing\b/.test(text);
@@ -159,9 +166,8 @@ const capabilityFor = (intent, user, providers, requestText, readiness) => {
         "Portable PDF document"
       ],
       steps: [
-        { order: 1, title: "Structure content", deliverable: "Document outline" },
-        { order: 2, title: "Create content", deliverable: "Markdown source document" },
-        { order: 3, title: "Export and verify", deliverable: "DOCX and PDF files" }
+        { order: 1, title: "Preserve supplied text", deliverable: "Unchanged Markdown source document" },
+        { order: 2, title: "Export and verify", deliverable: "DOCX and PDF files" }
       ],
       warnings: []
     };
@@ -396,7 +402,12 @@ export const createCreationPlan = async ({
   automatic = false,
   submissionId = ""
 }) => {
-  const request = normalize(requestText);
+  const documentMarkdown = suppliedDocumentText(requestText);
+  const documentExport = documentMarkdown !== null;
+  if (documentExport && (!documentMarkdown.trim() || documentMarkdown.length > 100_000)) {
+    throw Object.assign(new Error("Supply nonblank document text of at most 100,000 characters after the export instruction and newline."), { status: 400, code: "invalid_document_content" });
+  }
+  const request = documentExport ? "Export this text as a document." : normalize(requestText);
   if (request.length < 3) {
     throw Object.assign(new Error("Describe what you want IABT to create"), {
       status: 400,
@@ -405,17 +416,22 @@ export const createCreationPlan = async ({
   }
   const ids = normalizeFileIds(fileIds);
   const revisionId = revisionFileId ? normalizeFileIds([revisionFileId])[0] : "";
+  if (documentExport && (ids.length || revisionId)) throw Object.assign(new Error("Export the supplied text without attachments or an app revision. Your saved files are unchanged."), { status: 422, code: "document_export_attachments_unsupported" });
   if (revisionId && ids.length) throw Object.assign(new Error("Choose the app to change without adding other files."), { status: 422, code: "revision_attachments_unsupported" });
   // The requested output wins over its subject: a report about software is
-  // still a report. An actual "build an app" request remains unsupported here.
+  // still a deterministic review; app creation uses the approved AI route.
   const explicitSourceReview = /^(?:(?:please|can you|could you|would you)\s+)?(?:(?:create|write|generate|produce|make|prepare)\s+(?:me\s+)?(?:(?:an?|the)\s+)?(?:(?:brief|short|detailed|source|file|review)\s+){0,3}(?:report|document|checklist|summary|review)\b|(?:review|summari[sz]e)\b)/i.test(request);
   const intent = revisionId ? "app" : ids.length && explicitSourceReview ? "document" : inferCreationIntent(request);
   assertCreationProfile({ config, user, intent });
   const aiReady = orchestrationConfigured(config);
-  const starter = !revisionId && ["app", "website"].includes(intent) ? coreStarter(request) : null;
+  if (intent === "document" && !ids.length && !documentExport && !aiReady) {
+    throw Object.assign(new Error("Writing a new document is not available right now. To export text you already have, start with 'Export this text as a document:' and place the complete text on the next line. Nothing was charged."), { status: 409, code: "document_creation_unavailable" });
+  }
+  const sourceApp = ids.length > 0 && ["app", "website"].includes(intent);
+  const starter = !revisionId && !ids.length && ["app", "website"].includes(intent) ? coreStarter(request) : null;
   const namedStarterRequested = starter && /\b(?:starter|demo)\b/i.test(request);
-  if (["app", "website"].includes(intent) && !aiReady && !namedStarterRequested && !ids.length) {
-    throw Object.assign(new Error(revisionId ? "Changes to saved apps need custom app creation, which is not available right now. Your original app is unchanged. Nothing was charged." : CORE_STARTER_MESSAGE), { status: 409, code: "app_creation_unavailable" });
+  if (["app", "website"].includes(intent) && !aiReady && !namedStarterRequested) {
+    throw Object.assign(new Error(revisionId ? "Changes to saved apps need custom app creation, which is not available right now. Your original app is unchanged. Nothing was charged." : sourceApp ? "Creating an app from your files needs custom app creation, which is not available right now. Your files are saved and unchanged. Nothing was charged." : CORE_STARTER_MESSAGE), { status: 409, code: "app_creation_unavailable" });
   }
   const registry = await capabilityRegistry({ config, providers, repository, storage, observe: false });
   const capability = capabilityFor(intent, user, providers, request, registry.capabilities);
@@ -424,8 +440,8 @@ export const createCreationPlan = async ({
       status: 422, code: "source_intent_unsupported"
     });
   }
-  if (ids.length && !["document", "video"].includes(intent)) {
-    throw Object.assign(new Error("Attached files support text source-review documents or video from one JPEG/PNG image. Uploaded code is never executed or modified."), {
+  if (ids.length && !["document", "video", "app", "website"].includes(intent)) {
+    throw Object.assign(new Error("Use attached text files to create an app or website, or request a source-review document. Uploaded code is never executed or overwritten."), {
       status: 422, code: "source_intent_unsupported"
     });
   }
@@ -446,13 +462,13 @@ export const createCreationPlan = async ({
     if (imageVideo) {
       capability.id = "luma-ray-3.2-image-video-v1";
       capability.warnings = [...capability.warnings, "After quote approval, the verified photo is sent privately to Luma as the starting frame. Provider moderation and generation quality limits still apply; video generation does not restore missing detail in a blurry image."];
-    } else if (!revisionId) {
+    } else if (!revisionId && !sourceApp) {
       capability.id = "iabt-source-review-v1";
       capability.deliverables = ["Source inventory and candidate requirement checklist in Markdown", "Microsoft Word-compatible DOCX source review", "Portable PDF source review"];
       capability.warnings = ["Deterministic UTF-8 source review only: no general semantic analysis, uploaded-code execution, or repository changes."];
     }
   }
-  const orchestrated = !namedStarterRequested && (!references.length || revisionId) && ["app", "website", "document", "code", "design"].includes(intent) && aiReady;
+  const orchestrated = !documentExport && !namedStarterRequested && (!references.length || revisionId || sourceApp) && ["app", "website", "document", "code", "design"].includes(intent) && aiReady;
   if (orchestrated) {
     capability.id = "openai-responses-orchestration-v1";
     capability.provider = "openai";
@@ -487,7 +503,7 @@ export const createCreationPlan = async ({
   const submission = normalize(submissionId, 200);
   const requestKey = submission ? createHash("sha256").update(JSON.stringify([user.id, conversationId, submission])).digest("hex") : "";
   const recordId = requestKey ? [requestKey.slice(0, 8), requestKey.slice(8, 12), requestKey.slice(12, 16), requestKey.slice(16, 20), requestKey.slice(20, 32)].join("-") : undefined;
-  const requestFingerprint = createHash("sha256").update(JSON.stringify([request, conversationId, projectId, referenceBinding(references), ...(revisionId ? [revisionId] : [])])).digest("hex");
+  const requestFingerprint = createHash("sha256").update(JSON.stringify([request, conversationId, projectId, referenceBinding(references), ...(revisionId ? [revisionId] : []), ...(documentExport ? [documentMarkdown] : [])])).digest("hex");
   let plan = await repository.createRecord("CreationPlan", user, {
     user_id: user.id,
     user_email: user.email,
@@ -495,26 +511,30 @@ export const createCreationPlan = async ({
     ...(projectId ? { project_id: projectId } : {}),
     request_text: request,
     request_fingerprint: requestFingerprint,
-    title: imageVideo ? "Image-to-Video Production" : revisionId ? "Updated app" : references.length ? "JERICHO Source Review" : starter && !orchestrated ? starterTitle(request, starter) : titleFor(request, intent),
+    title: imageVideo ? "Image-to-Video Production" : revisionId ? "Updated app" : references.length && !sourceApp ? "JERICHO Source Review" : starter && !orchestrated ? starterTitle(request, starter) : titleFor(request, intent),
     intent,
     status: "quoted",
     capability_id: capability.id,
     provider: capability.provider,
     provider_ready: capability.providerReady,
     render_ready: capability.renderReady,
-    fallback_available: !orchestrated || !["app", "website"].includes(intent),
+    fallback_available: !orchestrated || !["app", "website", "document"].includes(intent),
     assistant_summary: revisionId
       ? "I'll make the change using your saved app and keep the original version."
       : imageVideo
       ? "JERICHO verified your saved image and prepared a paid video quote. Approving it permits sending that image to Luma to guide the video; no provider call has happened yet."
+      : sourceApp ? "I'll use your files to create an app you can try and download. Your originals stay unchanged."
       : references.length
       ? "JERICHO verified " + references.length + " private text source(s) and will create a source inventory, candidate requirement checklist, and complete source evidence. Uploaded code will not run or change."
+      : documentExport ? "I'll export your supplied text unchanged as Markdown, with Word and PDF reading copies."
       : starter && !orchestrated ? "I'll create the " + starter.replace(/_/g, "-") + " starter for you to try and download."
       : ["app", "website"].includes(intent) ? "I'll create an app you can try here and download."
       : "I'll prepare your saved files.",
     ...(references.length ? { file_references: references } : {}),
     normalized_spec: {
       creative_prompt: request,
+      ...(documentExport ? { document_output_contract: "supplied_text_v1", document_markdown: documentMarkdown } : {}),
+      ...(intent === "document" && orchestrated ? { document_output_contract: "composed_document_v1" } : {}),
       ...(["app", "website"].includes(intent) ? { app_output_contract: "self_contained_html_v1" } : {}),
       ...(starter && !orchestrated ? { starter_id: starter } : {}),
       ...(revisionId ? { revision_source: references[0] } : {}),

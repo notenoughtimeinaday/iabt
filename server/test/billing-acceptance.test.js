@@ -59,7 +59,7 @@ test("local billing contract: a signed purchase funds verified private delivery 
   const metadata = Object.fromEntries(Object.entries(params).filter(([key]) => key.startsWith("metadata[")).map(([key, value]) => [key.slice(9, -1), value]));
   const session = { id: checkout.session_id, mode: "payment", payment_status: "paid", metadata };
   assert.equal((await f.deliver("evt_acceptance_purchase", "checkout.session.completed", session)).credits_granted, 100);
-  const planned = await createCreationPlan({ ...f, automatic: true, submissionId: "acceptance-document", requestText: "Create a document describing the purchased-credit delivery check." });
+  const planned = await createCreationPlan({ ...f, automatic: true, submissionId: "acceptance-document", requestText: "Export this text as a document:\n# Purchased-credit delivery check\n\nThe supplied text must be saved privately." });
   assert.equal(planned.job.status, "queued");
   const worker = createJobWorker({ ...f, workerId: "billing-acceptance-worker" });
   t.after(() => worker.stop());

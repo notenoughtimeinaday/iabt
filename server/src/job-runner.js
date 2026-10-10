@@ -114,7 +114,8 @@ const resultFor = async (job, providers) => {
     return buildDocumentArtifacts({
       title: job.input.title,
       requestText: job.input.request_text,
-      intent: job.input.intent
+      intent: job.input.intent,
+      documentMarkdown: job.input.document_output_contract === "supplied_text_v1" ? job.input.document_markdown : undefined
     });
   }
   if (job.job_type === "creation.code") {
@@ -308,12 +309,22 @@ export const runClaimedJob = async ({
         return { job: deferred, deferred: true, artifacts: [], released_credits: 0 };
       }
       if (step.result) {
+        if (job.input.intent === "document") {
+          const createdDocument = job.output.orchestration?.calls?.some((call) => call.name === "create_document" && call.status === "succeeded");
+          const formats = new Set(step.result.artifacts?.filter((artifact) => artifact.kind === "document").map((artifact) => artifact.metadata?.format));
+          if (step.result.metadata?.orchestration?.incomplete !== false || !createdDocument || !["markdown", "docx", "pdf"].every((format) => formats.has(format))) {
+            throw Object.assign(new Error("The requested document was not completed. Reserved IABT credits were restored."), { code: "document_creation_incomplete" });
+          }
+        }
         if (job.input.app_output_contract === "self_contained_html_v1" && step.result.metadata?.orchestration?.incomplete) {
           throw Object.assign(new Error("The app could not be completed. Your existing version is unchanged and reserved credits were restored."), { code: "app_creation_incomplete" });
         }
         result = step.result;
       }
       else if (step.fallback) {
+        if (job.input.intent === "document") {
+          throw Object.assign(new Error("The requested document was not completed. Reserved IABT credits were restored."), { code: "document_creation_incomplete" });
+        }
         if (job.input.app_output_contract === "self_contained_html_v1") {
           throw Object.assign(new Error("The app could not be completed. Your existing version is unchanged and reserved credits were restored."), { code: "app_creation_incomplete" });
         }

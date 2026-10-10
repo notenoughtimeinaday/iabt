@@ -174,14 +174,15 @@ test("storefront prompt is inferred without a mode selector and produces a worki
   assert.equal(account.reserved_credits, 0);
 });
 
-test("document prompt produces durable Markdown, DOCX, and PDF artifacts", async () => {
+test("supplied document text produces unchanged Markdown plus durable DOCX and PDF reading copies", async () => {
+  const supplied = "# IABT launch checklist\n\n## résumé section\n\n- Confirm the account.\n- Save the owner actions.\n";
   const planned = await createCreationPlan({
     repository,
     config,
     providers,
     user,
     requestText:
-      "Create a document that explains the IABT launch checklist, includes a résumé section, and ends with owner actions.",
+      "Export this text as a document:\n" + supplied,
     conversationId: "document-conversation"
   });
   assert.equal(planned.plan.intent, "document");
@@ -212,7 +213,8 @@ test("document prompt produces durable Markdown, DOCX, and PDF artifacts", async
   assert.ok(pdf);
 
   const markdownBytes = await storage.read(markdown.storage_key);
-  assert.match(markdownBytes.toString("utf8"), /IABT launch checklist/);
+  assert.equal(markdownBytes.toString("utf8"), supplied);
+  assert.equal(completed.job.output.provider_metadata.original_writing, false);
 
   const docxBytes = await storage.read(docx.storage_key);
   assert.equal(docxBytes.subarray(0, 4).toString("hex"), "504b0304");

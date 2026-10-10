@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +13,8 @@ import { MemoryRepository } from "../src/memory-repository.js";
 import { createProviderRegistry } from "../src/providers/provider-registry.js";
 import { LocalObjectStorage } from "../src/storage/local-storage.js";
 import { createJobWorker } from "../src/worker.js";
+import { createIabtHandler } from "../src/app.js";
+import { createOpaqueToken, hashToken } from "../src/security.js";
 
 async function fixture(t, env = {}) {
   const directory = await mkdtemp(join(tmpdir(), "iabt-autonomy-policy-"));
@@ -25,7 +28,7 @@ async function fixture(t, env = {}) {
   const user = await repository.createUser({ email: "creator@example.test", passwordHash: "unused", emailVerified: true });
   await repository.grantCredits({ ownerId: user.id, amount: 20, idempotencyKey: "opening" });
   const context = { repository, config, providers, storage, user };
-  const plan = (extra = {}) => createCreationPlan({ ...context, requestText: "Create a report about a neighborhood bookstore", ...extra });
+  const plan = (extra = {}) => createCreationPlan({ ...context, requestText: "Export this text as a document:\n# Neighborhood bookstore\n\nThe shop opens at 9 am.", ...extra });
   const execute = (record, extra = {}, options = {}) => executeCreationPlan({ ...context, ...options, body: { plan_id: record.id, approved: true, pricing_version: record.pricing_version, accepted_total_cents: record.total_estimated_cost_cents, ...extra } });
   const upload = async (content) => {
     const id = randomUUID();
@@ -62,7 +65,7 @@ test("affirmative creation gate distinguishes tasks from conversation, explanati
       assert.equal(result.billing.action, "quote_only", text);
       assert.equal(result.billing.credits_reserved, false);
     } catch (error) {
-      assert.equal(error.code, "app_creation_unavailable", text);
+      assert.ok(["app_creation_unavailable", "document_creation_unavailable"].includes(error.code), text);
     }
   }
   assert.equal((await f.repository.listJobs(f.user)).length, 0);
@@ -172,7 +175,7 @@ test("concurrent objective replays and different approval keys reserve one job a
   assert.equal((await f.repository.listRecords("ConsentGrant", f.user)).length, 1);
   assert.equal((await f.repository.getCreditAccount(f.user.id)).reserved_credits, 1);
   assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 19);
-  await assert.rejects(f.plan({ automatic: true, submissionId: "retry-safe-objective", requestText: "Create a report about a different goal" }), { code: "idempotency_conflict" });
+  await assert.rejects(f.plan({ automatic: true, submissionId: "retry-safe-objective", requestText: "Export this text as a document:\n# A different document" }), { code: "idempotency_conflict" });
 });
 
 test("quote signature binds execution route, normalized arguments and context", async (t) => {
@@ -220,5 +223,111 @@ test("paid media and Responses orchestration require explicit quotes despite aut
       assert.equal(job.approval.max_cost_cents, 12);
     }
   }
+  assert.equal(f.calls(), 0);
+});
+
+test("freeform document composition without approved AI rejects before creating a plan or reserving credits", async (t) => {
+  const f = await fixture(t);
+  for (const requestText of [
+    "Create a document for a community garden volunteer orientation. Include these facts: meet Saturday at 9am; bring gloves.",
+    "Write a report about neighborhood gardens.",
+    "Create a document explaining how to use 'Export this text as a document:' safely."
+  ]) await assert.rejects(f.plan({ requestText, automatic: true }), { code: "document_creation_unavailable" });
+  assert.equal((await f.repository.listRecords("CreationPlan", f.user)).length, 0);
+  assert.equal((await f.repository.listJobs(f.user)).length, 0);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 20);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).reserved_credits, 0);
+  assert.equal(f.calls(), 0);
+});
+
+test("explicit text exports stay local with AI configured and preserve every body character beyond prompt limits", async (t) => {
+  const f = await fixture(t, { OPENAI_API_KEY: "not-live", IABT_ENABLE_PAID_AI: "true", IABT_ENABLE_ORCHESTRATION: "true", IABT_ORCHESTRATION_BUDGET_ACCEPTED: "true", IABT_OPENAI_RESPONSE_COST_CENTS: "2", IABT_ORCHESTRATION_BUDGET_CENTS: "12" });
+  const text = "\r\n# Community garden app orientation\r\n\r\nMeet Saturday at 9am.  Bring gloves.\r\nDo not create anything; this line is literal document text.\r\n\t" + "Résumé and garden notes. ".repeat(600) + "\r\n\r\n";
+  const requestText = "Export this text as a document:\r\n" + text;
+  assert.equal(creationRequestDisposition(requestText).create, true);
+  const { plan, job } = await f.plan({ requestText, automatic: true, submissionId: "literal-export" });
+  assert.equal(plan.intent, "document");
+  assert.equal(plan.job_type, "creation.document");
+  assert.equal(plan.provider_cost_cents, 0);
+  assert.equal(plan.normalized_spec.document_output_contract, "supplied_text_v1");
+  assert.equal(plan.normalized_spec.document_markdown, text);
+  assert.equal(verifyQuoteSignature(f.config, plan), true);
+  const worker = createJobWorker({ ...f, workerId: "literal-document-worker" });
+  t.after(() => worker.stop());
+  const completed = await worker.runOnce();
+  assert.equal(completed.job.status, "succeeded");
+  const markdown = completed.artifacts.find((artifact) => artifact.original_name.endsWith(".md"));
+  assert.deepEqual(await f.storage.read(markdown.storage_key), Buffer.from(text, "utf8"));
+  assert.equal(completed.job.output.provider_metadata.delivery_mode, "supplied_text_export");
+  assert.equal(completed.job.output.provider_metadata.original_writing, false);
+  assert.equal((await f.plan({ requestText, automatic: true, submissionId: "literal-export" })).job.id, job.id);
+  await assert.rejects(f.plan({ requestText: "Export this text as a document:\r\n" + text.replace("  Bring", " Bring"), submissionId: "literal-export" }), { code: "idempotency_conflict" });
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 19);
+  assert.equal(f.calls(), 0);
+});
+
+test("invalid supplied text and altered signed document content cannot reserve credits", async (t) => {
+  const f = await fixture(t);
+  for (const text of ["", " \t\r\n", "x".repeat(100001)]) {
+    await assert.rejects(f.plan({ requestText: "Export this text as a document:\n" + text, automatic: true }), { code: "invalid_document_content" });
+  }
+  const file = await f.upload("Saved source remains unchanged.");
+  await assert.rejects(f.plan({ fileIds: [file.id], automatic: true }), { code: "document_export_attachments_unsupported" });
+  const { plan } = await f.plan();
+  await f.repository.updateRecord("CreationPlan", plan.id, f.user, { normalized_spec: { ...plan.normalized_spec, document_markdown: "Altered supplied content" } });
+  await assert.rejects(f.execute(plan), { code: "quote_mismatch" });
+  assert.equal((await f.repository.listJobs(f.user)).length, 0);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 20);
+  assert.equal(f.calls(), 0);
+});
+
+test("an old queued document request cannot capture credits by exporting its own prompt", async (t) => {
+  const f = await fixture(t);
+  await f.repository.enqueueJob({ ownerId: f.user.id, jobType: "creation.document", input: { intent: "document", title: "JERICHO Document", request_text: "Write a useful garden orientation document." }, idempotencyKey: "legacy-empty-document", creditAmount: 1 });
+  const worker = createJobWorker({ ...f, workerId: "legacy-document-worker" });
+  t.after(() => worker.stop());
+  const completed = await worker.runOnce();
+  assert.equal(completed.job.status, "failed");
+  assert.equal(completed.job.last_error_code, "document_content_required");
+  assert.equal(completed.job.output.artifact_manifest?.length || 0, 0);
+  assert.equal(completed.released_credits, 1);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 20);
+  assert.equal(f.calls(), 0);
+});
+
+test("Studio HTTP preserves large literal exports with support keywords while keeping ordinary message bounds and replay identity", async (t) => {
+  const f = await fixture(t);
+  const server = createServer(createIabtHandler(f));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const token = createOpaqueToken();
+  await f.repository.createSession({ userId: f.user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 60000).toISOString() });
+  const post = async (path, body) => {
+    const result = await fetch(`http://127.0.0.1:${server.address().port}${path}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(body) });
+    return { status: result.status, body: await result.json() };
+  };
+  const conversation = (await post("/v1/agents/conversations", { agent_name: "iabt_creator" })).body;
+  const path = `/v1/agents/conversations/${conversation.id}/messages`;
+  const unavailable = await post(path, { content: "Create a document for a garden volunteer orientation. Meet Saturday at 9 am; bring gloves.", submission_id: "compose" });
+  assert.equal(unavailable.status, 409);
+  assert.equal((await f.repository.listJobs(f.user)).length, 0);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 20);
+  assert.equal((await post(path, { content: "x".repeat(20001), submission_id: "ordinary-too-large" })).status, 400);
+  assert.equal((await post(path, { content: "Export this text as a document:\n" + "x".repeat(100001), submission_id: "export-too-large" })).status, 400);
+  assert.equal((await f.repository.listJobs(f.user)).length, 0);
+  const supplied = "# Garden volunteer orientation\n\nMeet Saturday at 9 am.  Bring gloves.\n\nDo not create a new app. This line is document content.\nIncident response: check status and capabilities. Why does this need review? These are literal document words.\n" + "Volunteer notes remain literal.\n".repeat(900);
+  assert.ok(supplied.length > 20000);
+  const body = { content: "Export this text as a document:\n" + supplied, submission_id: "export" };
+  assert.equal((await post(path, body)).status, 200);
+  assert.equal((await post(path, body)).status, 200);
+  assert.equal((await post(path, { ...body, content: body.content.replace("  Bring", " Bring") })).status, 409);
+  assert.equal((await f.repository.listJobs(f.user)).length, 1);
+  const worker = createJobWorker({ ...f, workerId: "document-http-worker" });
+  t.after(() => worker.stop());
+  const result = await worker.runOnce();
+  assert.equal(result.job.status, "succeeded");
+  const markdown = result.artifacts.find((artifact) => artifact.original_name.endsWith(".md"));
+  assert.equal((await f.storage.read(markdown.storage_key)).toString("utf8"), supplied);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 19);
   assert.equal(f.calls(), 0);
 });

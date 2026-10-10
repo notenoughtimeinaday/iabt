@@ -1,6 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStudioSubmissionGate, mediaReadiness, normalizeCreationCapabilities, refreshAcceptedSubmission, studioErrorMessage } from "../src/lib/studio-state.js";
+import { createStudioSubmissionGate, mediaReadiness, normalizeCreationCapabilities, refreshAcceptedSubmission, studioErrorMessage, studioRequestAssets, studioRequestText } from "../src/lib/studio-state.js";
+import { createAttachmentTracker } from "../src/lib/upload-batch.js";
+
+test("Studio preserves supplied document whitespace and gives changed content a new submission identity", () => {
+  const body = "# Volunteer guide\r\n\r\n    Keep this indentation.  \r\n";
+  const prompt = "Export this text as a document:\r\n" + body;
+  assert.equal(studioRequestText(prompt), prompt);
+  assert.equal(studioRequestText("  Create a website.  "), "Create a website.");
+  const gate = createStudioSubmissionGate((() => { let id = 0; return () => String(++id); })());
+  gate.acquire();
+  const first = gate.idFor(studioRequestText(prompt));
+  gate.release();
+  gate.acquire();
+  assert.equal(gate.idFor(studioRequestText(prompt)), first);
+  assert.notEqual(gate.idFor(studioRequestText(prompt + "\r\n")), first);
+  gate.release();
+});
 
 test("Studio reads the standalone keyed capability response without claiming unconfigured media is available", () => {
   const rows = normalizeCreationCapabilities({
@@ -68,6 +84,33 @@ test("Studio changes submission identity when conversation, files, objective or 
   });
   assert.equal(new Set(ids).size, keys.length);
   assert.throws(() => gate.idFor("unlocked"), /Acquire/);
+});
+
+test("revising a source-built app preserves its attachments without resending them or changing retry identity", () => {
+  const attachments = createAttachmentTracker();
+  const source = { id: "asset-a", file_id: "source-a", project_id: "conversation:a", name: "requirements.md" };
+  attachments.switchScope("conversation:a", "a", [source]);
+  let sequence = 0;
+  const gate = createStudioSubmissionGate(() => `submission-${++sequence}`);
+  const prepare = (revisionFileId) => {
+    const assets = studioRequestAssets(attachments.snapshot().rows, revisionFileId);
+    const fileIds = assets.map((asset) => asset.file_id);
+    gate.acquire();
+    const submissionId = gate.idFor(JSON.stringify(["a", "Add a filter", fileIds, true, revisionFileId]));
+    gate.release();
+    return { fileIds, contextAssetIds: assets.map((asset) => asset.id), revisionFileId, submissionId };
+  };
+  const initial = prepare(null);
+  assert.deepEqual(initial.fileIds, ["source-a"]);
+  const revision = prepare("saved-html-a");
+  assert.deepEqual(revision.fileIds, []);
+  assert.deepEqual(revision.contextAssetIds, [], "legacy/custom context must not reintroduce excluded attachments");
+  assert.equal(revision.revisionFileId, "saved-html-a");
+  assert.notEqual(revision.submissionId, initial.submissionId);
+  assert.deepEqual(prepare("saved-html-a"), revision, "an uncertain revision retry reuses its request identity");
+  assert.notEqual(prepare("saved-html-b").submissionId, revision.submissionId, "selecting a different saved version is a different request");
+  assert.deepEqual(attachments.snapshot().rows, [source], "revision requests never remove original attachments");
+  assert.deepEqual(prepare(null).fileIds, ["source-a"], "leaving revision mode restores the normal attachment context");
 });
 
 test("Studio refreshes accepted-request resources even if the sidebar refresh fails", async () => {

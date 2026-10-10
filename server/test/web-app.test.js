@@ -29,7 +29,7 @@ async function fixture({ ai = true, profile = "core", role = "user" } = {}) {
   const worker = createJobWorker({ ...context, workerId: "web-app-worker" });
   const plan = (extra = {}) => createCreationPlan({ ...context, requestText: "Build a counter app", ...extra });
   const execute = (plan, extra = {}) => executeCreationPlan({ ...context, ...extra, body: { plan_id: plan.id, approved: true, pricing_version: plan.pricing_version, accepted_total_cents: plan.total_estimated_cost_cents } });
-  const upload = async (text = html(), owner = user) => { const id = randomUUID(), bytes = Buffer.from(text); const stored = await storage.put({ ownerId: owner.id, objectId: id, bytes }); return repository.createStoredObject({ id, ownerId: owner.id, storageProvider: stored.storage_provider, storageKey: stored.storage_key, originalName: "Counter.html", contentType: "text/html", sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") }); };
+  const upload = async (text = html(), owner = user, name = "Counter.html") => { const id = randomUUID(), bytes = Buffer.from(text); const stored = await storage.put({ ownerId: owner.id, objectId: id, bytes }); return repository.createStoredObject({ id, ownerId: owner.id, storageProvider: stored.storage_provider, storageKey: stored.storage_key, originalName: name, contentType: /\.html$/i.test(name) ? "text/html" : "text/plain", sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") }); };
   const drain = async () => { for (let i = 0; i < 30; i++) { for (const job of repository.jobs.values()) job.available_at = "2000-01-01T00:00:00.000Z"; const result = await worker.runOnce(); if (!result || ["succeeded", "failed", "needs_setup"].includes(result.job.status)) return result; } throw new Error("Worker did not finish"); };
   return { ...context, calls, replies, objects, worker, plan, execute, upload, drain };
 }
@@ -149,6 +149,114 @@ test("revision source changes after approval fail before a model call and restor
   assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 20);
 });
 
+test("source-grounded apps require AI and an accepted quote without substituting a starter or source report", async () => {
+  const unavailable = await fixture({ ai: false });
+  const source = await unavailable.upload("Tasks need due dates and filters", unavailable.user, "requirements.md");
+  await assert.rejects(unavailable.plan({ requestText: "Create a task-list starter from these requirements", fileIds: [source.id], automatic: true }), { code: "app_creation_unavailable" });
+  assert.equal((await unavailable.repository.getCreditAccount(unavailable.user.id)).available_credits, 20);
+  assert.equal((await unavailable.repository.listRecords("CreationPlan", unavailable.user)).length, 0);
+  assert.equal((await unavailable.repository.listJobs(unavailable.user)).length, 0);
+  assert.equal(unavailable.calls.length, 0);
+
+  const f = await fixture(), owned = await f.upload("Use a green theme", f.user, "requirements.md");
+  for (const requestText of ["Build an inventory app from my files", "Create a nursery website using my files"]) {
+    const { plan, job } = await f.plan({ requestText, fileIds: [owned.id], automatic: true });
+    assert.equal(plan.job_type, "creation.orchestrated");
+    assert.equal(plan.capability_id, "openai-responses-orchestration-v1");
+    assert.equal(plan.normalized_spec.app_output_contract, "self_contained_html_v1");
+    assert.equal(plan.fallback_available, false);
+    assert.equal(plan.file_references[0].sha256, owned.sha256);
+    assert.equal(job, undefined);
+  }
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).reserved_credits, 0);
+  assert.equal(f.calls.length, 0);
+});
+
+test("source-grounded app quotes reject foreign files, altered source bytes and altered signed references", async () => {
+  const f = await fixture(), source = await f.upload("Original requirements", f.user, "requirements.md");
+  const other = await f.repository.createUser({ email: "foreign@example.test", passwordHash: "unused", emailVerified: true });
+  for (const role of ["user", "admin"]) await assert.rejects(createCreationPlan({ ...f, user: { ...other, role }, requestText: "Build an app from my files", fileIds: [source.id] }), { code: "source_not_found" });
+  const { plan } = await f.plan({ fileIds: [source.id] });
+  f.objects.set(source.storage_key, Buffer.from("Altered requirements"));
+  await assert.rejects(f.execute(plan), { code: "source_integrity_failed" });
+  f.objects.set(source.storage_key, Buffer.from("Original requirements"));
+  f.repository.entityMap("CreationPlan").get(plan.id).file_references[0].sha256 = "f".repeat(64);
+  await assert.rejects(f.execute(plan), { code: "quote_mismatch" });
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).reserved_credits, 0);
+  assert.equal((await f.repository.listJobs(f.user)).length, 0);
+  assert.equal(f.calls.length, 0);
+});
+
+test("source-grounded apps recheck every source after approval before any paid request", async () => {
+  for (const change of ["bytes", "owner", "missing"]) {
+    const f = await fixture(), source = await f.upload("Preserve the invoice total", f.user, "requirements.md");
+    const other = await f.repository.createUser({ email: "changed-owner@example.test", passwordHash: "unused", emailVerified: true });
+    const { plan } = await f.plan({ fileIds: [source.id] });
+    await f.execute(plan);
+    if (change === "bytes") f.objects.set(source.storage_key, Buffer.from("Replacement source"));
+    if (change === "owner") f.repository.storedObjects.get(source.id).owner_id = other.id;
+    if (change === "missing") f.objects.delete(source.storage_key);
+    const result = await f.drain();
+    assert.equal(result.job.status, "failed");
+    assert.equal(f.calls.length, 0);
+    assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 20);
+  }
+});
+
+test("approved app creation inspects all supplied data and requirements and saves new identical HTML and ZIP source", async () => {
+  const f = await fixture();
+  const sources = [await f.upload("- Show nursery stock\n- Allow changing stock quantities", f.user, "requirements.md"), await f.upload("plant,stock\nOrchid,7", f.user, "stock.csv")];
+  const before = sources.map((source) => Buffer.from(f.objects.get(source.storage_key)));
+  const { plan } = await f.plan({ requestText: "Build a nursery stock app from these requirements and data", fileIds: sources.map((source) => source.id) });
+  const nodes = sources.map((source, index) => ({ id: "read" + index, tool: "inspect_file", objective: "Read " + source.original_name, depends_on: [] }));
+  nodes.push({ id: "build", tool: "create_web_app", objective: "Build nursery stock app", depends_on: ["read0", "read1"] });
+  f.replies.push(response("resp_sources", [toolCall("plan_execution", { objective: "Nursery stock app", nodes }, "plan"), ...sources.map((source, index) => toolCall("inspect_file", { node_id: "read" + index, file_id: source.id }, "read" + index))]), response("resp_app", [toolCall("create_web_app", { node_id: "build", title: "Nursery stock", html: html("Orchid stock: 7") }, "build")]), response("resp_complete"));
+  await f.execute(plan);
+  const result = await f.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 2);
+  const outputs = f.calls[1].body.input.filter((item) => item.type === "function_call_output");
+  assert.match(outputs.find((item) => item.call_id === "read0").output, /changing stock quantities/);
+  assert.match(outputs.find((item) => item.call_id === "read1").output, /Orchid,7/);
+  assert.deepEqual(f.calls[0].body.tools.map((item) => item.name).sort(), ["create_web_app", "inspect_file", "plan_execution"]);
+  assert.match(f.calls[0].body.input[0].content, /Inspect every approved file/);
+  for (const [index, source] of sources.entries()) assert.deepEqual(f.objects.get(source.storage_key), before[index]);
+  const app = result.artifacts.find((item) => /\.html$/.test(item.original_name));
+  const archive = result.artifacts.find((item) => /\.zip$/.test(item.original_name));
+  const previewBytes = f.objects.get(app.storage_key), zip = f.objects.get(archive.storage_key);
+  assert.match(previewBytes.toString(), /Orchid stock: 7/);
+  assert.match(previewBytes.toString(), /connect-src 'none'/);
+  const offset = 30 + zip.readUInt16LE(26) + zip.readUInt16LE(28);
+  assert.deepEqual(zip.subarray(offset, offset + zip.readUInt32LE(18)), previewBytes);
+  assert.equal(result.job.output.provider_metadata.runtime_tested, false);
+  assert.equal(f.repository.creditEntries.filter((entry) => entry.entry_type === "capture").length, 1);
+});
+
+test("the model cannot create an app after inspecting only some approved sources", async () => {
+  const f = await fixture(), first = await f.upload("First requirement", f.user, "first.md"), second = await f.upload("Second requirement", f.user, "second.md");
+  const { plan } = await f.plan({ fileIds: [first.id, second.id] });
+  f.replies.push(response("resp_skip", [toolCall("plan_execution", { objective: "Skip second source", nodes: [{ id: "read", tool: "inspect_file", objective: "Read one file", depends_on: [] }, { id: "build", tool: "create_web_app", objective: "Build", depends_on: ["read"] }] }, "plan"), toolCall("inspect_file", { node_id: "read", file_id: first.id }, "read"), toolCall("create_web_app", { node_id: "build", title: "Incomplete", html: html() }, "build")]), new Error("provider stopped"));
+  await f.execute(plan);
+  const result = await f.drain();
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.job.output.orchestration.artifacts.length, 0);
+  assert.match(f.calls[1].body.input.find((item) => item.call_id === "build").output, /source_inspection_required/);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 20);
+  assert.equal(f.repository.creditEntries.some((entry) => entry.entry_type === "capture"), false);
+});
+
+test("an explicit source review remains deterministic when AI is configured", async () => {
+  const f = await fixture(), source = await f.upload("- Preserve existing behavior", f.user, "requirements.md");
+  const { plan } = await f.plan({ requestText: "Review the uploaded app requirements", fileIds: [source.id], automatic: true });
+  assert.equal(plan.intent, "document");
+  assert.equal(plan.capability_id, "iabt-source-review-v1");
+  assert.equal(plan.provider_cost_cents, 0);
+  const result = await f.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 3);
+  assert.equal(f.calls.length, 0);
+});
+
 test("failed custom app generation restores credits without generating a placeholder or repeating paid submission", async () => {
   const f = await fixture();
   const { plan } = await f.plan();
@@ -199,6 +307,32 @@ test("HTTP preview is private and revision messages preserve replay identity and
   const plans = await f.repository.listRecords("CreationPlan", f.user);
   assert.equal(plans.length, 1);
   assert.equal(plans[0].normalized_spec.revision_source.file_id, previous.id);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).reserved_credits, 0);
+  assert.equal(f.calls.length, 0);
+});
+
+test("HTTP app requests preserve attached-source identity across replay and require explicit cost approval", async (t) => {
+  const f = await fixture(), source = await f.upload("- Add an editable inventory total", f.user, "requirements.md");
+  const server = createServer(createIabtHandler(f));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const token = createOpaqueToken();
+  await f.repository.createSession({ userId: f.user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 60000).toISOString() });
+  const post = async (path, body) => { const result = await fetch(`http://127.0.0.1:${server.address().port}${path}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(body) }); return { status: result.status, body: await result.json() }; };
+  const conversation = (await post("/v1/agents/conversations", { agent_name: "iabt_creator" })).body;
+  const path = `/v1/agents/conversations/${conversation.id}/messages`;
+  const message = { content: "Build an inventory app from these requirements", file_ids: [source.id], submission_id: "source-app-once" };
+  const first = await post(path, message);
+  assert.equal(first.status, 200);
+  assert.equal((await post(path, message)).status, 200);
+  assert.equal((await post(path, { ...message, file_ids: [] })).status, 409);
+  const plans = await f.repository.listRecords("CreationPlan", f.user);
+  assert.equal(plans.length, 1);
+  assert.equal(plans[0].job_type, "creation.orchestrated");
+  assert.equal(plans[0].conversation_id, conversation.id);
+  assert.equal(plans[0].file_references[0].sha256, source.sha256);
+  assert.equal(first.body.messages.find((item) => item.role === "user").file_references[0].file_id, source.id);
+  assert.equal((await f.repository.listJobs(f.user)).length, 0);
   assert.equal((await f.repository.getCreditAccount(f.user.id)).reserved_credits, 0);
   assert.equal(f.calls.length, 0);
 });

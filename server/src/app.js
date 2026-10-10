@@ -15,6 +15,7 @@ import { streamPrivateDownload } from "./storage/download-gateway.js";
 import {
   createCreationPlan,
   creationRequestDisposition,
+  suppliedDocumentText,
   executeCreationPlan
 } from "./creation/planner.js";
 import { processStripeWebhook } from "./billing/stripe-webhook.js";
@@ -526,7 +527,9 @@ const handleAgents = async ({
 
   if (conversationId && segments[4] === "messages" && req.method === "POST") {
     if (body.role && body.role !== "user") throw new HttpError(400, "invalid_message_role", "Only user messages can be submitted");
-    if (typeof body.content !== "string" || !body.content.trim() || body.content.length > 20000) throw new HttpError(400, "invalid_message", "Enter a message of at most 20,000 characters");
+    const documentExport = suppliedDocumentText(body.content) !== null;
+    const messageLimit = documentExport ? 100064 : 20000;
+    if (typeof body.content !== "string" || !body.content.trim() || body.content.length > messageLimit) throw new HttpError(400, "invalid_message", documentExport ? "Export at most 100,000 text characters after the document instruction." : "Enter a message of at most 20,000 characters");
     const fileIds = fileIdsFromRequest(body);
     const submissionId = String(body.submission_id || "");
     if (submissionId.length > 200) throw new HttpError(400, "invalid_submission_id", "Submission identifier is too long");
@@ -544,7 +547,8 @@ const handleAgents = async ({
     if (!sourceConversation) throw new HttpError(404, "conversation_not_found", "Conversation was not found");
     const previousResponse = replay(sourceConversation);
     if (previousResponse) return previousResponse;
-    const support = !fileIds.length && !revisionFileId && await respondToSupportRequest({ repository, user, providers, storage, config, requestText: body.content, agentName: sourceConversation.agent_name });
+    // Literal export content is data, even when it contains support keywords.
+    const support = !documentExport && !fileIds.length && !revisionFileId && await respondToSupportRequest({ repository, user, providers, storage, config, requestText: body.content, agentName: sourceConversation.agent_name });
     const disposition = creationRequestDisposition(body.content);
     const conversationalResponse = support || (!disposition.create && (!revisionFileId || disposition.reason === "execution_withheld") ? { content: disposition.response, metadata: { execution: "not_requested" } } : null);
     // Planning, storage reads and job enqueue run outside the conversation lock.

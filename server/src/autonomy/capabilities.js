@@ -40,7 +40,7 @@ export async function capabilityRegistry({ config = {}, providers, repository, s
     capabilities: {
       app: local("app", ["Named starters or approved self-contained HTML generation and owned-source revision. Preview/export do not prove runtime correctness."]),
       website: local("website", ["Private preview and source packaging; no public deployment."]),
-      document: local("document", ["Template documents or bounded text source reviews without paid orchestration."]),
+      document: local("document", ["Export explicitly supplied text or create bounded text source reviews without a paid provider. Original writing requires configured Responses orchestration and an approved quote; request summaries are not completed documents."]),
       code: local("code", ["Scaffold packaging; no isolated execution of generated code."]),
       design: local("design", ["Specification and SVG board; no external design-account changes."]),
       automation: restricted(local("automation", ["Disabled runbooks only; no external execution."])),
