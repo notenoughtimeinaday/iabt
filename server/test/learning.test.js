@@ -36,6 +36,11 @@ test("curriculum is versioned, inspectable and cannot be modified through return
   assert.match(second.sha256, /^[a-f0-9]{64}$/);
   assert.equal(second.model_weights_updated, false);
   assert.match(second.rules.find((rule) => rule.id === "identity-continuity").instruction, /does not authorize account linking/);
+  const release = second.rules.find((rule) => rule.id === "software-release-benchmark").instruction;
+  assert.match(release, /web-first on the existing Base44 backend/);
+  assert.match(release, /independent migration and app-store work are deferred and are not prerequisites/);
+  assert.match(release, /resume device and store-release tasks only after a new explicit owner instruction/);
+  assert.match(release, /never authorizes external actions/);
 });
 
 test("terminal outcomes are learned once across concurrent record attempts using persisted jobs", async () => {

@@ -30,18 +30,25 @@ Independent review and full local verification passed: 481 tests, including
 skips. Lint, type checking and build passed. Browser checks covered desktop,
 tablet and phone navigation, quotes and unchanged-text downloads; the PDF also
 contained the supplied material. A disabled-AI writing request preserved the
-draft and credits. Isolated staging acceptance is pending. The deployed
-October 9 commits below are still the current rollback points. Paid AI remains
+draft and credits. GitHub CI run 695 also passed. The API and frontend are Live
+at `adcdfefee3829200dd71a8fa3be33976d77254f1`; hosted readiness passed and
+an actual supplied-text export saved all three formats. Its downloaded Markdown
+matched all 219 original characters, using one existing test credit and no paid
+provider call. The October 9 commits below remain rollback points. Paid AI remains
 off pending the already requested bounded test authorization; no activation,
 supplier charge, live billing or production release is implied by this repair.
 
-Relevant chats are being preserved under the owner's private task outputs,
-including fresh handoffs and exact history coverage. Some ChatGPT histories
+The owner-requested recovery covers 28 related chats in private task outputs,
+including seven fresh handoffs, 55 exposed root-master turns, source-history
+bundles and exact coverage records. The reviewed learning curriculum preserves
+the useful creation workflow and now explicitly defers TreEbay app-store and
+independent-migration work. The focused learning/HTTP checks passed 18/18.
+Some ChatGPT histories
 expose only recent messages, and remote library references are not equivalent
 to local file backups. No old chat should be described as fully preserved until
 those coverage gaps are resolved. Existing source and release work is reused.
 
-## Current scope: useful core creation and a simpler interface
+## Preserved scope and historical October 9 preview
 
 The owner's latest direction supersedes the media expansion below. Jericho's
 public focus is apps, websites and documents. New image/video, audio,
