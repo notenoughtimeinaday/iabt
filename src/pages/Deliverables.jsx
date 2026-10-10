@@ -17,6 +17,8 @@ import { base44, platformRuntime } from "@/api/iabtClient";
 import { storedFileId, resolveFileDownload, openFileDownload } from "@/lib/stored-files";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
+import DocumentPreview from "@/components/DocumentPreview";
+import { canReadArtifact } from "@/lib/artifact-display";
 
 function readable(value = "") {
   return String(value).replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -211,7 +213,7 @@ export default function Deliverables() {
                     </p>
                   )}
 
-                  {artifact.content && (
+                  {canReadArtifact(artifact) ? <DocumentPreview artifact={artifact} /> : artifact.content && (
                     <details className="iabt-library-preview">
                       <summary>Preview document</summary>
                       <pre>{artifact.content}</pre>

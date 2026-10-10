@@ -5,6 +5,8 @@ import { base44, platformRuntime } from "@/api/iabtClient";
 import { storedFileId, resolveFileDownload, openFileDownload } from "@/lib/stored-files";
 import { createAttachmentTracker } from "@/lib/upload-batch";
 import { createStudioSubmissionGate, refreshAcceptedSubmission, studioRequestAssets, studioRequestText, studioErrorMessage as errorMessage } from "@/lib/studio-state";
+import { artifactFormat, canReadArtifact, exportComposerDraft, exportComposerRequest, groupArtifactResults, workTitle } from "@/lib/artifact-display";
+import DocumentPreview from "@/components/DocumentPreview";
 import "@/studio-simple.css";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
@@ -55,7 +57,7 @@ const AUTO_STARTERS = [
   { label: "Build an app or website", icon: AppWindow, prompt: "I want to build an app or website that " },
   { label: "Review existing source", icon: Code2, attach: true, prompt: "Review the source files I attach and create a report of the requirements, gaps and next steps. Distinguish code inspection from tests actually run." },
   { label: "Create a document", icon: FileText, prompt: "Create a document about " },
-  { label: "Export my text", icon: Download, prompt: "Export this text as a document:\n" },
+  { label: "Export my text", icon: Download, prompt: "", exporting: true },
 ];
 
 const REVISION_STARTERS = [
@@ -70,9 +72,7 @@ function contentText(content) {
 }
 
 function titleFromConversation(conversation) {
-  if (conversation?.metadata?.title) return conversation.metadata.title;
-  const first = conversation?.messages?.find((message) => message.role === "user");
-  const text = contentText(first?.content).trim();
+  const text = workTitle(conversation);
   if (text) return text.length > 46 ? text.slice(0, 46) + "…" : text;
   return "Untitled work";
 }
@@ -86,20 +86,6 @@ function formatDate(value) {
 
 function readable(value = "") {
   return String(value).replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function artifactsWithAppFirst(rows) {
-  // Reorder only siblings from the same job. Keep each job's existing place
-  // in the newest-first history, including files without a known source job.
-  const siblings = new Map();
-  const isApp = (artifact) => String(artifact.mime_type || "").split(";")[0] === "text/html";
-  for (const artifact of rows) {
-    if (!artifact.job_id) continue;
-    if (!siblings.has(artifact.job_id)) siblings.set(artifact.job_id, []);
-    siblings.get(artifact.job_id).push(artifact);
-  }
-  for (const group of siblings.values()) group.sort((left, right) => Number(isApp(right)) - Number(isApp(left)));
-  return rows.map((artifact) => artifact.job_id ? siblings.get(artifact.job_id).shift() : artifact);
 }
 
 function assetScopeFor(conversationId, projectId) {
@@ -227,6 +213,7 @@ export default function Studio() {
   const incomingPrompt = (searchParams.get("prompt") || "").slice(0, 100064);
   const targetProjectId = (searchParams.get("project_id") || "").trim().slice(0, 200);
   const setupProvider = (searchParams.get("setup") || "").trim().slice(0, 80);
+  const incomingDraft = exportComposerDraft(incomingPrompt);
   const reduceMotion = useReducedMotion();
   const messageListRef = useRef(null);
   const followLatestRef = useRef(true);
@@ -236,7 +223,8 @@ export default function Studio() {
   const attachmentTracker = useRef(createAttachmentTracker());
   const switchingConversationRef = useRef(false);
   const submissionRef = useRef(createStudioSubmissionGate());
-  const [prompt, setPrompt] = useState(() => incomingPrompt || (setupProvider
+  const [documentExport, setDocumentExport] = useState(() => platformRuntime.backend === "standalone" && incomingDraft.exporting);
+  const [prompt, setPrompt] = useState(() => (platformRuntime.backend === "standalone" ? incomingDraft.text : incomingPrompt) || (setupProvider
     ? "Help me connect " + readable(setupProvider) + " to my IABT projects. Use the safest authorization method, keep credentials out of prompts and generated code, explain who pays provider costs, and verify the connection before using it."
     : ""));
   const [revisionArtifact, setRevisionArtifact] = useState(null);
@@ -301,6 +289,7 @@ export default function Studio() {
   const attachedAssets = platformRuntime.backend === "standalone" ? assets : assets.slice(0, ATTACHED_ASSET_LIMIT);
   const hasResults = Boolean(activePlan || jobs.length || artifacts.length);
   const recentMessages = historyOpen ? visibleMessages : visibleMessages.slice(-2);
+  const artifactGroups = groupArtifactResults(artifacts);
 
   const loadAppPreview = useCallback(async (artifact, retry = false) => {
     const existing = appPreviewsRef.current[artifact.id];
@@ -418,6 +407,8 @@ export default function Studio() {
       publishAttachments();
       setConversation(full);
       setRevisionArtifact(null);
+      setDocumentExport(false);
+      setPrompt("");
       setWorkspaceView("conversation");
       setHistoryOpen(false);
       setAttachmentsOpen(false);
@@ -460,6 +451,8 @@ export default function Studio() {
       publishAttachments();
       setConversation(created);
       setRevisionArtifact(null);
+      setDocumentExport(false);
+      setPrompt("");
       setWorkspaceView("conversation");
       setHistoryOpen(false);
       setAttachmentsOpen(false);
@@ -590,12 +583,15 @@ export default function Studio() {
   }, [submissionError]);
 
   useEffect(() => {
-    if (!incomingPrompt && !startNew) return;
-    const next = new URLSearchParams(searchParams);
-    next.delete("prompt");
-    next.delete("new");
-    setSearchParams(next, { replace: true });
-  }, [incomingPrompt, startNew, searchParams, setSearchParams]);
+    if (!conversation?.id) return;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("prompt");
+      next.delete("new");
+      next.set("conversation", conversation.id);
+      return next;
+    }, { replace: true });
+  }, [conversation?.id, setSearchParams]);
 
   useEffect(() => {
     if (!mobileNavOpen) return undefined;
@@ -615,7 +611,8 @@ export default function Studio() {
 
   async function sendPrompt(event) {
     event?.preventDefault();
-    const request = studioRequestText(prompt);
+    const request = studioRequestText(exportComposerRequest(prompt, documentExport));
+    if (documentExport && !prompt.trim()) return;
     if (!request.trim() || submissionRef.current.busy) return;
     const attachmentError = attachmentTracker.current.planningError();
     if (attachmentError || switchingConversationRef.current) {
@@ -639,7 +636,7 @@ export default function Studio() {
       }
       const scopedAssets = attachmentSnapshot.rows.filter((asset) => !scopeId || asset.project_id === scopeId);
       const revisionFileId = revisionArtifact ? storedFileId(revisionArtifact) || revisionArtifact.id : null;
-      const requestAssets = studioRequestAssets(scopedAssets, revisionFileId);
+      const requestAssets = studioRequestAssets(scopedAssets, revisionFileId || (documentExport ? "text-export" : null));
       if (platformRuntime.backend === "standalone" && requestAssets.length > ATTACHED_ASSET_LIMIT) {
         throw new Error(`A file report can use at most ${ATTACHED_ASSET_LIMIT} attachments. Remove the extra attachments before sending your request.`);
       }
@@ -679,6 +676,7 @@ export default function Studio() {
       setMessages((current) => [...current.filter((item) => item.id !== sent.id), sent]);
       setPrompt("");
       setRevisionArtifact(null);
+      setDocumentExport(false);
       setQuoteAccepted(false);
       setSubmissionNotice("Request received. Your progress and files will appear here.");
       // A list refresh failure must not turn an accepted request into a send failure.
@@ -709,8 +707,18 @@ export default function Studio() {
   }
 
   function beginRevision(artifact) {
+    setDocumentExport(false);
     setRevisionArtifact(artifact);
     setPrompt("");
+    focusComposer();
+  }
+
+  function editDocumentCopy(content) {
+    setRevisionArtifact(null);
+    setDocumentExport(true);
+    setPrompt(content);
+    setSubmissionError("");
+    setSubmissionNotice("");
     focusComposer();
   }
 
@@ -909,7 +917,7 @@ export default function Studio() {
               <p className="creator-welcome-copy">Describe an app, bring your source files, or create a document. Your conversation and saved results stay together.</p>
               <div className="creator-starters">
                 {(targetProjectId ? REVISION_STARTERS : AUTO_STARTERS).map((starter) => (
-                  <button type="button" key={starter.label} onClick={() => { setPrompt(starter.prompt); if (starter.attach) setAttachmentsOpen(true); focusComposer(); }}>
+                  <button type="button" key={starter.label} onClick={() => { setDocumentExport(platformRuntime.backend === "standalone" && starter.exporting === true); setRevisionArtifact(null); setPrompt(starter.prompt); if (starter.attach) setAttachmentsOpen(true); focusComposer(); }}>
                     {React.createElement(starter.icon || Sparkles)}<span>{starter.label}</span><ArrowUpRight />
                   </button>
                 ))}
@@ -948,7 +956,10 @@ export default function Studio() {
                         <strong>{message.role === "user" ? "You" : "JERICHO"}</strong>
 
                       </div>
-                      <p>{contentText(message.content)}</p>
+                      {message.role === "user" && exportComposerDraft(contentText(message.content)).exporting ? <>
+                        <p>{workTitle({ messages: [message] })}</p>
+                        <details className="creator-optional-details"><summary>View supplied text</summary><pre className="creator-supplied-text">{exportComposerDraft(contentText(message.content)).text}</pre></details>
+                      </> : <p>{contentText(message.content)}</p>}
                       {message.tool_calls?.length > 0 && (
                         <details className="creator-optional-details"><summary>Activity details</summary><div className="creator-tool-list">
                           {message.tool_calls.map((tool, toolIndex) => (
@@ -975,15 +986,14 @@ export default function Studio() {
           {activePlan?.status === "quoted" && <button type="button" className="creator-review-quote-link" onClick={() => { setWorkspaceView("results"); window.requestAnimationFrame(() => document.getElementById("creator-active-plan")?.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" })); }}><CheckCircle2 /><span>A quote is ready · {Number(activePlan.credit_cost || 0)} {Number(activePlan.credit_cost) === 1 ? "credit" : "credits"}</span><ChevronRight /></button>}
 
           <form className="creator-composer creator-composer-auto" onSubmit={sendPrompt}>
-
-
+            {documentExport && <div className="creator-export-note"><FileText /><span>Export your text<small>Edit freely. Your earlier files stay saved.</small></span><button type="button" disabled={sending} aria-label="Leave text export" onClick={() => { setDocumentExport(false); setPrompt(""); }}><X /></button></div>}
             {revisionArtifact && <div className="creator-revision-note">
               <AppWindow /><span>Changing <strong>{revisionArtifact.name}</strong><small>Uses this saved app only. Original attachments stay in this conversation.</small></span>
               <button type="button" disabled={sending} onClick={() => setRevisionArtifact(null)} aria-label="Stop changing this app"><X /></button>
             </div>}
             <textarea
               ref={promptRef}
-              aria-label={revisionArtifact ? "Changes to your app" : "What would you like to build?"}
+              aria-label={documentExport ? "Text to export" : revisionArtifact ? "Changes to your app" : "What would you like to build?"}
               aria-describedby={submissionError ? "creator-submission-error" : "creator-submission-status"}
               value={prompt}
               readOnly={sending}
@@ -991,9 +1001,9 @@ export default function Studio() {
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void sendPrompt(event);
               }}
-              placeholder={revisionArtifact || targetProjectId ? "Describe the change you want…" : "What are you building or improving?"}
+              placeholder={documentExport ? "Paste or write your document here…" : revisionArtifact || targetProjectId ? "Describe the change you want…" : "What are you building or improving?"}
               rows={4}
-              maxLength={/^Export this text as a document:/i.test(prompt) ? 100064 : 12000}
+              maxLength={documentExport ? 100000 : /^Export this text as a document:/i.test(prompt) ? 100064 : 12000}
             />
             {submissionError && (
               <div id="creator-submission-error" className="creator-submission-error" role="alert" tabIndex={-1} ref={submissionErrorRef}>
@@ -1094,8 +1104,8 @@ export default function Studio() {
 
         {artifacts.length > 0 && (
           <section className="creator-artifacts">
-            <div className="creator-section-title"><span>Deliverables</span><small>{artifacts.length} ready</small></div>
-            {artifactsWithAppFirst(artifacts).map((artifact) => {
+            <div className="creator-section-title"><span>Your results</span><small>{artifactGroups.length} saved {artifactGroups.length === 1 ? "result" : "results"}</small></div>
+            {artifactGroups.map(({ primary: artifact, files }, resultIndex) => {
               const cachedAccess = artifactAccessUrls[artifact.id];
               const signedUrlReady = cachedAccess?.url &&
                 new Date(cachedAccess.expires_at || 0).getTime() > Date.now();
@@ -1112,18 +1122,15 @@ export default function Studio() {
               return (
                 <article key={artifact.id} className={isApp ? "creator-app-result" : ""}>
                   <div className="creator-artifact-info">
-                    <strong>{artifact.name}</strong>
+                    <strong>{canReadArtifact(artifact) ? artifact.name.replace(/\.(md|markdown)$/i, "") : artifact.name}</strong>
+                    <small className="creator-result-saved">Saved {formatDate(artifact.created_date)}</small>
                     {artifact.metadata?.rendered === false && (
                       <p className="creator-artifact-limitation">
                         This is a {artifact.metadata?.requested_kind || "media"} preproduction document. No playable media file was rendered.
                       </p>
                     )}
                     <div>
-                      {platformRuntime.backend === "standalone" && storedFileId(artifact) && (
-                        <button type="button" onClick={() => downloadStoredArtifact(artifact)}>
-                          <Download /> Download
-                        </button>
-                      )}
+                      {platformRuntime.backend === "standalone" && files.filter(storedFileId).map((file) => <button key={file.id} type="button" onClick={() => downloadStoredArtifact(file)} aria-label={"Download " + artifactFormat(file)}><Download /> {files.length > 1 ? artifactFormat(file) : "Download"}</button>)}
                       {deliveryUrl && platformRuntime.backend !== "standalone" && (
                         <a href={deliveryUrl} target="_blank" rel="noreferrer">
                           <ArrowUpRight /> Open
@@ -1145,8 +1152,8 @@ export default function Studio() {
                       )}
                     </div>
                   </div>
-                  <ArtifactPreview artifact={previewArtifact} previewLoading={appPreviews[artifact.id]?.loading}
-                    previewError={appPreviews[artifact.id]?.error} onPreview={() => loadAppPreview(artifact, true)} />
+                  {canReadArtifact(artifact) ? <DocumentPreview artifact={artifact} autoOpen={resultIndex === 0} onEdit={platformRuntime.backend === "standalone" ? editDocumentCopy : undefined} disabled={sending || conversationBusy} /> : <ArtifactPreview artifact={previewArtifact} previewLoading={appPreviews[artifact.id]?.loading}
+                    previewError={appPreviews[artifact.id]?.error} onPreview={() => loadAppPreview(artifact, true)} />}
                   {isApp && <p className="creator-preview-note">Preview — review and test your app before publishing.</p>}
                 </article>
               );

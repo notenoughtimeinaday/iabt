@@ -140,7 +140,7 @@ test("configured remote services remain unverified and registry never exposes cr
 test("safe objective reserves once automatically and captures only after verified private delivery", async (t) => {
   const f = await fixture(t);
   const result = await f.plan({ automatic: true, submissionId: "create-report" });
-  assert.equal(result.plan.title, "JERICHO Document");
+  assert.equal(result.plan.title, "Neighborhood bookstore");
   assert.equal(result.plan.autonomy_policy.automatic, true);
   assert.equal(result.plan.status, "executing");
   assert.equal((await f.repository.getJob(result.job.id, f.user)).approval.source, "autonomy_policy");

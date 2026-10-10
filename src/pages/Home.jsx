@@ -35,6 +35,7 @@ import {
   normalizeAppDefinition,
 } from "@/lib/appDefinition";
 import { legacyTag, readLegacyProjects } from "@/lib/legacyProjects";
+import { workTitle } from "@/lib/artifact-display";
 import "@/home-simple.css";
 
 export default function Home() {
@@ -347,8 +348,7 @@ export default function Home() {
           {workError && <p className="home-load-error" role="alert">{workError} <button type="button" onClick={load}>Retry</button></p>}
           {loading ? <p>Loading your work…</p> : recentWork.length ? <div className="home-recent-grid">
             {recentWork.map((item) => {
-              const content = item.messages?.find((message) => message.role === "user")?.content;
-              const title = item.metadata?.title || (typeof content === "string" ? content : content?.text) || "Untitled work";
+              const title = workTitle(item);
               const updated = item.updated_date ? new Date(item.updated_date) : null;
               const dateLabel = updated && !Number.isNaN(updated.getTime()) ? updated.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "Saved conversation";
               return <button className="home-work-card" type="button" key={item.id} onClick={() => navigate("/studio?conversation=" + encodeURIComponent(item.id))}>

@@ -2,6 +2,15 @@
 
 ## October 10: restore a useful professional workspace
 
+The subsequent results-focused candidate adds a readable private document view,
+one result card with alternate Word/PDF/Markdown downloads, and plain-text
+editing that saves a new copy while retaining previous files. Text previews are
+owner checked, size/hash/UTF-8 verified and inert. The selected conversation is
+kept in navigation so refreshing resumes that work. Heading-derived document
+names and shorter supplied-text messages make the work easier to recognize.
+Verification and deployment for this follow-up are recorded separately in the
+private results-pass checkpoint; the earlier accepted revisions remain below.
+
 The owner rejected the overly reduced October 9 interface. The current candidate
 restores a dark navy/violet workspace with readable contrast, existing-source
 work, documents, saved projects, and a conversation beside a results canvas.

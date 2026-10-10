@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { documentTitleFromText } from "../../../shared/document-title.js";
 import { normalizeFileIds, readTextSources, referenceBinding, sourceReferences } from "../files/text-sources.js";
 import { readImageSources } from "../files/image-sources.js";
 import { estimateLumaVideoCostCents } from "../providers/luma-pricing.js";
@@ -511,7 +512,7 @@ export const createCreationPlan = async ({
     ...(projectId ? { project_id: projectId } : {}),
     request_text: request,
     request_fingerprint: requestFingerprint,
-    title: imageVideo ? "Image-to-Video Production" : revisionId ? "Updated app" : references.length && !sourceApp ? "JERICHO Source Review" : starter && !orchestrated ? starterTitle(request, starter) : titleFor(request, intent),
+    title: imageVideo ? "Image-to-Video Production" : revisionId ? "Updated app" : references.length && !sourceApp ? "JERICHO Source Review" : starter && !orchestrated ? starterTitle(request, starter) : documentExport ? documentTitleFromText(documentMarkdown) : titleFor(request, intent),
     intent,
     status: "quoted",
     capability_id: capability.id,

@@ -2,6 +2,35 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createStudioSubmissionGate, mediaReadiness, normalizeCreationCapabilities, refreshAcceptedSubmission, studioErrorMessage, studioRequestAssets, studioRequestText } from "../src/lib/studio-state.js";
 import { createAttachmentTracker } from "../src/lib/upload-batch.js";
+import { exportComposerDraft, exportComposerRequest, groupArtifactResults } from "../src/lib/artifact-display.js";
+
+test("result grouping joins known formats only within one job and preserves independent source history", () => {
+  const markdown = { id: "md", job_id: "document-job", mime_type: "text/markdown", name: "Guide.md" };
+  const pdf = { id: "pdf", job_id: "document-job", mime_type: "application/pdf" };
+  const word = { id: "word", job_id: "document-job", mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
+  const html = { id: "html", job_id: "app-job", mime_type: "text/html" };
+  const zip = { id: "zip", job_id: "app-job", mime_type: "application/zip" };
+  const unrelated = { id: "unknown", mime_type: "text/plain" };
+  const rows = [pdf, word, markdown, unrelated, zip, html];
+  const original = structuredClone(rows);
+  const groups = groupArtifactResults(rows);
+  assert.deepEqual(groups.map((group) => group.primary.id), ["md", "unknown", "html"]);
+  assert.deepEqual(groups[0].files.map((file) => file.id), ["md", "pdf", "word"]);
+  assert.deepEqual(rows, original);
+  const other = { id: "other", job_id: "document-job", mime_type: "image/png" };
+  assert.equal(groupArtifactResults([markdown, pdf, other]).length, 3, "unrecognized siblings cannot disappear");
+});
+
+test("plain document editing reconstructs the exact supplied-text export and excludes old attachment context", () => {
+  const body = "# Community guide\r\n\r\n    Spaces stay.  \r\n";
+  const draft = exportComposerDraft("Export this text as a document:\r\n" + body);
+  assert.equal(draft.exporting, true);
+  assert.equal(draft.text, body);
+  assert.equal(exportComposerRequest(draft.text, true), "Export this text as a document:\n" + body);
+  assert.equal(exportComposerRequest("Build a garden app", false), "Build a garden app");
+  assert.deepEqual(studioRequestAssets([{ file_id: "earlier-source" }], "text-export"), []);
+  assert.equal(exportComposerDraft("Explain text export").exporting, false);
+});
 
 test("Studio preserves supplied document whitespace and gives changed content a new submission identity", () => {
   const body = "# Volunteer guide\r\n\r\n    Keep this indentation.  \r\n";

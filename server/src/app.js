@@ -36,6 +36,7 @@ import { SUPPORTED_AGENT_NAMES, respondToSupportRequest, buildJerichoKnowledge }
 import { handleExchangeFunction } from "./functions/exchange.js";
 import { handleIntegrationFunction } from "./functions/integrations.js";
 import { fileIdsFromRequest } from "./files/text-sources.js";
+import { readStoredTextPreview } from "./files/text-preview.js";
 import { prepareWebAppHtml, readRevisionSource } from "./creation/web-app.js";
 import { capabilityRegistry } from "./autonomy/capabilities.js";
 import { loadLearningContext, recordUserCorrection, resolveUserCorrection, withdrawLesson, proposeImprovement, listImprovementProposals } from "./learning/service.js";
@@ -880,6 +881,10 @@ const handleFunction = async ({
   if (name === "get-app-preview") {
     const source = await readRevisionSource({ repository, storage, user, fileId: body.file_id });
     return { status: 200, payload: { data: { file_id: source.reference.file_id, sha256: source.reference.sha256, mime_type: "text/html", content: prepareWebAppHtml(source.text) } } };
+  }
+
+  if (name === "get-text-preview") {
+    return { status: 200, payload: { data: await readStoredTextPreview({ repository, storage, user, fileId: body.file_id }) } };
   }
 
   if (name === "get-capability-registry") {
