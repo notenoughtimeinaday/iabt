@@ -241,6 +241,9 @@ export class ProviderRegistry {
   }
 
   async openaiResponse(payload, context) {
+    if (this.config.orchestration?.privateAcceptance?.enabled) {
+      throw new ProviderCallError("ai_acceptance_not_authorized", "Private AI tests must use the exact approved creation plans.");
+    }
     const response = await this.fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {

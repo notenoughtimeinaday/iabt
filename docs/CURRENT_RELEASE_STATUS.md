@@ -1,4 +1,35 @@
-# Current IABT release status — October 10, 2026
+# Current IABT release status — October 11, 2026
+
+## October 11: checkout feedback and private creation acceptance
+
+The billing feedback candidate `c29690e5c509fbc82cac5e4c9ea4b2c1f6d4240e`
+is Live on both canonical isolated services. Its exact source tree passed the
+complete local suite: 492 tests, zero failures/skips, including 71 PostgreSQL
+checks; GitHub CI run 699 also passed. Failed purchases now retain a readable,
+focused message inside Plans & billing, with dismissal and unchanged purchase
+retry identity. Fresh browser checks confirmed the error at 390×844 without
+horizontal overflow and successful keyboard dismissal. A hosted error check is
+separate from the simulated local provider check.
+
+An actual Stripe test-card credit-pack Checkout completed and its fulfillment
+added exactly 100 credits once, from 494 to 594. This is sandbox evidence only.
+The owner-authorized Accounts Read permission on the existing restricted test
+key is now saved and confirmed. Monthly Checkout reaches the next verifier but
+is blocked by missing Prices Read; Coupons Read is also required for the
+introductory discount. Both read-only corrections are prepared for approval.
+No unrestricted key, real charge, live subscription or production cutover is
+part of this evidence.
+
+The current follow-up introduces a default-off private Responses acceptance
+scope: one account, at most three exact approved plans, an expiration, a fixed
+model and bounded requests. Queue admission and every new paid request verify
+the canonical plan/job identity. The legacy response adapter cannot bypass this
+scope, and completed token usage is retained separately from cost estimates.
+Local and deployed acceptance for this follow-up must be recorded separately;
+its implementation is not a real generated-app result. The current supplier
+budget remains zero pending the requested bounded test authorization. Custom
+creation/writing, their useful output and original-source revision still need
+real provider and browser acceptance. This is not a public-launch certification.
 
 ## October 10: restore a useful professional workspace
 

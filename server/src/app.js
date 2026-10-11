@@ -888,7 +888,7 @@ const handleFunction = async ({
   }
 
   if (name === "get-capability-registry") {
-    return { status: 200, payload: { data: await capabilityRegistry({ repository, config, providers, storage }) } };
+    return { status: 200, payload: { data: await capabilityRegistry({ repository, config, providers, storage, user }) } };
   }
   if (name === "get-jericho-learning") {
     return { status: 200, payload: { data: { ...(await loadLearningContext({ repository, user })), proposals: await listImprovementProposals({ repository, user }) } } };

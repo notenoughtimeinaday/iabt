@@ -7,6 +7,7 @@ import { creationPolicy } from "../autonomy/policy.js";
 import { capabilityRegistry, orchestrationConfigured } from "../autonomy/capabilities.js";
 import { assertCreationProfile, coreStarter, CORE_STARTER_MESSAGE } from "./core-profile.js";
 import { readRevisionSource } from "./web-app.js";
+import { assertPrivateAcceptanceAccess } from "../autonomy/private-acceptance.js";
 
 export const CREATION_PRICING_VERSION = "iabt-standalone-2026-10-09.1";
 const QUOTE_TTL_MS = 30 * 60 * 1000;
@@ -424,7 +425,7 @@ export const createCreationPlan = async ({
   const explicitSourceReview = /^(?:(?:please|can you|could you|would you)\s+)?(?:(?:create|write|generate|produce|make|prepare)\s+(?:me\s+)?(?:(?:an?|the)\s+)?(?:(?:brief|short|detailed|source|file|review)\s+){0,3}(?:report|document|checklist|summary|review)\b|(?:review|summari[sz]e)\b)/i.test(request);
   const intent = revisionId ? "app" : ids.length && explicitSourceReview ? "document" : inferCreationIntent(request);
   assertCreationProfile({ config, user, intent });
-  const aiReady = orchestrationConfigured(config);
+  const aiReady = orchestrationConfigured(config, user);
   if (intent === "document" && !ids.length && !documentExport && !aiReady) {
     throw Object.assign(new Error("Writing a new document is not available right now. To export text you already have, start with 'Export this text as a document:' and place the complete text on the next line. Nothing was charged."), { status: 409, code: "document_creation_unavailable" });
   }
@@ -434,7 +435,7 @@ export const createCreationPlan = async ({
   if (["app", "website"].includes(intent) && !aiReady && !namedStarterRequested) {
     throw Object.assign(new Error(revisionId ? "Changes to saved apps need custom app creation, which is not available right now. Your original app is unchanged. Nothing was charged." : sourceApp ? "Creating an app from your files needs custom app creation, which is not available right now. Your files are saved and unchanged. Nothing was charged." : CORE_STARTER_MESSAGE), { status: 409, code: "app_creation_unavailable" });
   }
-  const registry = await capabilityRegistry({ config, providers, repository, storage, observe: false });
+  const registry = await capabilityRegistry({ config, providers, repository, storage, user, observe: false });
   const capability = capabilityFor(intent, user, providers, request, registry.capabilities);
   if (ids.length && intent === "image") {
     throw Object.assign(new Error("Editing or clearing up an uploaded photo is not implemented yet. Your image is saved, but IABT cannot enhance it. You can request a video from one JPEG or PNG when the video provider is configured. No job or credit reservation was created."), {
@@ -702,6 +703,7 @@ export const executeCreationPlan = async ({
   }
 
   assertCreationProfile({ config, user, intent: plan.intent });
+  if (plan.job_type === "creation.orchestrated") assertPrivateAcceptanceAccess(config, user, plan.id);
 
   if (plan.job_type === "provider.luma.video" && Number(config.providers?.luma?.costPerFiveSecondsCents) > 0 &&
       estimateLumaVideoCostCents(config.providers.luma.costPerFiveSecondsCents, plan.normalized_spec.duration_seconds) > Number(plan.provider_cost_cents)) {

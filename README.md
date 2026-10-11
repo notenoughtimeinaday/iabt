@@ -60,6 +60,20 @@ Orchestration is off by default. Enabling it requires an OpenAI key, `IABT_ENABL
 
 The worker limits model turns, polls, output tokens and graph attempts. Configured supplier costs are **operator estimates, not provider-enforced dollar caps**. Review actual provider pricing, account limits and usage before authorizing live calls. Paid-provider regression tests use mocked transports; they do not prove a funded account or a live provider result.
 
+For a private staging acceptance window, set `IABT_AI_ACCEPTANCE_ONLY=true`,
+`IABT_AI_ACCEPTANCE_OWNER_ID`, `IABT_AI_ACCEPTANCE_PLAN_IDS` (up to three exact
+UUIDs) and `IABT_AI_ACCEPTANCE_EXPIRES_AT`. The scope requires Stripe test mode,
+GPT-4o mini, at most eight turns and 6000 output tokens per response, a response
+estimate of at least three cents and a per-plan estimate no greater than 24 cents.
+The owner can request quotes before plan IDs are admitted; no new job or provider
+POST is permitted for an unlisted plan. Every paid POST verifies its canonical
+plan/job identity and current scope; existing known response polling can finish
+after expiry. The legacy response adapter remains unavailable during this mode.
+Three plans therefore allow at most 24 new Responses requests, including repair
+attempts. These request bounds and estimates do not impose a provider dollar cap.
+Completed usage is retained separately from estimates; missing usage stays
+unverified. Disable paid AI and orchestration after recording acceptance results.
+
 Current orchestration tools plan dependencies, inspect approved text sources, create Markdown/DOCX/PDF documents and package source files. They cannot run shell commands, execute uploaded/generated code, access arbitrary URLs, change accounts, push Git commits or deploy services. Normal attached-file requests currently use the deterministic private source-review path described in the [operational guide](JERICHO_OPERATIONS.md).
 
 ## Verification and release

@@ -1,16 +1,18 @@
 import { evaluateAction } from "./policy.js";
+import { privateAcceptanceAccess } from "./private-acceptance.js";
 
-export function orchestrationConfigured(config) {
+export function orchestrationConfigured(config, user) {
   const options = config?.orchestration || {};
   return Boolean(options.enabled && options.budgetAccepted && config?.providers?.openai?.apiKey && config.providers.openai.paidEnabled &&
     Number.isSafeInteger(options.budgetCents) && options.budgetCents > 0 &&
-    Number.isSafeInteger(options.responseCostCents) && options.responseCostCents > 0 && options.responseCostCents <= options.budgetCents);
+    Number.isSafeInteger(options.responseCostCents) && options.responseCostCents > 0 && options.responseCostCents <= options.budgetCents &&
+    privateAcceptanceAccess(config, user));
 }
 
 // Configured is configuration evidence only. Remote connections remain unknown
 // until a real operation establishes health; listing this registry incurs no
 // provider charges, sends no email and does not contact infrastructure APIs.
-export async function capabilityRegistry({ config = {}, providers, repository, storage, observe = true }) {
+export async function capabilityRegistry({ config = {}, providers, repository, storage, user, observe = true }) {
   const readiness = providers?.readiness?.() || {};
   const probe = async (component) => {
     if (!observe || typeof component?.health !== "function") return null;
@@ -47,7 +49,7 @@ export async function capabilityRegistry({ config = {}, providers, repository, s
       gcode_simulation: restricted(local("gcode_simulation", ["Simulation preparation only; no machine motion."])),
       source_review: local("source_review", ["UTF-8 text/code only; ownership and content hashes verified."]),
       internal_planner: entry("internal_planner", { operational: true, implementation: "server_rules" }),
-      openai_responses: remote("openai_responses", { ...readiness.openai, configured: orchestrationConfigured(config), blocker_codes: [...(readiness.openai?.blocker_codes || []), ...(!orchestrationConfigured(config) ? ["orchestration_budget_not_enabled"] : [])] }, "internal_planner", config.orchestration?.budgetCents || null),
+      openai_responses: remote("openai_responses", { ...readiness.openai, configured: orchestrationConfigured(config, user), blocker_codes: [...(readiness.openai?.blocker_codes || []), ...(!orchestrationConfigured(config, user) ? ["orchestration_budget_not_enabled"] : [])] }, "internal_planner", config.orchestration?.budgetCents || null),
       openai_image: restricted(remote("openai_image", readiness.openai_image, "design", config.providers?.openai?.imageCostCents || null)),
       neon_postgres: entry("neon_postgres", { configured: Boolean(config.databaseUrl), operational: config.databaseUrl ? databaseOk : null, risk: "read", blockers: databaseOk === true ? [] : ["database_not_verified"] }),
       private_storage: entry("private_storage", { configured: Boolean(storage), operational: storageOk, risk: "read", blockers: storageOk === true ? [] : ["storage_not_verified"] }),

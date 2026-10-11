@@ -82,6 +82,28 @@ test("Responses background tools resume across durable leases and capture only v
   await context.worker.stop();
 });
 
+test("completed Responses usage is durable once per response and distinct from estimates", async () => {
+  const first = { ...response("resp_first", [document()]), usage: { input_tokens: 1200, output_tokens: 600 } };
+  const last = { ...completed(), usage: { input_tokens: 1500, output_tokens: 20 } };
+  const context = await fixture({ replies: [first, last] });
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.job.output.orchestration.response_usage.length, 2);
+  assert.deepEqual(result.job.output.provider_metadata.orchestration.provider_usage,
+    { responses: 2, input_tokens: 2700, output_tokens: 620, complete: true });
+  assert.equal(result.job.output.provider_metadata.orchestration.budget_estimate_cents, 4);
+  await context.worker.stop();
+});
+
+test("missing provider usage remains unverified rather than a zero-cost claim", async () => {
+  const context = await fixture({ replies: [response("resp_first", [document()]), completed()] });
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.job.output.provider_metadata.orchestration.provider_usage.complete, false);
+  assert.equal(result.job.output.orchestration.response_usage.every(item => item.input_tokens === null && item.output_tokens === null), true);
+  await context.worker.stop();
+});
+
 test("disabled document composition restores credits without spending or a template substitute", async () => {
   const context = await fixture({ env: { IABT_ORCHESTRATION_BUDGET_ACCEPTED: "false" } });
   const result = await context.drain();

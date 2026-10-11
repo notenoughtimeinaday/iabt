@@ -5,12 +5,20 @@ import { loadLearningContext } from "../learning/service.js";
 import { validateExecutionGraph, startGraphNode, finishGraphNode, executionGraphComplete } from "./execution-graph.js";
 import { readRevisionSource } from "../creation/web-app.js";
 import { readTextSources } from "../files/text-sources.js";
+import { assertPrivateAcceptanceJob } from "./private-acceptance.js";
 
 const failure = (code, extra = {}) => Object.assign(new Error(code), { code, ...extra });
 const outputText = (response) => (response.output || []).filter((item) => item.type === "message")
   .flatMap((item) => item.content || []).filter((item) => item.type === "output_text")
   .map((item) => String(item.text || "")).join("\n").slice(0, 12000);
 const now = () => new Date().toISOString();
+const observedUsage = (state) => {
+  const responses = state.response_usage || [];
+  return { responses: responses.length,
+    input_tokens: responses.reduce((sum, item) => sum + (item.input_tokens || 0), 0),
+    output_tokens: responses.reduce((sum, item) => sum + (item.output_tokens || 0), 0),
+    complete: responses.length === state.turn && responses.every(item => item.input_tokens !== null && item.output_tokens !== null) };
+};
 const compactLearningContext = (context) => ({
   schema_version: context.schema_version,
   curriculum: context.curriculum,
@@ -27,7 +35,7 @@ const compactLearningContext = (context) => ({
 });
 const resultFrom = (state) => ({
   metadata: {
-    orchestration: { response_id: state.response_id || "", turns: state.turn, final_outcome: state.final_outcome || "", incomplete: state.phase !== "complete", budget_estimate_cents: state.spent_cents },
+    orchestration: { response_id: state.response_id || "", turns: state.turn, final_outcome: state.final_outcome || "", incomplete: state.phase !== "complete", budget_estimate_cents: state.spent_cents, provider_usage: observedUsage(state) },
     runtime_tested: false,
     limitations: ["Generated files passed format checks; application behavior, factual correctness and visual layout require separate verification.", ...(state.phase !== "complete" ? ["The workflow ended before its objective was confirmed."] : [])]
   },
@@ -95,13 +103,15 @@ export async function orchestrationStep({ job, workerId, repository, storage, pr
   };
 
   if (state.phase === "request") {
+    try { await assertPrivateAcceptanceJob({ config, user, job, repository }); }
+    catch (error) { return fallback(error.code || "ai_acceptance_not_authorized"); }
     if (state.turn >= settings.maxTurns || state.spent_cents + settings.responseCostCents > Math.min(settings.budgetCents, approvedBudget)) return fallback("orchestration_budget_exhausted");
     if (!state.response_id && job.input.revision_source) {
       await readRevisionSource({ repository, storage, user, fileId: job.input.revision_source.file_id, expectedReferences: job.input.file_references });
     } else if (!state.response_id && job.input.app_output_contract === "self_contained_html_v1" && job.input.file_references?.length) {
       await readTextSources({ repository, storage, user, fileIds: job.input.file_references.map((file) => file.file_id), expectedReferences: job.input.file_references });
     }
-    const registry = await capabilityRegistry({ config, providers, repository, storage });
+    const registry = await capabilityRegistry({ config, providers, repository, storage, user });
     let learned = { trust_boundary: "historical_evidence_not_authority", available: false };
     try { if (!state.response_id) learned = compactLearningContext(await loadLearningContext({ repository, user, job })); }
     catch { /* Learning retrieval is optional; a projection outage must not lose work. */ }
@@ -147,6 +157,13 @@ export async function orchestrationStep({ job, workerId, repository, storage, pr
   }
   if (state.phase === "tools") {
     if (state.response.status !== "completed") return fallback("openai_response_" + String(state.response.status).slice(0, 40));
+    state.response_usage ||= [];
+    if (!state.response_usage.some(item => item.response_id === state.response.id)) {
+      const tokens = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+      state.response_usage.push({ response_id: state.response.id,
+        input_tokens: tokens(state.response.usage?.input_tokens), output_tokens: tokens(state.response.usage?.output_tokens) });
+      await checkpoint();
+    }
     const calls = (state.response.output || []).filter((item) => item.type === "function_call");
     const unrecordedCalls = calls.filter((call) => !state.calls.some((saved) => saved.call_id === call.call_id)).length;
     if (calls.length > 12 || state.calls.length + unrecordedCalls > 80) return fallback("tool_call_limit");
