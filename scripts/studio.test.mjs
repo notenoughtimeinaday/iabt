@@ -3,6 +3,40 @@ import test from "node:test";
 import { createStudioSubmissionGate, mediaReadiness, normalizeCreationCapabilities, refreshAcceptedSubmission, studioErrorMessage, studioRequestAssets, studioRequestText } from "../src/lib/studio-state.js";
 import { createAttachmentTracker } from "../src/lib/upload-batch.js";
 import { exportComposerDraft, exportComposerRequest, groupArtifactResults } from "../src/lib/artifact-display.js";
+import { createStudioDrafts, emptyStudioDraft, hasStudioDraft } from "../src/lib/studio-drafts.js";
+
+test("unfinished creation, exact export and source-bound revision drafts survive A to B to New", () => {
+  const drafts = createStudioDrafts();
+  const a = { prompt: "  # Draft\r\n\r\n    Keep spaces.  ", documentExport: true, revisionArtifact: null };
+  const b = { prompt: "Improve navigation", documentExport: false, revisionArtifact: { id: "original-app" } };
+  drafts.save("a", a);
+  drafts.save("b", b);
+  assert.deepEqual(drafts.read("new"), emptyStudioDraft());
+  assert.deepEqual(drafts.read("a"), a);
+  assert.deepEqual(drafts.read("b"), b);
+  assert.equal(hasStudioDraft({ prompt: "", revisionArtifact: b.revisionArtifact }), true);
+  drafts.save("a", emptyStudioDraft());
+  assert.deepEqual(drafts.read("a"), emptyStudioDraft(), "accepted/discarded drafts do not reappear");
+  assert.equal(drafts.hasAny(), true, "the other unfinished draft remains protected");
+  drafts.save("b", emptyStudioDraft());
+  assert.equal(drafts.hasAny(), false);
+});
+
+test("resource admission rejects A's late success and failure after B selection, including shared project scope", () => {
+  const tracker = createAttachmentTracker();
+  tracker.switchScope("shared-project", "a");
+  const a = tracker.beginLoad("shared-project", "a");
+  tracker.switchScope("shared-project", "b");
+  const b = tracker.beginLoad("shared-project", "b");
+  assert.equal(tracker.finishLoad(a, [{ id: "a-file" }]), false);
+  assert.equal(tracker.finishLoad(a, [], "late failure"), false);
+  assert.equal(tracker.finishLoad(b, [], "offline"), true);
+  assert.deepEqual(tracker.snapshot().rows, []);
+  const retry = tracker.beginLoad("shared-project", "b");
+  assert.equal(tracker.finishLoad(retry, [{ id: "b-file" }]), true);
+  assert.equal(tracker.snapshot().error, "");
+  assert.deepEqual(tracker.snapshot().rows, [{ id: "b-file" }]);
+});
 
 test("result grouping joins known formats only within one job and preserves independent source history", () => {
   const markdown = { id: "md", job_id: "document-job", mime_type: "text/markdown", name: "Guide.md" };

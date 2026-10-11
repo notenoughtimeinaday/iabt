@@ -6,6 +6,7 @@ import { storedFileId, resolveFileDownload, openFileDownload } from "@/lib/store
 import { createAttachmentTracker } from "@/lib/upload-batch";
 import { createStudioSubmissionGate, refreshAcceptedSubmission, studioRequestAssets, studioRequestText, studioErrorMessage as errorMessage } from "@/lib/studio-state";
 import { artifactFormat, canReadArtifact, exportComposerDraft, exportComposerRequest, groupArtifactResults, workTitle } from "@/lib/artifact-display";
+import { createStudioDrafts, emptyStudioDraft, hasStudioDraft } from "@/lib/studio-drafts";
 import DocumentPreview from "@/components/DocumentPreview";
 import "@/studio-simple.css";
 import { Button } from "@/components/ui/button";
@@ -208,6 +209,8 @@ export default function Studio() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const setSearchParamsRef = useRef(setSearchParams);
+  setSearchParamsRef.current = setSearchParams;
   const requestedConversationId = (searchParams.get("conversation") || "").slice(0, 200);
   const startNew = searchParams.get("new") === "1";
   const incomingPrompt = (searchParams.get("prompt") || "").slice(0, 100064);
@@ -263,6 +266,33 @@ export default function Studio() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [workspaceView, setWorkspaceView] = useState("conversation");
   const menuButtonRef = useRef(null);
+  const savedWorkRef = useRef(null);
+  const draftsRef = useRef(createStudioDrafts());
+  const currentDraftRef = useRef(null);
+  currentDraftRef.current = { prompt, documentExport, revisionArtifact };
+  const selectedIdRef = useRef("");
+  const [resourceError, setResourceError] = useState("");
+  const navigationReadyRef = useRef(false);
+  const failedNavigationRef = useRef("");
+
+  const selectDraft = useCallback((id) => {
+    draftsRef.current.save(selectedIdRef.current, currentDraftRef.current);
+    selectedIdRef.current = id;
+    const draft = draftsRef.current.read(id);
+    currentDraftRef.current = draft;
+    setPrompt(draft.prompt);
+    setDocumentExport(draft.documentExport);
+    setRevisionArtifact(draft.revisionArtifact);
+  }, []);
+
+  const selectUrl = useCallback((id, replace = false) => {
+    setSearchParamsRef.current((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("prompt"); next.delete("new");
+      next.set("conversation", id);
+      return next;
+    }, { replace });
+  }, []);
 
   const activePlan = plans[0] || null;
   const currentIntent = targetProjectId ? "app" : activePlan?.intent || "auto";
@@ -367,6 +397,7 @@ export default function Studio() {
       const accepted = attachmentTracker.current.finishLoad(token, assetRows || []);
       publishAttachments();
       if (!accepted) return;
+      setResourceError("");
       setPlans(planRows || []);
       setJobs(jobRows || []);
       setArtifacts(artifactRows || []);
@@ -380,6 +411,7 @@ export default function Studio() {
     } catch (error) {
       const accepted = attachmentTracker.current.finishLoad(token, [], errorMessage(error));
       publishAttachments();
+      if (accepted) setResourceError("Saved results could not refresh. Please retry.");
       if (accepted && !quiet) {
         toast({ title: "Could not refresh this creation", description: errorMessage(error), variant: "destructive" });
       }
@@ -396,8 +428,9 @@ export default function Studio() {
     return !switchingConversationRef.current;
   }, [toast]);
 
-  const openConversation = useCallback(async (conversationId, quiet = false) => {
+  const openConversation = useCallback(async (conversationId, quiet = false, navigation = "push") => {
     if (!conversationId || !canSwitchConversation()) return;
+    if (conversationId === selectedIdRef.current) { setMobileNavOpen(false); return; }
     switchingConversationRef.current = true;
     setConversationBusy(true);
     try {
@@ -405,10 +438,11 @@ export default function Studio() {
       if (!full) throw new Error("That conversation is no longer available.");
       attachmentTracker.current.switchScope(assetScopeFor(conversationId, targetProjectId), conversationId);
       publishAttachments();
+      selectDraft(conversationId);
       setConversation(full);
-      setRevisionArtifact(null);
-      setDocumentExport(false);
-      setPrompt("");
+      setPlans([]); setJobs([]); setArtifacts([]);
+      setResourceError(""); setSystemAlert(null);
+      if (navigation !== "none") selectUrl(conversationId, navigation === "replace");
       setWorkspaceView("conversation");
       setHistoryOpen(false);
       setAttachmentsOpen(false);
@@ -420,6 +454,8 @@ export default function Studio() {
       await loadResources(conversationId, quiet);
       setMobileNavOpen(false);
     } catch (error) {
+      failedNavigationRef.current = conversationId;
+      if (navigation === "none" && selectedIdRef.current) selectUrl(selectedIdRef.current, true);
       if (!quiet) {
         toast({ title: "Could not open the conversation", description: errorMessage(error), variant: "destructive" });
       }
@@ -427,7 +463,7 @@ export default function Studio() {
       switchingConversationRef.current = false;
       setConversationBusy(false);
     }
-  }, [canSwitchConversation, loadResources, publishAttachments, targetProjectId, toast]);
+  }, [canSwitchConversation, loadResources, publishAttachments, selectDraft, selectUrl, targetProjectId, toast]);
 
   const refreshConversationList = useCallback(async () => {
     const rows = await listCreatorConversations();
@@ -449,10 +485,10 @@ export default function Studio() {
       });
       attachmentTracker.current.switchScope(assetScopeFor(created.id, targetProjectId), created.id, targetProjectId ? null : []);
       publishAttachments();
+      selectDraft(created.id);
       setConversation(created);
-      setRevisionArtifact(null);
-      setDocumentExport(false);
-      setPrompt("");
+      selectUrl(created.id);
+      setResourceError(""); setSystemAlert(null);
       setWorkspaceView("conversation");
       setHistoryOpen(false);
       setAttachmentsOpen(false);
@@ -475,7 +511,7 @@ export default function Studio() {
       switchingConversationRef.current = false;
       setConversationBusy(false);
     }
-  }, [canSwitchConversation, loadResources, publishAttachments, refreshConversationList, targetProjectId, toast]);
+  }, [canSwitchConversation, loadResources, publishAttachments, refreshConversationList, selectDraft, selectUrl, targetProjectId, toast]);
 
   useEffect(() => {
     let active = true;
@@ -497,9 +533,9 @@ export default function Studio() {
         setMonthlyUsed(Number(entitlementPayload?.usage?.monthly_used || 0));
 
         if (requestedConversationId) {
-          await openConversation(requestedConversationId);
+          await openConversation(requestedConversationId, false, "replace");
         } else if (!incomingPrompt && !startNew && conversationRows?.[0]?.id) {
-          await openConversation(conversationRows[0].id, true);
+          await openConversation(conversationRows[0].id, true, "replace");
         } else {
           const created = await base44.agents.createConversation({
             agent_name: CREATOR_AGENT,
@@ -511,6 +547,8 @@ export default function Studio() {
           if (!active) return;
           attachmentTracker.current.switchScope(assetScopeFor(created.id, targetProjectId), created.id, targetProjectId ? null : []);
           publishAttachments();
+          selectedIdRef.current = created.id;
+          selectUrl(created.id, true);
           setConversation(created);
           setMessages(created.messages || []);
           setConversations([created]);
@@ -519,13 +557,13 @@ export default function Studio() {
       } catch (error) {
         if (active) setLoadError(errorMessage(error, "Your workspace could not open."));
       } finally {
-        if (active) setLoading(false);
+        if (active) { navigationReadyRef.current = true; setLoading(false); }
       }
     }
 
     void bootstrap();
     return () => { active = false; };
-  }, [loadResources, openConversation, publishAttachments, targetProjectId, user?.id]);
+  }, [loadResources, openConversation, publishAttachments, selectUrl, targetProjectId, user?.id]);
 
   useEffect(() => {
     if (!conversation?.id) return undefined;
@@ -582,28 +620,37 @@ export default function Studio() {
     if (submissionError) submissionErrorRef.current?.focus();
   }, [submissionError]);
 
+  // URL changes include Back/Forward, not just the first workspace load.
   useEffect(() => {
-    if (!conversation?.id) return;
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.delete("prompt");
-      next.delete("new");
-      next.set("conversation", conversation.id);
-      return next;
-    }, { replace: true });
-  }, [conversation?.id, setSearchParams]);
+    if (!navigationReadyRef.current || loading || conversationBusy) return;
+    if (requestedConversationId && requestedConversationId !== selectedIdRef.current && requestedConversationId !== failedNavigationRef.current) {
+      void openConversation(requestedConversationId, false, "none");
+    }
+  }, [requestedConversationId, loading, conversationBusy, openConversation]);
 
   useEffect(() => {
-    if (!mobileNavOpen) return undefined;
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape") {
-        setMobileNavOpen(false);
-        menuButtonRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    failedNavigationRef.current = "";
+  }, [requestedConversationId]);
+
+  useEffect(() => {
+    const panel = savedWorkRef.current;
+    if (!panel) return;
+    if (mobileNavOpen && !panel.open) {
+      panel.showModal();
+      panel.querySelector(".creator-mobile-close")?.focus();
+    }
+    if (!mobileNavOpen && panel.open) { panel.close(); menuButtonRef.current?.focus(); }
   }, [mobileNavOpen]);
+
+  useEffect(() => {
+    const warn = (event) => {
+      draftsRef.current.save(selectedIdRef.current, currentDraftRef.current);
+      if (!draftsRef.current.hasAny() && !hasStudioDraft(currentDraftRef.current)) return;
+      event.preventDefault(); event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
 
   useEffect(() => {
     setQuoteAccepted(false);
@@ -673,6 +720,7 @@ export default function Studio() {
         }],
       });
       submissionRef.current.accepted();
+      draftsRef.current.save(target.id, emptyStudioDraft());
       setMessages((current) => [...current.filter((item) => item.id !== sent.id), sent]);
       setPrompt("");
       setRevisionArtifact(null);
@@ -706,17 +754,21 @@ export default function Studio() {
     });
   }
 
+  function replaceDraft(next) {
+    if (submissionRef.current.busy || switchingConversationRef.current) return false;
+    if (hasStudioDraft(currentDraftRef.current) && !window.confirm("Replace your unfinished draft? Cancel keeps your text and selected source.")) return false;
+    currentDraftRef.current = next;
+    setPrompt(next.prompt); setDocumentExport(next.documentExport); setRevisionArtifact(next.revisionArtifact);
+    return true;
+  }
+
   function beginRevision(artifact) {
-    setDocumentExport(false);
-    setRevisionArtifact(artifact);
-    setPrompt("");
+    if (!replaceDraft({ prompt: "", documentExport: false, revisionArtifact: artifact })) return;
     focusComposer();
   }
 
   function editDocumentCopy(content) {
-    setRevisionArtifact(null);
-    setDocumentExport(true);
-    setPrompt(content);
+    if (!replaceDraft({ prompt: content, documentExport: true, revisionArtifact: null })) return;
     setSubmissionError("");
     setSubmissionNotice("");
     focusComposer();
@@ -788,27 +840,19 @@ export default function Studio() {
 
   return (
     <div className={"creator-shell creator-simple" + (hasResults ? " has-results" : "")} data-workspace-view={workspaceView}>
-      <AnimatePresence>
-        {mobileNavOpen && (
-          <motion.button
-            type="button"
-            className="creator-mobile-scrim"
-            aria-label="Close conversation menu"
-            onClick={() => setMobileNavOpen(false)}
-            initial={reduceMotion ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          />
-        )}
-      </AnimatePresence>
-
-      {mobileNavOpen && <aside className="creator-sidebar is-open" aria-label="Saved work">
+      <dialog ref={savedWorkRef} className="creator-sidebar is-open" aria-label="Saved work"
+        onCancel={(event) => { event.preventDefault(); setMobileNavOpen(false); }}
+        onClick={(event) => {
+          if (event.target !== event.currentTarget) return;
+          const rect = event.currentTarget.getBoundingClientRect();
+          if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) setMobileNavOpen(false);
+        }}>
         <div className="creator-sidebar-brand">
           <Link to="/" className="creator-brand-link" aria-label="Return to workspace home">
             <img className="creator-brand-mark" src="/iabt-mark.svg" alt="" />
             <span><strong>JERICHO</strong><small>IABT workspace</small></span>
           </Link>
-          <button type="button" className="creator-mobile-close" onClick={() => { setMobileNavOpen(false); menuButtonRef.current?.focus(); }} aria-label="Close saved work">
+          <button type="button" className="creator-mobile-close" onClick={() => setMobileNavOpen(false)} aria-label="Close saved work">
             <X />
           </button>
         </div>
@@ -856,7 +900,7 @@ export default function Studio() {
           <Link to="/support"><MessageSquarePlus /> Support</Link>
           {platformRuntime.backend === "standalone" && <details className="creator-optional-details"><summary>Help &amp; activity</summary><JerichoLearningPanel /><JerichoMaintenancePanel /></details>}
         </div>
-      </aside>}
+      </dialog>
 
         <header className="creator-topbar">
           <button ref={menuButtonRef} type="button" className="creator-menu-button" onClick={() => setMobileNavOpen(true)} aria-label="Open saved work" aria-expanded={mobileNavOpen}>
@@ -917,7 +961,7 @@ export default function Studio() {
               <p className="creator-welcome-copy">Describe an app, bring your source files, or create a document. Your conversation and saved results stay together.</p>
               <div className="creator-starters">
                 {(targetProjectId ? REVISION_STARTERS : AUTO_STARTERS).map((starter) => (
-                  <button type="button" key={starter.label} onClick={() => { setDocumentExport(platformRuntime.backend === "standalone" && starter.exporting === true); setRevisionArtifact(null); setPrompt(starter.prompt); if (starter.attach) setAttachmentsOpen(true); focusComposer(); }}>
+                  <button type="button" key={starter.label} onClick={() => { if (!replaceDraft({ documentExport: platformRuntime.backend === "standalone" && starter.exporting === true, revisionArtifact: null, prompt: starter.prompt })) return; if (starter.attach) setAttachmentsOpen(true); focusComposer(); }}>
                     {React.createElement(starter.icon || Sparkles)}<span>{starter.label}</span><ArrowUpRight />
                   </button>
                 ))}
@@ -985,18 +1029,19 @@ export default function Studio() {
 
           {activePlan?.status === "quoted" && <button type="button" className="creator-review-quote-link" onClick={() => { setWorkspaceView("results"); window.requestAnimationFrame(() => document.getElementById("creator-active-plan")?.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" })); }}><CheckCircle2 /><span>A quote is ready · {Number(activePlan.credit_cost || 0)} {Number(activePlan.credit_cost) === 1 ? "credit" : "credits"}</span><ChevronRight /></button>}
 
+          {resourceError && <div className="creator-submission-error" role="alert">{resourceError} <button type="button" onClick={() => loadResources(conversation?.id)}>Retry saved results</button></div>}
           <form className="creator-composer creator-composer-auto" onSubmit={sendPrompt}>
-            {documentExport && <div className="creator-export-note"><FileText /><span>Export your text<small>Edit freely. Your earlier files stay saved.</small></span><button type="button" disabled={sending} aria-label="Leave text export" onClick={() => { setDocumentExport(false); setPrompt(""); }}><X /></button></div>}
+            {documentExport && <div className="creator-export-note"><FileText /><span>Export your text<small>Edit freely. Your earlier files stay saved.</small></span><button type="button" disabled={sending} aria-label="Leave text export" onClick={() => replaceDraft(emptyStudioDraft())}><X /></button></div>}
             {revisionArtifact && <div className="creator-revision-note">
               <AppWindow /><span>Changing <strong>{revisionArtifact.name}</strong><small>Uses this saved app only. Original attachments stay in this conversation.</small></span>
-              <button type="button" disabled={sending} onClick={() => setRevisionArtifact(null)} aria-label="Stop changing this app"><X /></button>
+              <button type="button" disabled={sending} onClick={() => replaceDraft({ prompt, documentExport: false, revisionArtifact: null })} aria-label="Stop changing this app"><X /></button>
             </div>}
             <textarea
               ref={promptRef}
               aria-label={documentExport ? "Text to export" : revisionArtifact ? "Changes to your app" : "What would you like to build?"}
               aria-describedby={submissionError ? "creator-submission-error" : "creator-submission-status"}
               value={prompt}
-              readOnly={sending}
+              readOnly={sending || conversationBusy}
               onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") void sendPrompt(event);

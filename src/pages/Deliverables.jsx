@@ -18,7 +18,7 @@ import { storedFileId, resolveFileDownload, openFileDownload } from "@/lib/store
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import DocumentPreview from "@/components/DocumentPreview";
-import { canReadArtifact } from "@/lib/artifact-display";
+import { artifactFormat, canReadArtifact, groupArtifactResults } from "@/lib/artifact-display";
 
 function readable(value = "") {
   return String(value).replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -94,11 +94,14 @@ export default function Deliverables() {
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return artifacts;
-    return artifacts.filter((artifact) =>
-      [artifact.name, artifact.kind, artifact.mime_type, artifact.metadata?.requested_kind]
+    const groups = platformRuntime.backend === "standalone"
+      ? groupArtifactResults(artifacts)
+      : artifacts.map((primary) => ({ primary, files: [primary] }));
+    if (!term) return groups;
+    return groups.filter((group) => group.files.some((artifact) =>
+      [artifact.name, artifact.kind, artifact.mime_type, artifact.metadata?.requested_kind, artifactFormat(artifact)]
         .some((value) => String(value || "").toLowerCase().includes(term))
-    );
+    ));
   }, [artifacts, query]);
 
   async function resolvePrivateArtifact(artifact) {
@@ -188,7 +191,7 @@ export default function Deliverables() {
           </div>
         ) : (
           <section className="creator-artifacts iabt-library-grid" aria-label="Deliverable library">
-            {filtered.map((artifact) => {
+            {filtered.map(({ primary: artifact, files }) => {
               const Icon = iconFor(artifact);
               const cached = accessUrls[artifact.id];
               const signedReady = cached?.url && new Date(cached.expires_at || 0).getTime() > Date.now();
@@ -234,16 +237,11 @@ export default function Deliverables() {
                     <small>Saved {formatDate(artifact.created_date)}</small>
                     <div>
                       {artifact.conversation_id && <Link to={"/studio?conversation=" + encodeURIComponent(artifact.conversation_id)}><ArrowUpRight /> Open workspace</Link>}
-                      {artifact.content && (
-                        <button type="button" onClick={() => downloadInlineArtifact(artifact)}>
-                          <Download /> Download file
+                      {files.map((file) => (file.content || (platformRuntime.backend === "standalone" && storedFileId(file))) && (
+                        <button key={file.id} type="button" disabled={resolving[file.id]} onClick={() => platformRuntime.backend === "standalone" && storedFileId(file) ? downloadStoredArtifact(file) : downloadInlineArtifact(file)}>
+                          <Download /> {artifactFormat(file)}
                         </button>
-                      )}
-                      {platformRuntime.backend === "standalone" && storedFileId(artifact) && (
-                        <button type="button" disabled={resolving[artifact.id]} onClick={() => downloadStoredArtifact(artifact)}>
-                          <Download /> Download
-                        </button>
-                      )}
+                      ))}
                       {deliveryUrl && platformRuntime.backend !== "standalone" && (
                         <a href={deliveryUrl} target="_blank" rel="noreferrer">
                           <ArrowUpRight /> Open
@@ -254,7 +252,7 @@ export default function Deliverables() {
                           <Download /> Download
                         </a>
                       )}
-                      {!deliveryUrl && artifact.file_uri && (
+                      {!deliveryUrl && artifact.file_uri && platformRuntime.backend !== "standalone" && (
                         <button type="button" onClick={() => resolvePrivateArtifact(artifact)} disabled={resolving[artifact.id]}>
                           {resolving[artifact.id] ? <Loader2 className="animate-spin" /> : <Download />}
                           Prepare secure download

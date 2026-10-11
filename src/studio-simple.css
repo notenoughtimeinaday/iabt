@@ -1,4 +1,7 @@
 /* Jericho workspace: one scoped palette, with conversation and output side by side. */
+.creator-shell.creator-simple dialog.creator-sidebar:not([open]) { display: none; }
+.creator-shell.creator-simple dialog.creator-sidebar { margin: 0; max-height: none; max-width: none; }
+.creator-shell.creator-simple dialog.creator-sidebar::backdrop { background: #020510b3; backdrop-filter: blur(3px); }
 .creator-shell.creator-simple {
   --creator-ink: #f3f6fc;
   --creator-muted: #bdc8dc;
