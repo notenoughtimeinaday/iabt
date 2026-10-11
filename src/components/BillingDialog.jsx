@@ -1,6 +1,6 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Check, CreditCard, Loader2, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { AlertCircle, Check, CreditCard, Loader2, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { base44 } from "@/api/iabtClient";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,12 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useToast } from "@/components/ui/use-toast";
 import { billingPlanCards, purchasedPlanSummary } from "@/lib/pricing";
-import { billingViewState } from "@/lib/billing-state";
+import { billingErrorNotice, billingViewState } from "@/lib/billing-state";
 
 export default function BillingDialog({ open, onOpenChange, entitlement, billingStatus }) {
-  const { toast } = useToast();
+  const [billingError, setBillingError] = useState(null);
+  const errorNotice = useRef(null);
   const [busyPlan, setBusyPlan] = useState("");
   const [acceptedOffers, setAcceptedOffers] = useState({});
   const currentPlan = String(entitlement?.plan || "free").toLowerCase();
@@ -38,7 +38,15 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
     entitlement?.status === "active";
   const remainingCredits = billing.credits;
 
+  useEffect(() => {
+    if (open && billingError && errorNotice.current) {
+      errorNotice.current.focus({ preventScroll: true });
+      errorNotice.current.scrollIntoView({ block: "nearest" });
+    }
+  }, [open, billingError]);
+
   async function startCheckout(plan) {
+    setBillingError(null);
     setBusyPlan(plan.id);
     try {
       const request = plan.offerId ? { offer_id: plan.offerId,
@@ -46,52 +54,43 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
       } : { plan: plan.id };
       const response = await base44.functions.invoke("stripe-create-checkout", { ...request, idempotency_key: retryKey(plan.id) });
       const payload = response?.data || response;
-      if (payload?.error) throw new Error(payload.error);
+      if (payload?.error) throw Object.assign(new Error("Checkout failed"), { data: payload });
       if (!payload?.url) throw new Error("Stripe did not return a checkout link.");
       window.location.assign(payload.url);
     } catch (error) {
-      const message = error.response?.data?.error || error.message || "Checkout could not be started.";
-      toast({
-        title: "Stripe checkout is not ready",
-        description: message,
-        variant: "destructive",
-      });
+      setBillingError(billingErrorNotice(error));
     } finally {
       setBusyPlan("");
     }
   }
 
   async function startCreditCheckout() {
+    setBillingError(null);
     setBusyPlan("credits");
     try {
       const response = await base44.functions.invoke("stripe-create-credit-checkout", { idempotency_key: retryKey("credits") });
       const payload = response?.data || response;
-      if (payload?.error) throw new Error(payload.error);
+      if (payload?.error) throw Object.assign(new Error("Checkout failed"), { data: payload });
       if (!payload?.url) throw new Error("Stripe did not return a checkout link.");
       window.location.assign(payload.url);
     } catch (error) {
-      const message = error.response?.data?.error || error.message || "Credit checkout could not be started.";
-      toast({
-        title: "Stripe credit checkout is not ready",
-        description: message,
-        variant: "destructive",
-      });
+      setBillingError(billingErrorNotice(error));
     } finally {
       setBusyPlan("");
     }
   }
 
   async function openBillingPortal() {
+    setBillingError(null);
     setBusyPlan("portal");
     try {
       const response = await base44.functions.invoke("stripe-customer-portal", {});
       const payload = response?.data || response;
-      if (payload?.error) throw new Error(payload.error);
+      if (payload?.error) throw Object.assign(new Error("Billing portal failed"), { data: payload });
       if (!payload?.url) throw new Error("Stripe did not return a billing portal link.");
       window.location.assign(payload.url);
     } catch (error) {
-      const message = error.response?.data?.error || error.message || "Billing portal could not be opened.";
-      toast({ title: "Billing portal unavailable", description: message, variant: "destructive" });
+      setBillingError(billingErrorNotice(error, "portal"));
     } finally {
       setBusyPlan("");
     }
@@ -112,6 +111,13 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
             </DialogDescription>
           </div>
         </DialogHeader>
+
+        {billingError && <div className="iabt-billing-economics iabt-billing-error" role="alert" tabIndex={-1} ref={errorNotice}>
+          <div><AlertCircle /></div>
+          <p><strong>{billingError.title}</strong><span>{billingError.message}</span>
+            <button type="button" onClick={() => setBillingError(null)}>Dismiss message</button>
+          </p>
+        </div>}
 
         <div className="iabt-billing-trust">
           <span><ShieldCheck /> Secure checkout</span>

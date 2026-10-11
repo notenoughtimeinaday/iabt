@@ -1,8 +1,28 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { billingViewState } from "../../src/lib/billing-state.js";
+import { billingErrorNotice, billingViewState } from "../../src/lib/billing-state.js";
 import { IABT_PLANS, billingPlanCards, purchasedPlanSummary } from "../../src/lib/pricing.js";
 import { PLAN_DEFAULTS } from "../src/billing/plans.js";
+
+test("billing failures explain verified setup rejection without exposing provider messages", () => {
+  const notice = billingErrorNotice({ data: { error: "billing_offer_verification_failed" }, message: "private provider body and credential" });
+  assert.match(notice.message, /checkout hasn't opened/);
+  assert.match(notice.message, /existing credits remain available/);
+  assert.doesNotMatch(JSON.stringify(notice), /private provider|credential|billing_offer/);
+  assert.equal(billingErrorNotice({ response: { data: { error: "billing_offer_price_mismatch" } } }).title, notice.title);
+});
+
+test("lost checkout responses and pending purchases never imply no payment or encourage another purchase", () => {
+  for (const code of ["request_timeout", "network_unavailable", "stripe_checkout_pending", "stripe_checkout_unavailable", "invalid_response"]) {
+    const notice = billingErrorNotice({ code, message: "untrusted remote message" });
+    assert.match(notice.message, /same purchase button/);
+    assert.match(notice.message, /already paid/);
+    assert.doesNotMatch(JSON.stringify(notice), /not charged|hasn't opened|untrusted remote/);
+  }
+  assert.match(billingErrorNotice({ data: { error: "stripe_checkout_terms_conflict" } }).message, /earlier purchase/);
+  assert.match(billingErrorNotice({ status: 401 }).message, /session/);
+  assert.match(billingErrorNotice(new Error("private portal error"), "portal").title, /management/);
+});
 
 test("standalone readiness enables configured checkout and displays actual server credit balance/pack size", () => {
   const view = billingViewState({ plan: "pro", credits_remaining: 47 }, { checkout_ready: true, configured: true, mode: "test", credit_pack_size: 75 });
