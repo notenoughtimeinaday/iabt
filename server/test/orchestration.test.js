@@ -5,7 +5,7 @@ import { loadConfig } from "../src/config.js";
 import { MemoryRepository } from "../src/memory-repository.js";
 import { createProviderRegistry } from "../src/providers/provider-registry.js";
 import { createJobWorker } from "../src/worker.js";
-import { invokeTool, registeredTools } from "../src/autonomy/tools.js";
+import { invokeTool, registeredTools, toolDefinitions } from "../src/autonomy/tools.js";
 
 const call = (name, args, id = "call_document") => ({ type: "function_call", call_id: id, name, arguments: JSON.stringify({ ...(["inspect_file", "create_document", "create_source"].includes(name) ? { node_id: "document" } : {}), ...args }) });
 const document = () => call("create_document", { title: "Bookstore report", markdown: "# Bookstore report\n\nA substantive report with a reproducible review checklist." });
@@ -92,6 +92,54 @@ test("completed Responses usage is durable once per response and distinct from e
   assert.deepEqual(result.job.output.provider_metadata.orchestration.provider_usage,
     { responses: 2, input_tokens: 2700, output_tokens: 620, complete: true });
   assert.equal(result.job.output.provider_metadata.orchestration.budget_estimate_cents, 4);
+  await context.worker.stop();
+});
+
+test("numeric graph IDs receive actionable repair and cannot bypass accepted planning", async () => {
+  const invalidPlan = call("plan_execution", { objective: "Create a bookstore report", nodes: [{ id: "1", tool: "create_document", objective: "Create document formats", depends_on: [] }] }, "numeric_plan");
+  const context = await fixture({ budget: 8, env: { IABT_ORCHESTRATION_BUDGET_CENTS: "8" }, replies: [
+    response("resp_invalid_plan", [invalidPlan]), response("resp_valid_plan", [plan()]),
+    { id: "resp_document", status: "completed", output: [document()] }, completed()
+  ] });
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 3);
+  const posts = context.requests.map(item => JSON.parse(item.options.body));
+  assert.equal(posts.length, 4);
+  assert.deepEqual(posts[0].tool_choice, { type: "function", name: "plan_execution" });
+  assert.deepEqual(posts[1].tool_choice, posts[0].tool_choice);
+  assert.equal(posts[2].tool_choice, undefined);
+  const repair = JSON.parse(posts[1].input[0].output);
+  assert.equal(repair.error, "invalid_tool_input");
+  assert.match(repair.message, /start with a letter/);
+  assert.match(repair.message, /create_app/);
+  assert.equal(result.job.output.orchestration.execution_graph.nodes[0].id, "document");
+  assert.equal(result.job.output.orchestration.execution_graph.nodes[0].attempts.length, 1);
+  assert.equal(context.repository.creditEntries.filter(entry => entry.entry_type === "capture").length, 1);
+  await context.worker.stop();
+});
+
+test("provider schemas and local tools reject invalid graph and execution identifiers", async () => {
+  const context = await fixture();
+  const job = context.queued;
+  const tools = registeredTools({ ...context, job });
+  const definitions = toolDefinitions(tools, context.user, job);
+  const graph = definitions.find(tool => tool.name === "plan_execution").parameters.properties.nodes.items.properties;
+  const pattern = new RegExp(graph.id.pattern);
+  assert.equal(pattern.test("create_app"), true);
+  assert.equal(pattern.test("A" + "x".repeat(63)), true);
+  for (const id of ["1", "", "read file", "A" + "x".repeat(64)]) {
+    assert.equal(pattern.test(id), false);
+    const args = { objective: "Create a report", nodes: [{ id, tool: "create_document", objective: "Write the report", depends_on: [] }] };
+    await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("plan_execution", args) }), { code: "invalid_tool_input" });
+    await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("create_document", { node_id: id, title: "Report", markdown: "A substantive document that must not be generated for an invalid node." }) }), { code: "invalid_tool_input" });
+  }
+  assert.equal(graph.depends_on.items.pattern, graph.id.pattern);
+  assert.equal(definitions.filter(tool => tool.name !== "plan_execution").every(tool => tool.parameters.properties.node_id.pattern === graph.id.pattern), true);
+  const badDependency = { objective: "Create a report", nodes: [{ id: "document", tool: "create_document", objective: "Write the report", depends_on: ["1"] }] };
+  await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("plan_execution", badDependency) }), { code: "invalid_tool_input" });
+  assert.equal(context.requests.length, 0);
+  assert.equal(context.objects.size, 0);
   await context.worker.stop();
 });
 

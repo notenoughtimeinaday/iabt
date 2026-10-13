@@ -1,6 +1,32 @@
-# Current IABT release status — October 11, 2026
+# Current IABT release status — October 12, 2026 (UTC)
 
-## October 11: checkout feedback and private creation acceptance
+## October 12: real monthly checkout and planning-loop repair
+
+Accounts Read, Prices Read and Coupons Read are saved on the existing restricted
+Stripe test key. A real sandbox Starter monthly Checkout completed at $12/month;
+the signed webhook granted exactly 100 credits once and activated the Starter
+entitlement. This proves the initial test subscription path, not live payments,
+renewal, cancellation, refunds or the $4.99 introductory offer.
+
+The owner approved up to $1 total for three private creation checks. The saved
+OpenAI credential works: the first custom-app test reached the Responses API,
+but exhausted eight requests without delivering an app. The model repeatedly
+used numeric graph node IDs that the execution validator rejected; its schema
+and generic repair hint did not explain the constraint. The failed job released
+its eight reserved IABT credits. Provider usage was retained separately; no useful
+app or revision result is claimed. Paid generation was disabled after the failure.
+
+The repair publishes the same identifier constraint in every tool schema and
+local validator, gives a bounded correction hint and requires successful
+planning before automatic tool selection. It preserves the failed job and all
+request/cost limits. Regression tests reproduce the numeric-ID failure and
+verify recovery, identifiers and dependencies without external provider calls.
+The working copy passed 501 tests with no failures/skips, including 71 disposable
+PostgreSQL checks, plus lint, type checking and build. Deployment and actual
+useful output after this repair require separate acceptance. The original
+document quote remains unexecuted, and no source-revision check has run.
+
+## October 11: checkout feedback and private creation acceptance (historical)
 
 The billing feedback candidate `c29690e5c509fbc82cac5e4c9ea4b2c1f6d4240e`
 is Live on both canonical isolated services. Its exact source tree passed the

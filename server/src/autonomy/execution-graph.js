@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 
 export const GRAPH_LIMITS = Object.freeze({ nodes: 16, depth: 8, attempts: 3, objectiveCharacters: 1200 });
+export const GRAPH_NODE_ID_PATTERN = "^[A-Za-z][A-Za-z0-9_-]{0,63}$";
+const nodeIdPattern = new RegExp(GRAPH_NODE_ID_PATTERN);
 const fail = (code, message) => { throw Object.assign(new Error(message), { code }); };
 const clone = (value) => structuredClone(value);
-const safeId = (value) => typeof value === "string" && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value);
+const safeId = (value) => typeof value === "string" && nodeIdPattern.test(value);
 const safeCallId = (value) => typeof value === "string" && /^[a-zA-Z0-9_-]{1,200}$/.test(value);
 const exactKeys = (value, keys) => value && typeof value === "object" && !Array.isArray(value) &&
   Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
@@ -29,7 +31,7 @@ export function validateExecutionGraph(proposed, { toolNames = [], previousGraph
     if (!exactKeys(node, ["id", "tool", "objective", "depends_on"]) || !safeId(node.id) ||
         !Array.isArray(node.depends_on) || node.depends_on.length > GRAPH_LIMITS.nodes ||
         node.depends_on.some((id) => !safeId(id)) || new Set(node.depends_on).size !== node.depends_on.length) {
-      fail("graph_invalid_node", "Graph nodes need a unique ID, registered tool, objective and unique dependency IDs.");
+      fail("graph_invalid_node", "Use unique node IDs beginning with a letter, followed by at most 63 letters, digits, underscores or hyphens. Dependencies must use those same IDs.");
     }
     if (typeof node.tool !== "string" || !knownTools.has(node.tool) || node.tool === "plan_execution") fail("graph_unknown_tool", "A graph may use only registered execution tools.");
     return { id: node.id, tool: node.tool, objective: objective(node.objective), depends_on: [...node.depends_on], status: "pending", attempts: [] };
