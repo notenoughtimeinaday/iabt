@@ -1,5 +1,48 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 15: useful-output hardening and clearer customer handoff
+
+Baseline draft PR #4 was refreshed at
+`3866d2de5bd8fec0a0934c8e4dd9f9c61a65f6b8`; GitHub verification run 703
+passed. The canonical isolated API was Live at that commit and the unchanged
+web service at `6ac726853e1ea1c407d1a926f32ce3a3e302479d`. The external
+Seagate drive is not mounted on this host. Its primary-workspace designation,
+existing files and recovery archives remain unchanged; this work uses a
+temporary Git checkout, not a replacement primary workspace.
+
+This continuation fixes request naming (a small-shop tracker no longer becomes
+an advertising storefront), makes the static requirement gate conservative
+about generic verbs, negations and unrelated JSON operations, and supplies the
+model with a bounded requirement checklist before generation. Authoring
+guidance requires implemented workflows, guarded storage, safe text rendering
+and validation before replacing imported data; those instructions are not proof
+that the provider follows them.
+
+Newly produced HTML has supported inline classic scripts compiled for syntax
+only. Invalid syntax returns a fixed repair hint through the same bounded job;
+no generated code is run on the API or worker. Module scripts and ambiguous
+markup require correction. Inert data scripts, event handlers, dynamic code,
+cross-script name conflicts and browser behavior retain explicit limitations.
+Previously saved previews and original sources are not rewritten.
+
+Studio now shows that files are saved while behavior remains untested. A
+collapsed "Before you publish" guide and matching `REVIEW.md` in each new source
+ZIP give concrete manual checks for the requested workflows, persistence,
+invalid imports, responsive layout and accessibility. These are instructions,
+not completed tests, automatic acceptance or permission to publish. Choosing
+Make a change keeps the original and does not itself submit a paid job.
+
+The focused 50-test run passed, including same-job syntax repair and exactly-once
+credit capture. The configured full local suite passed lint, type checking,
+deterministic exchange/creation checks, 443 executed tests and the production
+build. This host had no disposable PostgreSQL; 49 database tests were skipped,
+not counted as executed coverage. A local Chromium installation attempt failed
+because the download was not a valid archive; no new browser-rendered or hosted
+interaction acceptance is claimed. New source/CI and deployment results must
+be recorded separately after verification. Paid generation remains off; no new
+provider call, credit grant, purchase, production service change or merge is
+part of this continuation.
+
 ## October 15: first delivered private app and objective-quality repair
 
 The approved isolated-staging app check ran at

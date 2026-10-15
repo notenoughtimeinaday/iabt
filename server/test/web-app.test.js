@@ -116,6 +116,12 @@ test("new app objective checks reject the observed maintenance-tracker omissions
   assert.deepEqual(result.metadata.objective_contract.checked, result.metadata.objective_contract.passed);
   assert.ok(result.metadata.objective_contract.checked.includes("json_import"));
   assert.ok(result.metadata.objective_contract.checked.includes("responsive"));
+  assert.equal(result.metadata.script_checks.runtime_tested, false);
+  const zipText = result.artifacts[1].bytes.toString("utf8");
+  assert.match(zipText, /REVIEW\.md/);
+  assert.match(zipText, /manual checklist, not a completed test report/);
+  assert.match(zipText, /Edit an existing item/);
+  assert.match(zipText, /Invalid input must leave existing data unchanged/);
 });
 
 test("orchestration repairs a rejected app omission and captures credits only after an accepted artifact", async () => {
@@ -138,6 +144,32 @@ test("orchestration repairs a rejected app omission and captures credits only af
   assert.equal(f.repository.creditEntries.filter((entry) => entry.entry_type === "capture").length, 1);
   assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 20 - plan.credit_cost);
   assert.equal((await f.repository.getCreditAccount(f.user.id)).reserved_credits, 0);
+  const firstInput = JSON.parse(f.calls[0].body.input[0].content);
+  assert.ok(firstInput.app_requirement_candidates.some((item) => item.id === "edit"));
+  assert.match(firstInput.acceptance_instructions, /not the complete specification/);
+  assert.match(f.calls[0].body.instructions, /placeholder buttons and TODOs are not implementations/);
+  assert.match(f.calls[0].body.instructions, /preserve existing data on invalid input/);
+});
+
+test("invalid JavaScript is repaired within the same app job before any artifact is accepted", async () => {
+  const f = await fixture();
+  const { plan } = await f.plan();
+  f.replies.push(
+    response("resp_plan", [toolCall("plan_execution", { objective: "Build a counter", nodes: [{ id: "build_app", tool: "create_web_app", objective: "Build a counter", depends_on: [] }] }, "plan")]),
+    response("resp_broken", [toolCall("create_web_app", { node_id: "build_app", title: "Counter", html: html().replace("<script>", "<script>const missing = ;") }, "broken")]),
+    response("resp_fixed", [toolCall("create_web_app", { node_id: "build_app", title: "Counter", html: html() }, "fixed")]),
+    response("resp_complete")
+  );
+  await f.execute(plan);
+  const result = await f.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 2);
+  assert.equal(result.job.output.orchestration.execution_graph.nodes[0].attempts.length, 2);
+  const rejected = JSON.parse(f.calls[2].body.input.find((item) => item.call_id === "broken").output);
+  assert.equal(rejected.error, "web_app_script_syntax_invalid");
+  assert.match(rejected.message, /did not execute/);
+  assert.doesNotMatch(rejected.message, /missing =|SyntaxError|\/workspace/);
+  assert.equal(f.repository.creditEntries.filter((entry) => entry.entry_type === "capture").length, 1);
 });
 
 test("revision quotes bind the owner's actual HTML and reject changes before reserving credits", async () => {

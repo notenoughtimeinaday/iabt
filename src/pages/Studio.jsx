@@ -5,7 +5,7 @@ import { base44, platformRuntime } from "@/api/iabtClient";
 import { storedFileId, resolveFileDownload, openFileDownload } from "@/lib/stored-files";
 import { createAttachmentTracker } from "@/lib/upload-batch";
 import { createStudioSubmissionGate, refreshAcceptedSubmission, studioRequestAssets, studioRequestText, studioErrorMessage as errorMessage } from "@/lib/studio-state";
-import { artifactFormat, canReadArtifact, exportComposerDraft, exportComposerRequest, groupArtifactResults, workTitle } from "@/lib/artifact-display";
+import { appResultReview, artifactFormat, canReadArtifact, exportComposerDraft, exportComposerRequest, groupArtifactResults, workTitle } from "@/lib/artifact-display";
 import { createStudioDrafts, emptyStudioDraft, hasStudioDraft } from "@/lib/studio-drafts";
 import DocumentPreview from "@/components/DocumentPreview";
 import "@/studio-simple.css";
@@ -1164,11 +1164,13 @@ export default function Studio() {
                 file_url: deliveryUrl,
               };
               const isApp = String(artifact.mime_type || "").split(";")[0] === "text/html";
+              const appReview = isApp && platformRuntime.backend === "standalone" ? appResultReview(artifact) : null;
               return (
                 <article key={artifact.id} className={isApp ? "creator-app-result" : ""}>
                   <div className="creator-artifact-info">
                     <strong>{canReadArtifact(artifact) ? artifact.name.replace(/\.(md|markdown)$/i, "") : artifact.name}</strong>
                     <small className="creator-result-saved">Saved {formatDate(artifact.created_date)}</small>
+                    {appReview && <p className="creator-app-review-status">{appReview.status}</p>}
                     {artifact.metadata?.rendered === false && (
                       <p className="creator-artifact-limitation">
                         This is a {artifact.metadata?.requested_kind || "media"} preproduction document. No playable media file was rendered.
@@ -1199,7 +1201,14 @@ export default function Studio() {
                   </div>
                   {canReadArtifact(artifact) ? <DocumentPreview artifact={artifact} autoOpen={resultIndex === 0} onEdit={platformRuntime.backend === "standalone" ? editDocumentCopy : undefined} disabled={sending || conversationBusy} /> : <ArtifactPreview artifact={previewArtifact} previewLoading={appPreviews[artifact.id]?.loading}
                     previewError={appPreviews[artifact.id]?.error} onPreview={() => loadAppPreview(artifact, true)} />}
-                  {isApp && <p className="creator-preview-note">Preview — review and test your app before publishing.</p>}
+                  {appReview && <details className="creator-app-review">
+                    <summary>Before you publish</summary>
+                    <p>{appReview.evidence}</p>
+                    <p>{appReview.preview}</p>
+                    <ul>{appReview.checklist.map((item) => <li key={item}>{item}</li>)}</ul>
+                    <p>Missing something? Use <strong>Make a change</strong> to describe it. Your original version stays saved; choosing it does not start a job.</p>
+                  </details>}
+                  {isApp && !appReview && <p className="creator-preview-note">Preview — review and test your app before publishing.</p>}
                 </article>
               );
             })}

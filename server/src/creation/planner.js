@@ -58,9 +58,24 @@ export const inferCreationIntent = (requestText) => {
 };
 
 const titleFor = (requestText, intent) => {
-  const text = normalize(requestText, 140);
-  if (/piano/i.test(text) && intent === "app") return "Keyboard Piano";
-  if ((intent === "app" || intent === "website") && /merch|store|shop|e-?commerce/i.test(text)) return "IABT Advertising Storefront";
+  const text = normalize(requestText, 400);
+  if (intent === "app" || intent === "website") {
+    const explicit = text.match(/\b(?:app(?:lication)?|website|site|tool|tracker|dashboard|project|manager)\s+(?:called|named|titled)\s+["“']([^"”']{1,80})["”']/i);
+    if (explicit) return explicit[1].trim();
+    // Describe this request, not a template inferred from words such as
+    // "shop" or "store" in its audience, storage or feature requirements.
+    const objective = text
+      .replace(/^(?:(?:please|can you|could you|would you|will you|i need you to|i want you to|i'd like you to)\s+)*(?:create|build|make|design|develop|generate|prepare)\s+(?:me\s+)?/i, "")
+      .replace(/^(?:(?:an?|the|my|new|polished|beautiful|professional|responsive|self-contained|simple|accessible|mobile-friendly)\b[\s,-]*)+/i, "");
+    let subject = objective
+      .split(/[.!?;]|\s+(?:for|with|that|where|which|including|called|named|titled)\s+/i)[0]
+      .trim().replace(/[, :]+$/, "");
+    if (/^(?:(?:web|browser|mobile)\s+)?(?:app|application|website|site|tool)$/i.test(subject)) {
+      subject = objective.split(/[.!?;]|\s+(?:with|that|where|which|including|called|named|titled)\s+/i)[0].trim();
+    }
+    if (subject) return subject.charAt(0).toUpperCase() + subject.slice(1, 90);
+    return intent === "website" ? "My website" : "My app";
+  }
   if (intent === "audio") return "Original Audio Production";
   if (intent === "video") return "Video Production";
   if (intent === "document") return "JERICHO Document";
@@ -792,7 +807,7 @@ export const executeCreationPlan = async ({
       provider: plan.provider,
       status: job.status,
       progress: job.status === "succeeded" ? 100 : 0,
-      stage: terminal ? (job.status === "succeeded" ? "Verified deliverables are ready" : "Job ended; review its recovery details") : automaticAllowed ? "Safe private workflow queued automatically" : "Approval recorded; queued for production",
+      stage: terminal ? (job.status === "succeeded" ? "Files saved; delivery verified" : "Job ended; review its recovery details") : automaticAllowed ? "Safe private workflow queued automatically" : "Approval recorded; queued for creation",
       usage_state: job.credit_amount > 0 ? terminal ? job.status === "succeeded" ? "captured" : "released" : "reserved" : "none"
     },
     billing: {

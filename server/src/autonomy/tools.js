@@ -62,7 +62,7 @@ export function registeredTools({ job, repository, storage, user }) {
     },
     {
       ...common, name: "create_web_app",
-      description: "Create a complete working browser app as self-contained HTML plus an identical standalone source ZIP. Use inline CSS/JavaScript and local interactions, no external dependencies, network requests, account services or payment promises. Implement every explicitly requested behavior, do not substitute a generic list; an omission is rejected with a bounded repair list. Inspect the prior HTML first when revising; preserve its useful behavior. Browser storage may be unavailable in the sandbox and must be guarded. This checks format and explicit lexical evidence, not runtime correctness.",
+      description: "Create a complete working browser app as self-contained HTML plus an identical standalone source ZIP and manual REVIEW.md checklist. Use inline CSS/classic JavaScript and local interactions, no module scripts, external dependencies, network requests, account services or payment promises. Implement every explicitly requested behavior, not labels or placeholders; bounded static omissions and syntax failures are rejected for repair. Inspect the prior HTML first when revising; preserve its useful behavior. Guard browser-storage reads and writes. This checks format, static markers and JavaScript compilation only, not runtime correctness.",
       input_schema: objectSchema({ node_id: nodeId, title: string, html: string }),
       execute: async ({ title, html }) => {
         if (!safeName(title)) throw fail("invalid_tool_input", "Use a simple app title.");

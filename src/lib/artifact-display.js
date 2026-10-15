@@ -1,4 +1,5 @@
 import { documentTitleFromText } from "../../shared/document-title.js";
+import { appReviewSteps } from "../../shared/app-review.js";
 export const artifactMime = (artifact) => String(artifact?.mime_type || "").split(";")[0].trim().toLowerCase();
 export const canReadArtifact = (artifact) => ["text/markdown", "text/x-markdown", "text/plain", "text/csv", "application/json"].includes(artifactMime(artifact));
 export const isMarkdownArtifact = (artifact) => ["text/markdown", "text/x-markdown"].includes(artifactMime(artifact)) || (artifactMime(artifact) === "text/plain" && /\.md$/i.test(artifact?.name || ""));
@@ -10,6 +11,25 @@ export function artifactFormat(artifact) {
   if (mime === "text/html") return "HTML";
   if (mime === "application/zip") return "Source ZIP";
   return "File";
+}
+
+// These are manual review prompts, not acceptance records or automatic tests.
+// Only known server feature IDs select prompts; no generated text or claims
+// are promoted into a behavior-verification badge.
+export function appResultReview(artifact) {
+  const metadata = artifact?.metadata || {};
+  const contract = metadata.objective_contract;
+  const checked = contract?.method === "bounded_lexical_evidence" && Array.isArray(contract.checked) ? contract.checked : [];
+  const checklist = appReviewSteps(checked).map((step) => step.text);
+  const incomplete = metadata.objective_completed === false || metadata.delivery_mode === "template_fallback";
+  return {
+    status: incomplete ? "Files saved · request not fully completed" : metadata.runtime_tested === true ? "Files saved · review test evidence" : "Files saved · behavior not tested",
+    evidence: metadata.runtime_tested === true
+      ? "Recorded testing is not your acceptance or proof of publishing readiness."
+      : "Behavior has not been automatically tested. Source and delivery checks do not prove the app works.",
+    preview: "This private preview is sandboxed; browser storage may be unavailable. Download the HTML to test saved data on your own device.",
+    checklist
+  };
 }
 
 // Keep jobs in their existing order, collapse only known sibling formats, and

@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createStudioSubmissionGate, mediaReadiness, normalizeCreationCapabilities, refreshAcceptedSubmission, studioErrorMessage, studioRequestAssets, studioRequestText } from "../src/lib/studio-state.js";
 import { createAttachmentTracker } from "../src/lib/upload-batch.js";
-import { exportComposerDraft, exportComposerRequest, groupArtifactResults } from "../src/lib/artifact-display.js";
+import { appResultReview, exportComposerDraft, exportComposerRequest, groupArtifactResults } from "../src/lib/artifact-display.js";
 import { createStudioDrafts, emptyStudioDraft, hasStudioDraft } from "../src/lib/studio-drafts.js";
+import { appReviewSteps } from "../shared/app-review.js";
 
 test("unfinished creation, exact export and source-bound revision drafts survive A to B to New", () => {
   const drafts = createStudioDrafts();
@@ -53,6 +54,24 @@ test("result grouping joins known formats only within one job and preserves inde
   assert.deepEqual(rows, original);
   const other = { id: "other", job_id: "document-job", mime_type: "image/png" };
   assert.equal(groupArtifactResults([markdown, pdf, other]).length, 3, "unrecognized siblings cannot disappear");
+});
+
+test("app results distinguish source delivery from behavior and provide targeted manual review without acceptance", () => {
+  const artifact = { metadata: { runtime_tested: false, objective_contract: { method: "bounded_lexical_evidence", checked: ["search", "filter", "overdue", "browser_storage", "json_import", "json_export", "responsive"] } } };
+  const original = structuredClone(artifact);
+  const review = appResultReview(artifact);
+  assert.equal(review.status, "Files saved · behavior not tested");
+  assert.match(review.evidence, /not been automatically tested/);
+  assert.match(review.preview, /sandboxed.*browser storage may be unavailable/);
+  assert.deepEqual(review.checklist, appReviewSteps(artifact.metadata.objective_contract.checked).map((step) => step.text));
+  assert.ok(review.checklist.some((item) => /import|export/i.test(item)));
+  assert.ok(review.checklist.some((item) => /reopen|reload/i.test(item)));
+  assert.deepEqual(artifact, original, "viewing guidance must not accept or modify the saved result");
+  assert.deepEqual(appResultReview({}).checklist, appReviewSteps().map((step) => step.text), "historical files have useful fallback guidance");
+  assert.match(appResultReview({ metadata: { delivery_mode: "named_starter", objective_completed: false } }).status, /not fully completed/);
+  assert.match(appResultReview({ metadata: { runtime_tested: "true" } }).evidence, /not been automatically tested/, "truthy provider claims do not establish testing");
+  assert.match(appResultReview({ metadata: { runtime_tested: true } }).evidence, /not your acceptance/);
+  assert.deepEqual(appResultReview({ metadata: { objective_contract: { method: "untrusted", checked: ["browser_storage"] } } }).checklist, appReviewSteps().map((step) => step.text));
 });
 
 test("plain document editing reconstructs the exact supplied-text export and excludes old attachment context", () => {

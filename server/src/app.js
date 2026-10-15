@@ -755,14 +755,14 @@ const publicJob = (job) => ({
           ? "Partial deliverables saved; objective remains incomplete"
           : "Deliverables created and storage verified"
       : job.status === "failed"
-        ? "Production failed; reserved credits restored"
+        ? "Creation failed; reserved credits restored"
         : job.status === "needs_setup"
           ? "Configuration required; reserved credits restored"
           : job.status === "running"
             ? "IABT is creating and verifying deliverables"
             : job.input?.provider_job_id
               ? "The managed renderer is still creating the video"
-              : "Approval recorded; queued for production",
+              : "Approval recorded; queued for creation",
   usage_state:
     job.status === "succeeded"
       ? "captured"
