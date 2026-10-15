@@ -18,8 +18,15 @@ const repairHints = Object.freeze({
   invalid_tool_input: "Match the tool schema. Node IDs must start with a letter and contain at most 64 letters, digits, underscores or hyphens, for example create_app; use that exact ID for dependencies and execution calls.",
   graph_invalid_node: "Use unique node IDs beginning with a letter, for example create_app, and unique dependency IDs from the same graph. IDs may contain at most 64 letters, digits, underscores or hyphens.",
   graph_required: "Call plan_execution successfully before creating a deliverable. Use the accepted graph's ready node_id for each execution call.",
-  graph_tool_mismatch: "Use the exact node_id and tool from the accepted execution graph."
+  graph_tool_mismatch: "Use the exact node_id and tool from the accepted execution graph.",
+  web_app_requirements_missing: "The HTML omitted explicit requested behavior. Implement every item in the missing_requirements list in the same self-contained app, then retry create_web_app for the same node."
 });
+const repairMessage = (error) => {
+  const hint = repairHints[error?.code] || "The tool rejected this input. Correct it without expanding permissions.";
+  if (error?.code !== "web_app_requirements_missing" || !Array.isArray(error.missing_requirements)) return hint;
+  const missing = error.missing_requirements.filter((item) => typeof item === "string" && /^[a-zA-Z0-9 -]{1,80}$/.test(item)).slice(0, 20);
+  return missing.length ? `${hint} missing_requirements: ${missing.join(", ")}.` : hint;
+};
 const observedUsage = (state) => {
   const responses = state.response_usage || [];
   return { responses: responses.length,
@@ -212,7 +219,7 @@ export async function orchestrationStep({ job, workerId, repository, storage, pr
           if (saved.node_id) state.execution_graph = finishGraphNode(state.execution_graph, { nodeId: saved.node_id, callId: call.call_id, result: result.artifacts ? saved.result : { file_id: result.file_id, inspected: true } });
         } catch (error) {
           if (error?.code === "job_lease_lost" || classifyFailure(error).retryable) throw error;
-          saved.result = { error: error.code || "tool_failed", message: repairHints[error.code] || "The tool rejected this input. Correct it without expanding permissions." };
+          saved.result = { error: error.code || "tool_failed", message: repairMessage(error) };
           saved.status = "failed";
           state.failures.push({ code: saved.result.error, call_id: call.call_id, recovery: "model_input_repair", at: now() });
           if (saved.node_id && state.execution_graph?.nodes?.some((node) => node.id === saved.node_id && node.attempts.at(-1)?.call_id === call.call_id && node.status === "running")) {

@@ -1,4 +1,48 @@
-# Current IABT release status — October 12, 2026 (UTC)
+# Current IABT release status — October 15, 2026 (UTC)
+
+## October 15: first delivered private app and objective-quality repair
+
+The approved isolated-staging app check ran at
+`6ac726853e1ea1c407d1a926f32ce3a3e302479d`. The bounded Responses workflow
+repaired one invalid execution graph, then delivered one HTML preview and an
+identical source ZIP. The HTML is 5,169 bytes with SHA-256
+`c69e790e0f898415cec3a44963a596ba69806e193770d96ae2de229a164ef1bc`; the ZIP
+is 5,814 bytes with SHA-256
+`3d1b0d7783eb65f899bcfcca9a168663ac66b957de4d2afdd10e872a09ca7ae6`.
+The job captured its eight-credit reservation exactly once. Its provider record
+retained four completed Responses, eight polls, 40,640 input tokens and 1,561
+output tokens. The configured reservation estimate was 12 cents, not a
+provider invoice or final supplier-cost reconciliation.
+
+This first delivery is not accepted as a useful completion. A separate bounded
+JavaScript test confirmed add, complete, delete and local-storage persistence,
+but the artifact omitted edit, search, filters, JSON import/export, overdue and
+upcoming summaries, realistic sample data, clear empty states and an explicit
+phone/desktop layout. The server had checked only complete self-contained HTML,
+network defaults and delivery format, so it accepted the artifact while the
+model's final text overstated completion.
+
+The current repair adds a server-owned, bounded lexical contract for supported
+explicit new-app requirements. Missing evidence rejects the tool attempt before
+artifact acceptance and returns only the exact server-generated omission list
+through the existing three-attempt repair loop. Artifact metadata retains the
+checked requirement IDs and still says `runtime_tested: false`; the contract is
+not code execution, semantic proof, subjective design review or deployment
+acceptance. Revisions and requirements supplied only in attachments retain
+their separate inspection and acceptance boundaries. Regression coverage
+replays the exact maintenance-tracker omissions, verifies a corrected retry and
+confirms one credit capture only after accepted artifacts.
+
+Paid AI and orchestration were disabled again immediately after the approved
+check, the private plan allowlist is empty and the account has two available
+IABT credits. No second paid generation, credit adjustment, PR merge, production
+change or public launch is part of this repair. Final source, CI and isolated
+deployment evidence for the candidate are recorded only after those checks
+actually pass. The candidate's configured local verification passed lint, type
+checking, deterministic exchange and creation checks, 424 executed tests and
+the production build. This host had no disposable PostgreSQL, so 49 database
+tests were explicitly skipped and are not claimed as local coverage; CI with
+its disposable database remains required.
 
 ## October 12: real monthly checkout and planning-loop repair
 
