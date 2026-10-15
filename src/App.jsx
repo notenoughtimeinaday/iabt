@@ -6,6 +6,7 @@ import { routingMode } from '@/lib/routing';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import WorkspaceConnection from '@/components/WorkspaceConnection';
 import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Login from '@/pages/Login';
@@ -32,7 +33,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 const Router = routingMode === "hash" ? HashRouter : BrowserRouter;
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, checkAppState } = useAuth();
   const { pathname, search, hash } = useLocation();
   const publicPaths = new Set([
     "/login",
@@ -48,12 +49,8 @@ const AuthenticatedApp = () => {
   const isPublicPath = publicPaths.has(pathname);
 
   // Public policy pages stay available even when account authentication is required.
-  if (isLoadingPublicSettings || (isLoadingAuth && !isPublicPath)) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
-      </div>
-    );
+  if (!isPublicPath && (isLoadingPublicSettings || isLoadingAuth)) {
+    return <WorkspaceConnection loading />;
   }
 
   // Handle authentication errors
@@ -64,6 +61,7 @@ const AuthenticatedApp = () => {
       const returnTo = pathname + search + hash;
       return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />;
     }
+    return <WorkspaceConnection onRetry={checkAppState} />;
   }
 
   // Render the main app

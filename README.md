@@ -4,6 +4,8 @@ IABT is a standalone creation and project-operations application. JERICHO Studio
 
 Start release and payment work from the [current release status](docs/CURRENT_RELEASE_STATUS.md), which identifies the canonical isolated staging environment and separates completed checks from remaining acceptance gates. Refresh its recorded source/deployment identities before making changes; older staging records remain historical evidence.
 
+The [Jericho Studio product release kit](release/OWNER-RELEASE.md) defines the focused first offering, customer guide, proposed pricing and final launch gates. From a clean, verified checkout, build an owner package with `node scripts/package-release.mjs --output-dir <new folder outside this checkout> --api-origin https://iabt-isolated-staging-api.onrender.com`. This preserves source, a staging-targeted frontend, installed dependency notices and SHA-256 manifests. It does not activate live billing or establish readiness for sales.
+
 This branch advances bounded autonomy and learning from recorded evidence. It does **not** certify that every product feature is complete, that generated applications work, or that the release is ready for production. See the [completion and evidence matrix](docs/AUTONOMY_V1.md), [operational guide](JERICHO_OPERATIONS.md), and [staging acceptance runbook](STANDALONE_DEPLOYMENT.md).
 
 ## Implemented behavior

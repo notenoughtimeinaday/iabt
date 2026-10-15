@@ -1,5 +1,45 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 15: product package and explicit startup recovery
+
+The private `1.0.0-preview.1` release kit contains a focused offering, customer
+quick start, existing proposed USD pricing, operator handoff, source snapshot,
+staging-targeted frontend build, dependency notices and SHA-256 manifest. Use
+`scripts/package-release.mjs` from a clean checkout; prior archives remain intact.
+This creates no live prices, payments, infrastructure purchase or production release.
+
+A current hosted outage was confirmed independently in Neon and Render API logs:
+the free staging project reports 6,245,714,826 transfer bytes for October and rejects
+database connections with a quota error. Neon documents suspension above the free
+5 GB/project/month transfer allowance until reset or upgrade. The reported next
+cycle starts November 1 UTC. This identifies the exhausted allowance, not the
+query or process responsible for accumulated traffic.
+
+Startup previously fell through an unhandled service-error state into protected
+auth routing, producing an invisible spinner or repeated account checks. Startup
+now resolves atomically; service errors show an accessible connection/retry screen,
+expired and unregistered sessions retain their own paths, and stale checks cannot
+overwrite newer state. Help, policies and sign-in routes remain accessible while
+the API is unavailable. Retry reads account state only, never paid work or checkout.
+The curriculum records these boundaries.
+
+Local verification: `npm run verify` passed with disposable PostgreSQL: 525 tests
+(480 server, 16 file, 21 frontend, 8 readiness), zero failures/skips, plus lint,
+typecheck, Exchange/creation verification and production build. The first local
+run used the wrong test port and failed connection setup; after the disposable
+database was restarted on its designated port, the full run passed. No hosted
+database was used for regression tests. A controlled local HTTP 503 browser check
+verified the error screen, retry and public Help navigation. The product guide
+was visually checked at desktop and phone widths, without page-level overflow.
+This does not restore the hosted database or establish account-recovery acceptance.
+
+No additional paid provider test ran. Reuse earlier real-provider and billing
+evidence below; incomplete generated work remains incomplete. The private package
+keeps hosted availability, useful app/revision/document acceptance, recovery,
+isolation and live commerce as explicit gates. PR #4 stays draft; main, production
+DNS, live Stripe and the separate MCP candidate are unchanged. Frontend-only
+staging publication is separate from API acceptance while its database is blocked.
+
 ## October 15: reject unchanged and obviously incomplete app revisions
 
 Refreshed standalone draft PR #4 at

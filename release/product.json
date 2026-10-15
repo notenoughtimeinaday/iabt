@@ -1,0 +1,26 @@
+{
+  "name": "Jericho Studio",
+  "publisher": "Insured Spending, LLC",
+  "version": "1.0.0-preview.1",
+  "channel": "private-preview",
+  "public_sale_approved": false,
+  "positioning": "Turn a clear idea into useful work you can keep.",
+  "audience": "Independent creators and small businesses",
+  "core": ["Small browser apps and websites", "Documents in Word, PDF and Markdown", "Saved source, previews, downloads and revisions"],
+  "scope_note": "Custom AI creation and revision still require real workflow acceptance. File review reads bounded UTF-8 sources, not arbitrary PDF, Office, archive or media content. Saved files are not proof of working software.",
+  "proposed_usd_offers": [
+    { "name": "Meet Jericho", "first_month_cents": 499, "renewal_month_cents": 1200, "monthly_credits": 100 },
+    { "name": "Starter", "monthly_cents": 1200, "monthly_credits": 100 },
+    { "name": "Builder", "monthly_cents": 2900, "monthly_credits": 300 },
+    { "name": "Pro", "monthly_cents": 5900, "monthly_credits": 650 },
+    { "name": "Extra credits", "one_time_cents": 1000, "credits": 100 }
+  ],
+  "offer_note": "Existing test-only offer contract. This file does not activate sales or change purchased entitlements. The introductory offer is for eligible new subscribers, then renews monthly. Cost per creation varies and is shown before approved paid work.",
+  "excluded_from_first_release": ["Autonomous repository changes and deployment", "App-store submission", "Video generation", "Unrestricted third-party integrations", "Multi-user backends inside generated apps"],
+  "release_gates": [
+    { "id": "hosted_availability", "status": "blocked", "evidence": "2026-10-15: Neon quota rejection in SQL and Render API logs; project reports 6245714826 transfer bytes; app startup unavailable." },
+    { "id": "custom_app_revision_document", "status": "pending", "evidence": "Earlier app delivered files but omitted required workflows. Latest source quality checks passed CI 704; complete real-provider workflow acceptance remains open." },
+    { "id": "live_commerce", "status": "pending", "evidence": "Prior sandbox monthly subscription and top-up checks are preserved. Production Stripe setup, introductory payment, renewal/cancellation/refund, tax and final terms require release acceptance." },
+    { "id": "recovery_and_isolation", "status": "pending", "evidence": "Preserve prior recovery evidence; finish hosted account recovery, cross-account isolation and backup/restore acceptance before launch." }
+  ]
+}
