@@ -1,5 +1,36 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 15: reject unchanged and obviously incomplete app revisions
+
+Refreshed standalone draft PR #4 at
+`e94a01aaba2bf4ffd2b440a7e43403d0a6ae7fe1`. Both canonical isolated Render
+services were Live at that revision. The user's follow-up authorized fixing
+the source and subsequently removed the blanket no-spend restriction while
+asking where spending is needed. The earlier no-deploy restriction remains;
+this patch includes no provider request, credit grant, deployment or production
+change. Keep any future provider tests explicitly bounded and report actual
+usage separately from internal reservation estimates.
+
+Found and reproduced two revision defects: `create_web_app` could accept the
+original HTML under a new filename, and revisions bypassed the bounded explicit
+feature-omission gate. The fix re-reads the approved owner-scoped original at
+artifact creation, rejects unchanged output (ignoring the platform's own tags,
+outer whitespace and reader-normalized line endings), and applies the same
+positive requirement checks to revisions. Feature-removal instructions are not
+promoted into mandatory additions. Rejected output uses the existing bounded
+repair loop; exhausted repairs fail without artifact delivery and restore the
+credit reservation. Original files remain untouched.
+
+Five new regression tests cover these paths. The focused app/objective/script
+suite passed 40 tests. Full local `npm run verify` passed lint, type checking,
+deterministic checks, 448 executed tests and the production build; 49 PostgreSQL
+tests were skipped because this host has no disposable database. CI results
+must be recorded separately. Static source difference, labels and compilation
+are not proof of the requested change, preserved behavior or browser usability.
+No new live generation or source-revision acceptance is claimed. General
+repository editing/build/test autonomy and PDF/Office/archive interpretation
+remain outside the implemented uploaded-source workflow.
+
 ## October 15: useful-output hardening and clearer customer handoff
 
 Baseline draft PR #4 was refreshed at

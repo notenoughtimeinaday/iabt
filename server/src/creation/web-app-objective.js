@@ -8,6 +8,9 @@ const itemModifiers = "(?:(?:a|an|the|new|existing|maintenance|selected|saved|in
 const itemAction = (verbs) => includes(new RegExp(`\\b(?:${verbs})\\b(?:(?:\\s*,\\s*(?:(?:and|or)\\s+)?|\\s+(?:and|or)\\s+)${actionWords}\\b)*\\s+${itemModifiers}${itemWords}\\b`, "i"));
 const fieldRequest = (name) => includes(new RegExp(`\\b(?:set|assign|choose|select|include|enter|fields?|with|by)\\b[^.;]{0,100}\\b(?:${name})\\b`, "i"));
 const jsonOperation = (operation, paired) => includes(new RegExp(`\\b${operation}(?:ing)?\\s+(?:(?:and|or)\\s+${paired}(?:ing)?\\s+)?(?:(?:data|files?)\\s+)?(?:(?:as|in|from|to)\\s+)?JSON\\b|\\bJSON\\s+(?:(?:data|files?)\\s+)?(?:${paired}(?:ing)?\\s+(?:and|or)\\s+)?${operation}(?:ing)?\\b`, "i"));
+// Removing a feature is not a request to keep it. Still recognize item deletion
+// ("remove tasks") as an interaction. Ambiguous removal prose is under-detected.
+const featureRemoval = new RegExp(`\\b(?:remove|delete|drop|replace)\\b(?!\\s+${itemModifiers}${itemWords}\\b)`, "i");
 
 // Prefer under-detection over forcing an unwanted feature into a paid result.
 // This deliberately does not interpret arbitrary prose or resolve coreference.
@@ -15,6 +18,7 @@ function positiveClauses(request) {
   return String(typeof request === "string" ? request : "").slice(0, 20_000).replaceAll("’", "'")
     .split(/[.!?;\n]+|\b(?:but|however|instead)\b/i)
     .map((clause) => clause.split(/\b(?:without|avoid\w*|exclud\w*|omit\w*|disabl\w*|disallow\w*|forbid\w*|never|cannot|can't|shouldn't|mustn't|don't|do\s+not|doesn't|does\s+not|not|no)\b/i, 1)[0])
+    .map((clause) => clause.split(featureRemoval, 1)[0])
     .filter(Boolean);
 }
 

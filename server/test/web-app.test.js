@@ -18,11 +18,11 @@ const completeMaintenanceHtml = `<!doctype html><html lang="en"><head><meta char
 const toolCall = (name, args, id) => ({ type: "function_call", name, call_id: id, arguments: JSON.stringify(args) });
 const response = (id, output = []) => ({ id, status: "completed", output });
 
-async function fixture({ ai = true, profile = "core", role = "user" } = {}) {
+async function fixture({ ai = true, profile = "core", role = "user", maxTurns = 8 } = {}) {
   const repository = new MemoryRepository();
   const user = await repository.createUser({ email: "builder@example.test", passwordHash: "unused", emailVerified: true, role });
   await repository.grantCredits({ ownerId: user.id, amount: 20, idempotencyKey: "opening" });
-  const config = loadConfig({ NODE_ENV: "test", IABT_AUTH_SECRET: "web-app-test-only", IABT_CREATION_PROFILE: profile,
+  const config = loadConfig({ NODE_ENV: "test", IABT_AUTH_SECRET: "web-app-test-only", IABT_CREATION_PROFILE: profile, IABT_ORCHESTRATION_MAX_TURNS: String(maxTurns),
     ...(ai ? { OPENAI_API_KEY: "not-a-live-key", IABT_ENABLE_PAID_AI: "true", IABT_ENABLE_ORCHESTRATION: "true", IABT_ORCHESTRATION_BUDGET_ACCEPTED: "true", IABT_OPENAI_RESPONSE_COST_CENTS: "2", IABT_ORCHESTRATION_BUDGET_CENTS: "12" } : {}) });
   const objects = new Map();
   const storage = { kind: "test", health: async () => ({ ok: true }), async put({ ownerId, objectId, bytes }) { const key = ownerId + "/" + objectId; objects.set(key, Buffer.from(bytes)); return { storage_provider: "test", storage_key: key }; }, async read(key) { return objects.get(key); }, async createReadUrl(record) { return "https://example.invalid/private/" + record.id; } };
@@ -207,6 +207,94 @@ test("approved revisions inspect original source, produce a new HTML version and
   const replay = await f.execute(plan);
   assert.equal(replay.job.id, started.job.id);
   assert.equal(f.repository.creditEntries.filter((entry) => entry.entry_type === "capture").length, 1);
+});
+
+test("revision comparison ignores only platform wrapping, outer whitespace and reader-normalized line endings", () => {
+  const original = html().replace("</head>", "\n</head>");
+  const revision = { file_id: randomUUID(), sha256: createHash("sha256").update(original).digest("hex") };
+  for (const unchanged of [original, "\n " + original + " \n", prepareWebAppHtml(original), original.replaceAll("\n", "\r\n")]) {
+    assert.throws(() => buildWebAppArtifacts({ title: "Renamed", html: unchanged, revision, revisionText: original }), { code: "web_app_revision_unchanged" });
+  }
+  assert.throws(() => buildWebAppArtifacts({ title: "Counter", html: original, revision }), { code: "revision_source_required" });
+  const changed = buildWebAppArtifacts({ title: "Counter", html: original.replace("Keep this behavior", "Changed behavior"), revision, revisionText: original });
+  assert.equal(changed.metadata.revision_source_changed, true);
+  assert.equal(changed.metadata.runtime_tested, false);
+});
+
+test("unchanged revisions are repaired in the original job before capturing credits", async () => {
+  const f = await fixture();
+  const previous = await f.upload(prepareWebAppHtml(html()));
+  const before = Buffer.from(f.objects.get(previous.storage_key));
+  const { plan } = await f.plan({ requestText: "Change heading to Updated counter", revisionFileId: previous.id });
+  f.replies.push(
+    response("resp_plan", [toolCall("plan_execution", { objective: "Update the counter", nodes: [
+      { id: "inspect", tool: "inspect_file", objective: "Read original", depends_on: [] },
+      { id: "revise", tool: "create_web_app", objective: "Change heading", depends_on: ["inspect"] }
+    ] }, "plan"), toolCall("inspect_file", { node_id: "inspect", file_id: previous.id }, "inspect")]),
+    response("resp_unchanged", [toolCall("create_web_app", { node_id: "revise", title: "Renamed file", html: html() }, "unchanged")]),
+    response("resp_repaired", [toolCall("create_web_app", { node_id: "revise", title: "Updated counter", html: html("Updated counter") }, "repaired")]),
+    response("resp_complete")
+  );
+  await f.execute(plan);
+  const result = await f.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.job.output.orchestration.execution_graph.nodes[1].attempts.length, 2);
+  const rejected = JSON.parse(f.calls[2].body.input.find((item) => item.call_id === "unchanged").output);
+  assert.equal(rejected.error, "web_app_revision_unchanged");
+  assert.match(rejected.message, /requested change/);
+  assert.equal(f.repository.creditEntries.filter((entry) => entry.entry_type === "capture").length, 1);
+  assert.equal(result.artifacts.length, 2);
+  assert.deepEqual(f.objects.get(previous.storage_key), before);
+  assert.match(f.objects.get(result.artifacts.find((item) => item.original_name.endsWith(".html")).storage_key).toString(), /Updated counter/);
+});
+
+test("a changed revision that still omits the requested feature is rejected and repaired", async () => {
+  const f = await fixture();
+  const previous = await f.upload();
+  const { plan } = await f.plan({ requestText: "Add search to this app", revisionFileId: previous.id });
+  const revised = html("Updated counter").replace("</body>", '<label>Search<input type="search"></label></body>');
+  f.replies.push(
+    response("resp_plan", [toolCall("plan_execution", { objective: "Add search", nodes: [
+      { id: "inspect", tool: "inspect_file", objective: "Read original", depends_on: [] },
+      { id: "revise", tool: "create_web_app", objective: "Add search", depends_on: ["inspect"] }
+    ] }, "plan"), toolCall("inspect_file", { node_id: "inspect", file_id: previous.id }, "inspect")]),
+    response("resp_wrong", [toolCall("create_web_app", { node_id: "revise", title: "Counter", html: html("Updated counter") }, "wrong")]),
+    response("resp_repaired", [toolCall("create_web_app", { node_id: "revise", title: "Counter", html: revised }, "repaired")]),
+    response("resp_complete")
+  );
+  await f.execute(plan);
+  const result = await f.drain();
+  assert.equal(result.job.status, "succeeded");
+  const rejected = JSON.parse(f.calls[2].body.input.find((item) => item.call_id === "wrong").output);
+  assert.equal(rejected.error, "web_app_requirements_missing");
+  assert.match(rejected.message, /missing_requirements: search/);
+  const artifact = result.job.output.artifact_manifest.find((item) => item.kind === "app");
+  assert.deepEqual(artifact.metadata.objective_contract.checked, ["search"]);
+  assert.equal(artifact.metadata.runtime_tested, false, "a label is marker evidence only, never a working search test");
+  assert.equal(f.repository.creditEntries.filter((entry) => entry.entry_type === "capture").length, 1);
+  assert.ok(JSON.parse(f.calls[0].body.input[0].content).app_requirement_candidates.some((item) => item.id === "search"));
+});
+
+test("an unchanged revision that exhausts repair keeps the original and restores its reservation", async () => {
+  const f = await fixture({ maxTurns: 4 });
+  const previous = await f.upload();
+  const before = Buffer.from(f.objects.get(previous.storage_key));
+  const { plan } = await f.plan({ requestText: "Change heading to Updated counter", revisionFileId: previous.id });
+  f.replies.push(response("resp_plan", [toolCall("plan_execution", { objective: "Update counter", nodes: [
+    { id: "inspect", tool: "inspect_file", objective: "Read original", depends_on: [] },
+    { id: "revise", tool: "create_web_app", objective: "Change heading", depends_on: ["inspect"] }
+  ] }, "plan"), toolCall("inspect_file", { node_id: "inspect", file_id: previous.id }, "inspect")]));
+  for (let i = 0; i < 3; i++) f.replies.push(response("resp_noop_" + i, [toolCall("create_web_app", { node_id: "revise", title: "Counter", html: html() }, "noop_" + i)]));
+  await f.execute(plan);
+  const result = await f.drain();
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.job.last_error_code, "app_creation_incomplete");
+  assert.equal(result.artifacts?.length || 0, 0);
+  assert.equal(f.repository.creditEntries.filter((entry) => entry.entry_type === "capture").length, 0);
+  const credits = await f.repository.getCreditAccount(f.user.id);
+  assert.equal(credits.available_credits, 20);
+  assert.equal(credits.reserved_credits, 0);
+  assert.deepEqual(f.objects.get(previous.storage_key), before);
 });
 
 test("revision source changes after approval fail before a model call and restore the original reservation", async () => {

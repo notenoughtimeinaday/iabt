@@ -3,7 +3,7 @@ import { buildDocumentArtifactSet } from "../creation/document-export.js";
 import { createZip } from "../creation/zip.js";
 import { readTextSources } from "../files/text-sources.js";
 import { evaluateAction } from "./policy.js";
-import { buildWebAppArtifacts } from "../creation/web-app.js";
+import { buildWebAppArtifacts, readRevisionSource } from "../creation/web-app.js";
 import { GRAPH_NODE_ID_PATTERN } from "./execution-graph.js";
 
 const objectSchema = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
@@ -66,7 +66,12 @@ export function registeredTools({ job, repository, storage, user }) {
       input_schema: objectSchema({ node_id: nodeId, title: string, html: string }),
       execute: async ({ title, html }) => {
         if (!safeName(title)) throw fail("invalid_tool_input", "Use a simple app title.");
-        const result = buildWebAppArtifacts({ title, html, request: job.input.request_text, revision: job.input.revision_source || null });
+        const revision = job.input.revision_source || null;
+        // Re-read the same approved owner-scoped source at artifact creation.
+        // Neither the model nor a remembered inspection supplies the baseline.
+        const original = revision ? await readRevisionSource({ repository, storage, user,
+          fileId: revision.file_id, expectedReferences: job.input.file_references }) : null;
+        const result = buildWebAppArtifacts({ title, html, request: job.input.request_text, revision, revisionText: original?.text });
         return { artifacts: result.artifacts.map(({ bytes, ...item }) => ({ ...item, content_base64: bytes.toString("base64") })) };
       }
     },

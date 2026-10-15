@@ -36,6 +36,15 @@ test("explicit negative feature clauses are not promoted into required behavior"
   assert.deepEqual(ids("Do not remove existing tasks; include search and filter by status."), ["search", "filter", "status"]);
 });
 
+test("feature removal is not mistaken for an addition during revision checks", () => {
+  for (const request of ["Remove search from this app", "Delete the filters", "Replace JSON import with CSV upload", "Drop browser storage", "Remove the overdue summary"]) {
+    assert.deepEqual(ids(request), [], request);
+    assert.deepEqual(missing(request, html()), [], request);
+  }
+  assert.deepEqual(ids("Remove search; add JSON export."), ["json_export"]);
+  assert.deepEqual(ids("Let users remove existing tasks and search remaining tasks."), ["delete", "search"]);
+});
+
 test("JSON requirements retain the operation's own format rather than cross-pairing unrelated formats", () => {
   assert.deepEqual(ids("Import CSV and export JSON."), ["json_export"]);
   assert.deepEqual(ids("Import JSON and export CSV."), ["json_import"]);
