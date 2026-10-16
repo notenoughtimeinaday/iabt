@@ -9,6 +9,7 @@ import { validateDocumentLength, priorDocumentExport } from "../creation/documen
 
 const objectSchema = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 const string = { type: "string" };
+const artifactTitle = { type: "string", description: "Filename title: start with an ASCII letter or digit; use only ASCII letters, digits, spaces, dots, underscores and hyphens, up to 100 characters. No consecutive dots or trailing dot/space. Use a plain hyphen, not an em dash. Keep richer display text inside the document or HTML." };
 const nodeId = { type: "string", pattern: GRAPH_NODE_ID_PATTERN, description: "Start with a letter; use at most 64 letters, digits, underscores or hyphens, for example create_app. Reuse the exact planned ID in node_id and depends_on." };
 const fail = (code, message) => Object.assign(new Error(message), { code });
 const safeName = (name) => typeof name === "string" && /^[a-zA-Z0-9][a-zA-Z0-9 ._-]{0,120}$/.test(name) && !name.includes("..") && !/[. ]$/.test(name);
@@ -54,7 +55,7 @@ export function registeredTools({ job, repository, storage, user }) {
     {
       ...common, name: "create_document",
       description: "Write the complete finished document and call this ONCE per distinct document: one call automatically exports the same content to Markdown, DOCX and PDF. Do not plan separate nodes for file formats. Meet the user's requested length and sections before calling. Numeric word ranges are checked; file structure and length do not prove factual correctness or visual layout.",
-      input_schema: objectSchema({ node_id: nodeId, title: string, markdown: string }),
+      input_schema: objectSchema({ node_id: nodeId, title: artifactTitle, markdown: string }),
       execute: async ({ title, markdown }) => {
         if (!safeName(title) || markdown.length < 20 || markdown.length > 100_000) throw fail("invalid_tool_input", "Use a simple title and substantive Markdown up to 100000 characters");
         const length = validateDocumentLength({ request: job.input.request_text, markdown });
@@ -67,7 +68,7 @@ export function registeredTools({ job, repository, storage, user }) {
     {
       ...common, name: "create_web_app",
       description: "Create a complete working browser app as self-contained HTML plus an identical standalone source ZIP and manual REVIEW.md checklist. Use inline CSS/classic JavaScript and local interactions, no module scripts, external dependencies, network requests, account services or payment promises. Implement every explicitly requested behavior, not labels or placeholders; bounded static omissions and syntax failures are rejected for repair. Inspect the prior HTML first when revising; preserve its useful behavior. Guard browser-storage reads and writes. This checks format, static markers and JavaScript compilation only, not runtime correctness.",
-      input_schema: objectSchema({ node_id: nodeId, title: string, html: string }),
+      input_schema: objectSchema({ node_id: nodeId, title: artifactTitle, html: string }),
       execute: async ({ title, html }) => {
         if (!safeName(title)) throw fail("invalid_tool_input", "Use a simple app title.");
         const revision = job.input.revision_source || null;
@@ -82,7 +83,7 @@ export function registeredTools({ job, repository, storage, user }) {
     {
       ...common, name: "create_source",
       description: "Package source files with a README and tests in a private ZIP. Relative subdirectories are supported. Source is not executed, installed or published; include explicit validation limitations.",
-      input_schema: objectSchema({ node_id: nodeId, title: string, files: { type: "array", items: objectSchema({ name: string, content: string }), minItems: 1, maxItems: 40 } }),
+      input_schema: objectSchema({ node_id: nodeId, title: artifactTitle, files: { type: "array", items: objectSchema({ name: string, content: string }), minItems: 1, maxItems: 40 } }),
       execute: async ({ title, files }) => {
         if (!safeName(title) || files.length < 1 || files.length > 40) throw fail("invalid_tool_input", "Invalid source package");
         const seen = new Set();

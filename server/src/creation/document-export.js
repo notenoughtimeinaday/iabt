@@ -151,16 +151,31 @@ const latin = (value) =>
     .replace(/…/g, "...")
     .replace(/[^\x20-\x7e]/g, "?");
 
-const wrap = ({ text: value, bullet, literal }, width = literal ? 76 : 86) => {
+const wrap = ({ text: value, bullet, literal, heading }, size) => {
   const text = latin((bullet ? "- " : "") + value);
   if (!text) return [""];
+  const width = Math.floor(504 / (size * 0.6));
   if (literal) return Array.from({ length: Math.ceil(text.length / width) }, (_, index) => text.slice(index * width, (index + 1) * width));
-  const words = text.split(/\s+/);
+  // Upper bounds for the built-in Helvetica fonts, in ems. This intentionally
+  // leaves some margin instead of allowing wide letters or long URLs to clip.
+  const advance = char => /[MW@%&]/.test(char) ? 1.02 : char === 'w' ? 0.84 : char === 'm' ? 0.90 :
+    /[ilI .,'`:;!|]/.test(char) ? (heading ? 0.34 : 0.30) : /[A-Z]/.test(char) ? 0.84 : (heading ? 0.67 : 0.60);
+  const measure = value => [...value].reduce((sum, char) => sum + advance(char) * size, 0);
+  const words = text.split(/\s+/).flatMap(word => {
+    const chunks = []; let chunk = '', used = 0;
+    for (const char of word) {
+      const step = advance(char) * size;
+      if (used + step > 504) { chunks.push(chunk); chunk = ''; used = 0; }
+      chunk += char; used += step;
+    }
+    if (chunk) chunks.push(chunk);
+    return chunks;
+  });
   const lines = [];
   let current = "";
   for (const word of words) {
     if (!current) current = word;
-    else if ((current + " " + word).length <= width) current += " " + word;
+    else if (measure(current + " " + word) <= 504) current += " " + word;
     else {
       lines.push(current);
       current = word;
@@ -174,14 +189,41 @@ const pdfEscape = (value) =>
   latin(value).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 
 export const createPdf = ({ markdown }) => {
-  const lines = readableBlocks(markdown)
-    .flatMap((block) => wrap(block).map((text) => ({ text, literal: block.literal })));
-  const linesPerPage = 48;
-  const pages = [];
-  for (let index = 0; index < lines.length; index += linesPerPage) {
-    pages.push(lines.slice(index, index + linesPerPage));
+  // Keep headings with following text and ordinary paragraphs together. Long
+  // source blocks may split, but no content is discarded to improve pagination.
+  const blocks = readableBlocks(markdown).filter(block => block.text.trim());
+  const pages = [[]];
+  let y = 738;
+  const nextPage = () => { pages.push([]); y = 738; };
+  for (const [index, block] of blocks.entries()) {
+    const size = block.literal ? 10 : block.heading === 1 ? 20 : block.heading ? 13 : 11;
+    const leading = block.heading === 1 ? 24 : block.heading ? 18 : 14;
+    // A conservative character width also bounds runs of wide Latin letters.
+    // Literal source uses fixed-width Courier and retains its whitespace.
+    const lines = wrap(block, size);
+    const before = block.heading ? 12 : 0;
+    const after = block.bullet || block.literal ? 3 : 9;
+    const height = before + lines.length * leading + after;
+    let following = 0;
+    if (block.heading) {
+      for (let nextIndex = index + 1; nextIndex < blocks.length; nextIndex += 1) {
+        const next = blocks[nextIndex];
+        const nextSize = next.literal ? 10 : next.heading === 1 ? 20 : next.heading ? 13 : 11;
+        const nextLeading = next.heading === 1 ? 24 : next.heading ? 18 : 14;
+        following += wrap(next, nextSize).length * nextLeading + (next.heading ? 21 : next.bullet || next.literal ? 3 : 9);
+        if (!next.heading || height + following > 684) break;
+      }
+      if (height + following > 684) following = 28;
+    }
+    if (pages.at(-1).length && height + following <= 684 && y - height - following < 54) nextPage();
+    y -= pages.at(-1).length ? before : 0;
+    for (const text of lines) {
+      if (y < 54 + leading) nextPage();
+      pages.at(-1).push({ text, y, size, font: block.literal ? "F2" : block.heading ? "F3" : "F1" });
+      y -= leading;
+    }
+    y -= after;
   }
-  if (!pages.length) pages.push([{ text: "" }]);
 
   const objects = [];
   objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
@@ -190,22 +232,21 @@ export const createPdf = ({ markdown }) => {
   objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
   const codeFontId = 4 + pages.length * 2;
   objects[codeFontId] = "<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>";
+  const headingFontId = codeFontId + 1;
+  objects[headingFontId] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>";
 
   pages.forEach((pageLines, index) => {
     const pageId = 4 + index * 2;
     const contentId = pageId + 1;
     const stream = [
       "BT",
-      "/F1 11 Tf",
-      "14 TL",
-      "54 738 Td",
-      ...pageLines.map((line) => (line.literal ? "/F2" : "/F1") + " 11 Tf (" + pdfEscape(line.text) + ") Tj T*"),
+      ...pageLines.map((line) => `/${line.font} ${line.size} Tf 1 0 0 1 54 ${line.y} Tm (${pdfEscape(line.text)}) Tj`),
       "ET"
     ].join("\n");
     const streamBytes = Buffer.from(stream, "latin1");
     objects[pageId] =
       "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] " +
-      "/Resources << /Font << /F1 3 0 R /F2 " + codeFontId + " 0 R >> >> /Contents " + contentId + " 0 R >>";
+      "/Resources << /Font << /F1 3 0 R /F2 " + codeFontId + " 0 R /F3 " + headingFontId + " 0 R >> >> /Contents " + contentId + " 0 R >>";
     objects[contentId] =
       "<< /Length " + streamBytes.length + " >>\nstream\n" + stream + "\nendstream";
   });

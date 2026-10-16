@@ -11,6 +11,22 @@ const docxParagraphs = (bytes) => [...bytes.toString("utf8").matchAll(/<w:t xml:
 // PDF transport escapes before checking the human-readable reading copy.
 const pdfLines = (bytes) => [...bytes.toString("latin1").matchAll(/\(((?:\\.|[^\\)])*)\) Tj/g)].map((match) => match[1].replace(/\\([\\()])/g, "$1"));
 
+test("PDF reading copies distinguish headings and keep short sections together across pages", () => {
+  const markdown = Array.from({ length: 18 }, (_, index) => `## Section ${index}\n\nA complete paragraph for section ${index} with enough useful detail to wrap across several lines. ` + "Keep this paragraph together. ".repeat(8)).join("\n\n");
+  const pdf = createPdf({ markdown }).toString("latin1");
+  const pages = [...pdf.matchAll(/stream\n([\s\S]*?)\nendstream/g)].map(match => match[1]);
+  assert.ok(pages.length > 1);
+  assert.match(pdf, /\/BaseFont \/Helvetica-Bold/);
+  for (let index = 0; index < 18; index += 1) {
+    const page = pages.find(page => page.includes(`(Section ${index}) Tj`));
+    assert.ok(page?.includes(`A complete paragraph for section ${index} `));
+  }
+  for (const match of pdf.matchAll(/1 0 0 1 54 ([\d.]+) Tm/g)) assert.ok(Number(match[1]) >= 54 && Number(match[1]) <= 738);
+  const wide = createPdf({ markdown: "W".repeat(300) });
+  assert.equal(pdfLines(wide).join(""), "W".repeat(300));
+  assert.ok(pdfLines(wide).every(line => line.length <= 44));
+});
+
 test("portable reading copies decode escaped prose and render all heading levels", () => {
   const markdown = [
     "# A report",

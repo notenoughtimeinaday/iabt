@@ -1,5 +1,43 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 16 UTC: three private deliveries completed; paid window closed
+
+Both isolated services deployed `faa3a6e` after CI 709 passed. The replacement
+GPT-5.6 Terra jobs produced the requested custom volunteer planner, a source-bound
+revision and an original 781-word guide with exactly one Markdown/Word/PDF set.
+The revised app preserves empty saved state, rejects impossible dates and invalid
+imports without replacing data, migrates version-1 imports with Normal priority,
+and supports combined priority/search filters, add/edit, completion, totals,
+confirmed deletion and editor reset after removal/import. These exact outputs
+were checked in an isolated browser with synthetic data; original source and ZIP
+hashes remain preserved. One pale helper-text line failed contrast review. A
+separate locally reviewed copy fixes only that CSS rule; it is not represented
+as an unassisted Jericho output. Word integrity/content passed; Word visual
+rendering is unverified because this host lacks the required LibreOffice binary.
+
+The three replacement jobs used 105,234 input and 17,729 output tokens. Including
+earlier GPT-4o mini tests, conservative estimated spend is $0.5156508 of the
+approved $9.90 existing balance. No top-up or additional infrastructure purchase
+was made. Each replacement job reserved and captured 54 staging credits exactly
+once. These deliberately high private-test reservations are not approved retail
+quotes. Paid AI, orchestration and budget acceptance are now false, the private
+plan allowlist is empty, and cleanup deploy `dep-db8piuon74is73cc2c2g` is live.
+
+This follow-up improves portable PDF heading hierarchy, line-width bounds and
+paragraph-aware pagination without paid composition. All three pages of the
+same guide were visually reviewed locally. It also explains safe filename titles
+and same-node repair, and teaches empty-state, date/import and contrast lessons.
+Full verification, publication and hosted re-export are recorded in the external
+release evidence. These changes do not rewrite already saved output files.
+
+Public sales remain closed. Final gates include production-safe credit pricing,
+real inbox recovery/support delivery, current cross-account/private-file and
+backup/restore acceptance, and separate production billing/checkout terms with
+renewal/cancellation/refund acceptance. Do not convert the test-bound database
+or test-funded credits to live commerce. Evidence and downloads are retained at
+`E:/Jericho-Master/evidence/product-release-20261015`; earlier sections below are
+historical, not the current service status.
+
 ## October 16 UTC: real-output quality repair candidate
 
 The scoped-planning release `991ac33` passed CI and generated a custom app in
