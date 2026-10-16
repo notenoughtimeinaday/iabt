@@ -43,6 +43,34 @@ function validateSession(session, row) {
     expires_at: session.expires_at, subscription_id: idOf(session.subscription) || null };
 }
 
+// Billing reads may encounter a pre-fulfillment snapshot long after its
+// subscription has ended. Reconcile only the exact linked Checkout, without
+// submitting a purchase, granting credits or reopening introductory eligibility.
+export async function reconcileLinkedCheckout({ repository, config, user, row, entitlement, fetchImpl }) {
+  if (!row?.session_id || !["creating", "open", "uncertain"].includes(row.status) ||
+      row.owner_id !== user.id || row.user_id !== user.id || row.mode !== config.providers.stripe.mode ||
+      row.app_id !== config.providers.stripe.metadataAppId || entitlement?.billing_provider !== "stripe" ||
+      !entitlement.provider_subscription_id || !entitlement.provider_customer_id) return row;
+  let verified;
+  try {
+    const session = await retrieveSubscriptionCheckout({ config, sessionId: row.session_id, fetchImpl });
+    verified = validateSession(session, row);
+    if (verified.status !== "complete" || verified.subscription_id !== entitlement.provider_subscription_id ||
+        idOf(session.customer) !== entitlement.provider_customer_id) return row;
+  } catch {
+    // An unavailable or mismatched provider read cannot authorize replacement.
+    // Preserve the pending attempt and existing account access for later retry.
+    return row;
+  }
+  const owner = { ...user, role: "user" };
+  return repository.withRecordTransaction(async (tx) => {
+    const current = await tx.getRecord(entity, row.id, owner);
+    if (current?.attempt_id !== row.attempt_id || current.session_id !== row.session_id ||
+        !["creating", "open", "uncertain"].includes(current.status)) return current;
+    return tx.updateRecord(entity, row.id, owner, { ...verified, lease_token: null, lease_expires_at_ms: null });
+  });
+}
+
 // The transaction owns admission, not network I/O. Ambiguous requests retain
 // the exact parameters and provider key. A caller-supplied request key cannot
 // create another payable subscription while this account has a pending one.

@@ -282,6 +282,65 @@ for (const adapter of ["memory", "postgres"]) {
     assert.equal(f.calls.length, 0);
   });
 
+  regression("completed introductory checkout is no longer resumable after cancellation and Starter can be purchased", async (t) => {
+    const f = await fixture(t, adapter);
+    const checkout = await f.create();
+    const session = f.sessions.get(checkout.session_id);
+    await f.deliver(invoiceFor(f.user, "price_new_starter", session.metadata));
+    Object.assign(session, { status: "complete", subscription: "sub_price_new_starter", customer: "cus_fixture" });
+    await f.repository.createRecord("AccountEntitlement", f.user, { user_id: f.user.id, plan: "free", status: "canceled",
+      billing_provider: "stripe", provider_customer_id: "cus_fixture", provider_subscription_id: session.subscription });
+    const before = await f.repository.getCreditAccount(f.user.id);
+    assert.equal((await f.row()).status, "open", "Reproduce the stale post-fulfillment snapshot");
+    assert.equal(await pendingOfferSummary({ ...f, repository: f.reopen() }), null);
+    assert.equal((await f.row()).status, "complete");
+    assert.equal((await f.row()).url, null);
+    const reads = f.reads.length;
+    assert.equal(await pendingOfferSummary(f), null);
+    assert.equal(f.reads.length, reads, "Reconciliation is durable; later billing reads do not query Stripe");
+    assert.deepEqual(await f.repository.getCreditAccount(f.user.id), before);
+    assert.equal((await introEligibility(f)).reason, "already_redeemed");
+    assert.equal(f.calls.length, 1, "Reading billing cannot create a purchase");
+    await assert.rejects(f.create(), { code: "billing_intro_ineligible" });
+    const regular = await f.create({ offerId: "starter-2026-10" });
+    assert.notEqual(regular.session_id, checkout.session_id);
+    assert.equal(f.calls.at(-1).params["discounts[0][coupon]"], undefined);
+    assert.equal(f.calls.at(-1).params.customer, "cus_fixture");
+  });
+
+  regression("pending checkout reconciliation preserves unresolved purchases and fences newer attempts", async (t) => {
+    const f = await fixture(t, adapter);
+    const checkout = await f.create();
+    const session = f.sessions.get(checkout.session_id);
+    await f.repository.createRecord("AccountEntitlement", f.user, { user_id: f.user.id, plan: "free", status: "canceled",
+      billing_provider: "stripe", provider_customer_id: "cus_fixture", provider_subscription_id: "sub_finished" });
+    Object.assign(session, { status: "complete", subscription: "sub_finished", customer: "cus_fixture" });
+    for (const transform of [
+      (s) => ({ ...s, subscription: "sub_unrelated" }),
+      (s) => ({ ...s, customer: "cus_unrelated" }),
+      (s) => ({ ...s, metadata: { ...s.metadata, checkout_attempt_id: "unrelated" } }),
+      () => { throw new Error("Private provider failure"); }
+    ]) {
+      f.transform(transform);
+      assert.equal((await pendingOfferSummary(f)).id, INTRO_OFFER_ID);
+      assert.equal((await f.row()).status, "open");
+    }
+    f.transform((s) => s);
+    const fetch = f.providers.fetch;
+    f.providers.fetch = async (...args) => {
+      const result = await fetch(...args);
+      const row = await f.row();
+      await f.repository.updateRecord("BillingCheckoutAttempt", row.id, f.user,
+        { attempt_id: randomUUID(), session_id: "cs_test_newer", status: "open" });
+      return result;
+    };
+    assert.equal((await pendingOfferSummary(f)).id, INTRO_OFFER_ID);
+    assert.equal((await f.row()).session_id, "cs_test_newer");
+    assert.equal((await f.row()).status, "open");
+    assert.equal(f.calls.length, 1);
+    assert.equal((await introEligibility(f)).reason, "purchase_pending");
+  });
+
   regression("Starter capacity is enforced while legacy Agency capacity is preserved", async (t) => {
     const f = await fixture(t, adapter);
     await f.repository.createRecord("AccountEntitlement", f.user, { user_id: f.user.id, plan: "starter", status: "active", project_limit: 0 });

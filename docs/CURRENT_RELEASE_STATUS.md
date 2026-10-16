@@ -1,5 +1,38 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 16 UTC: introductory billing and cancellation acceptance
+
+On deployed `190f407`, the single verified acceptance account completed the
+Meet Jericho test Checkout at $4.99 and received exactly 100 credits. Its next
+test-clock invoice charged the regular $12 and granted exactly another 100.
+Portal cancellation took effect at the next period boundary: the account became
+Free, retained all 210 credits, and downloaded its original private fixture with
+the same SHA-256. Stripe reports exactly two paid invoices and no subsequent
+renewal invoice. Intro eligibility remains consumed. Other-owner private files
+and a creation job returned 404. No live charges or additional AI calls occurred.
+
+This acceptance exposed a stale pending Checkout summary after cancellation.
+The repair reconciles only the exact provider-completed session linked to the
+account's subscription and customer. It durably removes the stale resume link,
+fences newer attempts, and preserves unresolved purchases if verification fails.
+It does not create purchases, grant credits or reset introductory eligibility.
+Memory and disposable PostgreSQL regressions cover later regular checkout and
+stale-response protection. All 51 focused checks and the full 548-test suite
+pass with no failures or skips, plus lint, type checks and production build.
+An initial run reused an old local fixture with mismatched migration checksums;
+a fresh disposable local database passed against the exact committed SQL bytes.
+CI and hosted rollout remain separately recorded in the external evidence.
+
+Earlier outstanding checks now completed: the original Word document passes
+two-page visual review, and a protected hosted database backup restored with
+matching fingerprints for all 18 tables and 673 rows. The database snapshot
+predates this new acceptance fixture. Password recovery is at a private user
+handoff. Support inbox routing, full object-storage recovery, retail credit
+calibration and separate production/live-billing acceptance remain release gates.
+The conservative prior OpenAI estimate remains $0.5156508 of $9.90; paid AI and
+orchestration remain disabled. Detailed receipts are in
+`E:/Jericho-Master/evidence/product-release-20261015`.
+
 ## October 16 UTC: three private deliveries completed; paid window closed
 
 Both isolated services deployed `faa3a6e` after CI 709 passed. The replacement

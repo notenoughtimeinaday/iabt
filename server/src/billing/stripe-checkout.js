@@ -19,9 +19,12 @@ const currentEntitlement = async (repository, user) =>
     })
   )[0] || null;
 
-export const pendingOfferSummary = async ({ repository, config, user }) => {
-  const row = await repository.getRecord("BillingCheckoutAttempt",
+export const pendingOfferSummary = async ({ repository, config, user, providers }) => {
+  let row = await repository.getRecord("BillingCheckoutAttempt",
     billingRecordId(`subscription-checkout:${config.providers.stripe.mode}:${user.id}`), { ...user, role: "user" });
+  if (!row?.offer_terms || !["creating", "open", "uncertain"].includes(row.status)) return null;
+  row = await reconcileLinkedCheckout({ repository, config, user, row,
+    entitlement: await currentEntitlement(repository, user), fetchImpl: providers?.fetch || globalThis.fetch });
   if (!row?.offer_terms || !["creating", "open", "uncertain"].includes(row.status)) return null;
   return { id: row.offer_terms.offer_id, disclosure: row.offer_terms.disclosure,
     disclosure_version: row.offer_terms.disclosure_version };
@@ -260,4 +263,4 @@ export const createCustomerPortal = async ({
   });
   return { ok: true, kind: "portal", url: portal.url };
 };
-import { hasManagedSubscription, retrieveSubscriptionCheckout, subscriptionCheckoutAttempt } from "./checkout-attempt.js";
+import { hasManagedSubscription, reconcileLinkedCheckout, retrieveSubscriptionCheckout, subscriptionCheckoutAttempt } from "./checkout-attempt.js";

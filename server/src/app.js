@@ -1015,7 +1015,7 @@ const handleFunction = async ({
           base44_required: false,
           billing: { ...(providers?.readiness?.().stripe || {}), credit_pack_size: config.providers.stripe.creditPackSize,
             offers: publicBillingOffers(config), new_offers_enabled: newOffersAvailable(config),
-            pending_offer: await pendingOfferSummary({ repository, config, user }),
+            pending_offer: await pendingOfferSummary({ repository, config, user, providers }),
             intro_eligibility: newOffersAvailable(config) ? await introEligibility({ repository, config, user }) : null }
         }
       }
