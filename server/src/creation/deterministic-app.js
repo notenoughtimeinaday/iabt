@@ -1,4 +1,4 @@
-// base44/shared/deterministic-app.ts
+import { taskListHtml } from "./task-list.js";
 function clean(value, max = 180) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
 }
@@ -10,6 +10,7 @@ function titleFor(requestText, spec) {
   if (explicit) return explicit;
   const request = clean(requestText, 90);
   if (/piano/i.test(request)) return "Keyboard Piano";
+  if (/task list|to-?do|task tracker|checklist app/i.test(request)) return "My tasks";
   if (/merch|store|shop|e-?commerce/i.test(request)) return "IABT Store";
   return request || "IABT Application";
 }
@@ -131,6 +132,14 @@ function genericHtml(title, requestText) {
 function createFallbackInteractiveApp(requestText, spec = {}, definition = {}) {
   const lower = (requestText + " " + JSON.stringify(spec || {})).toLowerCase();
   const title = clean(definition?.app?.name || titleFor(requestText, spec), 100);
+  if (spec.starter_id === "task_list" || /task list|to-?do(?: list)?|task tracker|checklist app/i.test(lower)) {
+    return {
+      implementation_summary: "A task-list starter with completion, removal, search and filters. Browser storage is optional; private previews may keep tasks only until reload.",
+      preview_html: taskListHtml(escapeHtml(title)),
+      test_cases: ["Add two tasks, complete one and filter active/completed.", "Search, remove a task and clear completed tasks.", "Verify the storage notice accurately describes whether persistence is available."],
+      generation_strategy: "iabt_task_list_starter"
+    };
+  }
   if (/piano|keyboard instrument|web audio|musical keyboard/.test(lower)) {
     return {
       implementation_summary: "IABT deterministic recovery created a playable Web Audio piano with computer-keyboard, pointer, touch, octave, focus-loss, and safe-volume controls.",

@@ -1,6 +1,10 @@
 import pg from "pg";
+import { settleCreationCredits } from "./creation/credit-settlement.js";
 import { createId } from "./security.js";
 import { applyMigrations } from "./migrations.js";
+import { assertBillingBinding, assertBillingMode, BILLING_EVIDENCE_SQL, validateBillingEvidence } from "./billing/environment.js";
+import { assertSamePriceContract, normalizePriceContract, validatePriceContracts } from "./billing/price-catalog.js";
+import { JOB_SUMMARY_COLUMNS } from "./job-read-columns.js";
 
 const { Pool } = pg;
 const clone = (value) => structuredClone(value);
@@ -21,6 +25,12 @@ const safeUser = (row, includeSecret = false) => {
 };
 
 const timestamp = (value) => value?.toISOString?.() || value || null;
+const maintenanceFromRow = (row) => row ? {
+  ...clone(row),
+  next_run_at: timestamp(row.next_run_at), lease_expires_at: timestamp(row.lease_expires_at),
+  last_started_at: timestamp(row.last_started_at), last_completed_at: timestamp(row.last_completed_at),
+  created_at: timestamp(row.created_at), updated_at: timestamp(row.updated_at)
+} : null;
 
 const recordFromRow = (row) => ({
   ...clone(row.payload || {}),
@@ -148,6 +158,7 @@ export class PostgresRepository {
   // The callback must only use records/users/audit methods on its repository;
   // it must not perform network calls or start another transaction.
   async withRecordTransaction(callback) {
+    if (this.recordTransactionActive) return callback(this);
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -155,6 +166,7 @@ export class PostgresRepository {
       await client.query("SET LOCAL statement_timeout = '10s'");
       await client.query("SELECT pg_advisory_xact_lock(1782451011)");
       const transaction = new PostgresRepository({ pool: client });
+      transaction.recordTransactionActive = true;
       const result = await callback(transaction);
       await client.query("COMMIT");
       return result;
@@ -168,7 +180,7 @@ export class PostgresRepository {
 
   // Security decisions must filter before limiting results. In particular an
   // old active block cannot disappear behind newer unrelated records.
-  async listRecordsExact(entityName, user, { query = {}, sort = "-created_date", limit = 50 } = {}) {
+  async listRecordsExact(entityName, user, { query = {}, sort = "-created_date", limit = 50, skip = 0 } = {}) {
     const payload = {};
     const params = [entityName];
     const clauses = ["entity_name = $1"];
@@ -190,7 +202,7 @@ export class PostgresRepository {
       `SELECT entity_name, id, owner_id, payload, created_at, updated_at
        FROM iabt_entity_records WHERE ${clauses.join(" AND ")}
        ORDER BY ${order} ${descending ? "DESC" : "ASC"} NULLS LAST, id ASC
-       LIMIT $${params.push(bound)}`,
+       LIMIT $${params.push(bound)} OFFSET $${params.push(Math.max(0, Math.floor(Number(skip) || 0)))}`,
       params
     );
     return result.rows.map(recordFromRow);
@@ -205,6 +217,60 @@ export class PostgresRepository {
   async health() {
     await this.pool.query("SELECT 1");
     return { ok: true, adapter: "postgres" };
+  }
+
+  async ensureBillingEnvironment(mode) {
+    assertBillingMode(mode);
+    // A binding is immutable through this application. Avoid the shared record
+    // lock on normal billing traffic; only first initialization needs admission.
+    const bound = await this.pool.query("SELECT mode, bound_from, bound_at FROM iabt_billing_environment WHERE singleton = true");
+    if (bound.rows[0]) return assertBillingBinding(bound.rows[0], mode);
+    return this.withRecordTransaction(async (transaction) => {
+      const existing = await transaction.pool.query("SELECT mode, bound_from, bound_at FROM iabt_billing_environment WHERE singleton = true");
+      if (existing.rows[0]) return assertBillingBinding(existing.rows[0], mode);
+      const evidence = await transaction.pool.query(BILLING_EVIDENCE_SQL);
+      const boundFrom = validateBillingEvidence(evidence.rows, mode);
+      const result = await transaction.pool.query(
+        "INSERT INTO iabt_billing_environment (singleton, mode, bound_from) VALUES (true, $1, $2) RETURNING mode, bound_from, bound_at",
+        [mode, boundFrom]
+      );
+      return result.rows[0];
+    });
+  }
+
+  async registerBillingPriceContracts({ mode, contracts }) {
+    await this.ensureBillingEnvironment(mode);
+    const normalized = validatePriceContracts(contracts);
+    if (!normalized.length) return;
+    const read = (connection) => connection.query(
+      "SELECT price_id, plan, catalog_version, monthly_credits, interval, contract_sha256 FROM iabt_billing_price_contracts WHERE mode = $1 AND price_id = ANY($2::text[])",
+      [mode, normalized.map((contract) => contract.price_id)]
+    );
+    const check = (rows) => {
+      for (const row of rows) assertSamePriceContract(row, normalized.find((contract) => contract.price_id === row.price_id));
+      return new Set(rows.map((row) => row.price_id));
+    };
+    // Existing immutable contracts require no cross-feature transaction lock.
+    if (check((await read(this.pool)).rows).size === normalized.length) return;
+    await this.withRecordTransaction(async (transaction) => {
+      const existing = check((await read(transaction.pool)).rows);
+      for (const contract of normalized) {
+        if (existing.has(contract.price_id)) continue;
+        await transaction.pool.query(
+          "INSERT INTO iabt_billing_price_contracts (mode, price_id, plan, catalog_version, monthly_credits, interval, contract_sha256) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+          [mode, contract.price_id, contract.plan, contract.catalog_version, contract.monthly_credits, contract.interval, contract.contract_sha256]
+        );
+      }
+    });
+  }
+
+  async getBillingPriceContract({ mode, priceId }) {
+    assertBillingMode(mode);
+    const result = await this.pool.query(
+      "SELECT price_id, plan, catalog_version, monthly_credits, interval, contract_sha256 FROM iabt_billing_price_contracts WHERE mode = $1 AND price_id = $2",
+      [mode, priceId]
+    );
+    return result.rows[0] ? normalizePriceContract(result.rows[0]) : null;
   }
 
   async close() {
@@ -251,14 +317,14 @@ export class PostgresRepository {
   }
 
   async updatePassword(id, passwordHash) {
-    const result = await this.pool.query(
-      `UPDATE iabt_users
-       SET password_hash = $2, updated_at = now()
-       WHERE id = $1
-       RETURNING *`,
-      [id, passwordHash]
-    );
-    return safeUser(result.rows[0]);
+    return this.withTransaction(async (client) => {
+      const result = await client.query(
+        "UPDATE iabt_users SET password_hash = $2, email_verified = true, updated_at = now() WHERE id = $1 RETURNING *",
+        [id, passwordHash]
+      );
+      await client.query("DELETE FROM iabt_auth_sessions WHERE user_id = $1", [id]);
+      return safeUser(result.rows[0]);
+    });
   }
 
   async createSession({ tokenHash, userId, expiresAt, expectedPasswordHash }) {
@@ -388,6 +454,17 @@ export class PostgresRepository {
   }
 
   async listRecords(entityName, user, { query = {}, sort, limit = 50, skip = 0 } = {}) {
+    // The workspace's scalar filters and date paging belong in SQL. Keep the
+    // legacy operator/custom-sort path until its coercion semantics are ported.
+    const scalarQuery = Object.entries(query || {}).every(([key, value]) =>
+      !["created_date", "updated_date"].includes(key) &&
+      !Object.hasOwn(Object.prototype, key) &&
+      (value === null || ["string", "number", "boolean"].includes(typeof value)) &&
+      (!["id", "owner_id"].includes(key) || (typeof value === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value))));
+    if (scalarQuery && /^-?(?:created_date|updated_date|id|owner_id)$/.test(sort || "-created_date") &&
+        Number.isSafeInteger(limit) && limit > 0 && limit <= 5000 && Number.isSafeInteger(skip) && skip >= 0) {
+      return this.listRecordsExact(entityName, user, { query: query || {}, sort: sort || "-created_date", limit, skip });
+    }
     const params = [entityName];
     const ownerClause =
       user.role === "admin"
@@ -421,16 +498,19 @@ export class PostgresRepository {
     return result.rows[0] ? recordFromRow(result.rows[0]) : null;
   }
 
-  async createRecord(entityName, user, input) {
-    const id = createId();
+  async createRecord(entityName, user, input, { id = createId() } = {}) {
     const result = await this.pool.query(
       `INSERT INTO iabt_entity_records
         (entity_name, id, owner_id, payload)
        VALUES ($1, $2, $3, $4::jsonb)
+       ON CONFLICT (entity_name, id) DO NOTHING
        RETURNING entity_name, id, owner_id, payload, created_at, updated_at`,
       [entityName, id, user.id, JSON.stringify(sanitizeRecordInput(input))]
     );
-    return recordFromRow(result.rows[0]);
+    if (result.rows[0]) return recordFromRow(result.rows[0]);
+    const existing = await this.getRecord(entityName, id, { ...user, role: "user" });
+    if (!existing) throw Object.assign(new Error("Record identity conflict"), { code: "record_conflict", status: 409 });
+    return existing;
   }
 
   async updateRecord(entityName, id, user, input) {
@@ -533,7 +613,7 @@ export class PostgresRepository {
 
   async startStripeEvent({ eventId, eventType, livemode, payloadSha256 }) {
     const claimed = await this.pool.query(
-      "INSERT INTO iabt_stripe_events (event_id, event_type, livemode, status, payload_sha256) VALUES ($1,$2,$3,'processing',$4) ON CONFLICT (event_id) DO UPDATE SET event_type = EXCLUDED.event_type, livemode = EXCLUDED.livemode, status = 'processing', payload_sha256 = EXCLUDED.payload_sha256, error_code = NULL, updated_at = now(), completed_at = NULL WHERE iabt_stripe_events.status = 'failed' OR iabt_stripe_events.updated_at < now() - interval '15 minutes' RETURNING *",
+      "INSERT INTO iabt_stripe_events (event_id, event_type, livemode, status, payload_sha256) VALUES ($1,$2,$3,'processing',$4) ON CONFLICT (event_id) DO UPDATE SET event_type = EXCLUDED.event_type, livemode = EXCLUDED.livemode, status = 'processing', payload_sha256 = EXCLUDED.payload_sha256, error_code = NULL, updated_at = now(), completed_at = NULL WHERE iabt_stripe_events.status = 'failed' OR (iabt_stripe_events.status = 'processing' AND iabt_stripe_events.updated_at < now() - interval '15 minutes') RETURNING *, updated_at::text AS claim_token",
       [eventId, eventType, Boolean(livemode), payloadSha256]
     );
     if (claimed.rowCount) return { claimed: true, event: claimed.rows[0] };
@@ -544,18 +624,82 @@ export class PostgresRepository {
     return { claimed: false, event: existing.rows[0] || null };
   }
 
-  async finishStripeEvent(eventId) {
+  async finishStripeEvent(eventId, { claimToken } = {}) {
     const result = await this.pool.query(
-      "UPDATE iabt_stripe_events SET status = 'succeeded', error_code = NULL, updated_at = now(), completed_at = now() WHERE event_id = $1 RETURNING *",
-      [eventId]
+      "UPDATE iabt_stripe_events SET status = 'succeeded', error_code = NULL, updated_at = now(), completed_at = now() WHERE event_id = $1 AND ($2::timestamptz IS NULL OR (status = 'processing' AND updated_at = $2::timestamptz)) RETURNING *",
+      [eventId, claimToken || null]
     );
     return result.rows[0] || null;
   }
 
-  async failStripeEvent(eventId, errorCode) {
+  async recordStripeRefundObservation({ observation, claimToken }) {
+    if (!claimToken) return null;
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SET LOCAL lock_timeout = '5s'");
+      await client.query("SET LOCAL statement_timeout = '10s'");
+      const claim = await client.query(
+        `SELECT event_id FROM iabt_stripe_events WHERE event_id = $1
+         AND status = 'processing' AND updated_at = $2::timestamptz
+         AND event_type = $3 AND livemode = $4 FOR UPDATE`,
+        [observation.event_id, claimToken, observation.event_type, observation.livemode]
+      );
+      if (!claim.rowCount) { await client.query("ROLLBACK"); return null; }
+      await client.query(
+        `INSERT INTO iabt_stripe_refund_observations (event_id, observation) VALUES ($1, $2::jsonb)
+         ON CONFLICT (event_id) DO NOTHING`, [observation.event_id, JSON.stringify(observation)]
+      );
+      const result = await client.query("SELECT * FROM iabt_stripe_refund_observations WHERE event_id = $1", [observation.event_id]);
+      await client.query("COMMIT");
+      return result.rows[0];
+    } catch (error) {
+      await client.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally { client.release(); }
+  }
+
+  async getStripeRefundObservation(eventId) {
+    const result = await this.pool.query("SELECT * FROM iabt_stripe_refund_observations WHERE event_id = $1", [eventId]);
+    return result.rows[0] || null;
+  }
+
+  async failStripeEvent(eventId, errorCode, { claimToken } = {}) {
     const result = await this.pool.query(
-      "UPDATE iabt_stripe_events SET status = 'failed', error_code = $2, updated_at = now() WHERE event_id = $1 RETURNING *",
-      [eventId, String(errorCode || "stripe_event_failed")]
+      "UPDATE iabt_stripe_events SET status = 'failed', error_code = $2, updated_at = now() WHERE event_id = $1 AND ($3::timestamptz IS NULL OR (status = 'processing' AND updated_at = $3::timestamptz)) RETURNING *",
+      [eventId, String(errorCode || "stripe_event_failed"), claimToken || null]
+    );
+    return result.rows[0] || null;
+  }
+
+  async findLegacyStripeCreditGrants({ checkoutSessionId }) {
+    if (!/^cs_[a-zA-Z0-9_]+$/.test(String(checkoutSessionId || ""))) throw new Error("Invalid checkout session identity");
+    const result = await this.pool.query(
+      `SELECT id, owner_id, amount, idempotency_key, metadata FROM iabt_credit_entries
+       WHERE entry_type = 'grant' AND idempotency_key ~ '^stripe:evt_[a-zA-Z0-9_]+$'
+         AND metadata ->> 'checkout_session_id' = $1
+       LIMIT 2`,
+      [checkoutSessionId]
+    );
+    return result.rows;
+  }
+
+  async findStarterCreditGrant(ownerId) {
+    const result = await this.pool.query(
+      `SELECT id, owner_id, amount, idempotency_key FROM iabt_credit_entries
+       WHERE owner_id = $1 AND entry_type = 'grant'
+         AND (idempotency_key = 'signup:free:v1' OR metadata ->> 'source' = 'initial_free_allowance')
+       LIMIT 1`,
+      [ownerId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async findBillingCreditGrant({ ownerId, idempotencyKey }) {
+    const result = await this.pool.query(
+      `SELECT id, owner_id, amount, idempotency_key, metadata FROM iabt_credit_entries
+       WHERE owner_id = $1 AND entry_type = 'grant' AND idempotency_key = $2 LIMIT 1`,
+      [ownerId, idempotencyKey]
     );
     return result.rows[0] || null;
   }
@@ -564,6 +708,9 @@ export class PostgresRepository {
     const value = Math.floor(Number(amount));
     if (!Number.isInteger(value) || value <= 0) throw new Error("Credit grant must be positive");
     return this.withTransaction(async (client) => {
+      // Distinct webhook deliveries can describe the same purchase. Serialize
+      // its grant before the existence check, including the initial account.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`grant:${ownerId}:${idempotencyKey}`]);
       const existing = await client.query(
         "SELECT id FROM iabt_credit_entries WHERE owner_id = $1 AND entry_type = 'grant' AND idempotency_key = $2",
         [ownerId, idempotencyKey]
@@ -595,6 +742,7 @@ export class PostgresRepository {
     maxAttempts = 3
   }) {
     return this.withTransaction(async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`job:${ownerId}:${idempotencyKey}`]);
       const existing = await client.query(
         "SELECT * FROM iabt_jobs WHERE owner_id = $1 AND idempotency_key = $2 LIMIT 1",
         [ownerId, idempotencyKey]
@@ -617,7 +765,7 @@ export class PostgresRepository {
       }
       const id = createId();
       const inserted = await client.query(
-        "INSERT INTO iabt_jobs (id, owner_id, job_type, input, approval, idempotency_key, credit_amount, max_attempts) VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8) RETURNING *",
+        "INSERT INTO iabt_jobs (id, owner_id, job_type, status, input, approval, idempotency_key, credit_amount, max_attempts) VALUES ($1, $2, $3, 'queued', $4::jsonb, $5::jsonb, $6, $7, $8) RETURNING *",
         [
           id,
           ownerId,
@@ -657,6 +805,15 @@ export class PostgresRepository {
       [jobId, workerId]
     );
     return result.rowCount === 1;
+  }
+
+  async checkpointJob({ jobId, workerId, outputPatch = {} }) {
+    const result = await this.pool.query(
+      "UPDATE iabt_jobs SET output = output || $3::jsonb, updated_at = now() WHERE id = $1 AND status = 'running' AND locked_by = $2 RETURNING *",
+      [jobId, workerId, JSON.stringify(outputPatch)]
+    );
+    if (!result.rows[0]) throw Object.assign(new Error("Job lease is no longer owned by this worker"), { code: "job_lease_lost" });
+    return jobFromRow(result.rows[0]);
   }
 
   async createStoredObject({
@@ -729,8 +886,11 @@ export class PostgresRepository {
         storedArtifacts.push(await this.createStoredObject({ ...item, jobId }, client));
       }
       const stored = storedArtifacts[0] || null;
+      const settlement = settleCreationCredits(job);
       const finalOutput = {
+        ...job.output,
         ...output,
+        credit_settlement: settlement,
         ...(stored
           ? {
               artifact_id: stored.id,
@@ -743,14 +903,18 @@ export class PostgresRepository {
         [jobId, workerId, JSON.stringify(finalOutput)]
       );
       if (job.credit_amount > 0) {
-        await client.query(
-          "UPDATE iabt_credit_accounts SET reserved_credits = reserved_credits - $2, updated_at = now() WHERE owner_id = $1 AND reserved_credits >= $2",
-          [job.owner_id, job.credit_amount]
+        const balance = await client.query(
+          "UPDATE iabt_credit_accounts SET reserved_credits = reserved_credits - $2, available_credits = available_credits + $3, updated_at = now() WHERE owner_id = $1 AND reserved_credits >= $2",
+          [job.owner_id, job.credit_amount, settlement.returned]
         );
-        await client.query(
-          "INSERT INTO iabt_credit_entries (id, owner_id, job_id, entry_type, amount, idempotency_key) VALUES ($1,$2,$3,'capture',$4,$5)",
-          [createId(), job.owner_id, job.id, job.credit_amount, job.idempotency_key]
-        );
+        if (balance.rowCount !== 1) throw Object.assign(new Error("Credit reservation missing"), { code: "credit_reservation_missing" });
+        for (const [entryType, amount] of [["capture", settlement.captured], ["release", settlement.returned]]) {
+          if (!amount) continue;
+          await client.query(
+            "INSERT INTO iabt_credit_entries (id, owner_id, job_id, entry_type, amount, idempotency_key, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)",
+            [createId(), job.owner_id, job.id, entryType, amount, job.idempotency_key, JSON.stringify(settlement)]
+          );
+        }
       }
       return {
         job: jobFromRow(updated.rows[0]),
@@ -860,6 +1024,7 @@ export class PostgresRepository {
         [
           job.id,
           JSON.stringify({
+            ...job.output,
             incident_id: incident.id,
             recovery: "credit_release",
             released_credits: job.credit_amount
@@ -895,24 +1060,106 @@ export class PostgresRepository {
     }));
   }
 
-  async getJob(id, user) {
+  async getJob(id, user, { summaryOnly = false } = {}) {
     const params = [id];
     const ownerClause = user.role === "admin" ? "" : " AND owner_id = $" + params.push(user.id);
     const result = await this.pool.query(
-      "SELECT * FROM iabt_jobs WHERE id = $1" + ownerClause + " LIMIT 1",
+      `SELECT ${summaryOnly ? JOB_SUMMARY_COLUMNS : "*"} FROM iabt_jobs WHERE id = $1` + ownerClause + " LIMIT 1",
       params
     );
     return jobFromRow(result.rows[0]);
   }
 
-  async listJobs(user, { limit = 50 } = {}) {
+  async listJobs(user, { limit = 50, summaryOnly = false } = {}) {
     const params = [];
     const ownerClause = user.role === "admin" ? "" : " WHERE owner_id = $" + params.push(user.id);
     params.push(Math.max(1, Math.min(250, limit)));
     const result = await this.pool.query(
-      "SELECT * FROM iabt_jobs" + ownerClause + " ORDER BY created_at DESC LIMIT $" + params.length,
+      `SELECT ${summaryOnly ? JOB_SUMMARY_COLUMNS : "*"} FROM iabt_jobs` + ownerClause + " ORDER BY created_at DESC LIMIT $" + params.length,
       params
     );
     return result.rows.map(jobFromRow);
+  }
+
+  async ensureMaintenance({ ownerId, intervalMs = 900000 }) {
+    await this.pool.query(`INSERT INTO iabt_maintenance(owner_id, interval_ms)
+      SELECT id, $2 FROM iabt_users WHERE id = $1 AND email_verified
+      ON CONFLICT(owner_id) DO NOTHING`, [ownerId, intervalMs]);
+    return this.getMaintenance(ownerId);
+  }
+
+  async getMaintenance(ownerId) {
+    const result = await this.pool.query("SELECT * FROM iabt_maintenance WHERE owner_id = $1", [ownerId]);
+    return maintenanceFromRow(result.rows[0]);
+  }
+
+  async enrollVerifiedMaintenance({ intervalMs = 900000, limit = 100 } = {}) {
+    const result = await this.pool.query(`INSERT INTO iabt_maintenance(owner_id, interval_ms)
+      SELECT u.id, $1 FROM iabt_users u WHERE u.email_verified
+        AND NOT EXISTS (SELECT 1 FROM iabt_maintenance m WHERE m.owner_id = u.id)
+      ORDER BY u.created_at, u.id LIMIT $2 ON CONFLICT(owner_id) DO NOTHING`, [intervalMs, Math.max(1, Math.min(100, limit))]);
+    return result.rowCount;
+  }
+
+  async configureMaintenance({ ownerId, enabled, intervalMs }) {
+    const result = await this.pool.query(`UPDATE iabt_maintenance SET enabled = $2, interval_ms = $3,
+      next_run_at = now(), lease_token = NULL, locked_by = NULL, lease_expires_at = NULL, updated_at = now()
+      WHERE owner_id = $1 RETURNING *`, [ownerId, enabled, intervalMs]);
+    return maintenanceFromRow(result.rows[0]);
+  }
+
+  async claimDueMaintenance({ workerId, leaseMs }) {
+    const result = await this.pool.query(`WITH due AS (
+      SELECT m.owner_id FROM iabt_maintenance m JOIN iabt_users u ON u.id = m.owner_id
+      WHERE m.enabled AND u.email_verified AND m.next_run_at <= clock_timestamp()
+        AND (m.lease_token IS NULL OR m.lease_expires_at <= clock_timestamp())
+      ORDER BY m.next_run_at, m.owner_id FOR UPDATE OF m SKIP LOCKED LIMIT 1
+    ) UPDATE iabt_maintenance m SET lease_token = $1, locked_by = $2,
+      lease_expires_at = clock_timestamp() + $3 * interval '1 millisecond', last_started_at = clock_timestamp(), updated_at = clock_timestamp()
+      FROM due WHERE m.owner_id = due.owner_id RETURNING m.*`, [createId(), workerId, leaseMs]);
+    return maintenanceFromRow(result.rows[0]);
+  }
+
+  async withMaintenanceLease({ ownerId, leaseToken }, callback) {
+    return this.withRecordTransaction(async (tx) => {
+      const result = await tx.pool.query(`SELECT * FROM iabt_maintenance WHERE owner_id = $1
+        AND enabled AND lease_token = $2 AND lease_expires_at > clock_timestamp() FOR UPDATE`, [ownerId, leaseToken]);
+      if (!result.rows.length) throw Object.assign(new Error("Maintenance lease changed"), { code: "maintenance_lease_lost" });
+      return callback(tx, maintenanceFromRow(result.rows[0]));
+    });
+  }
+
+  async renewMaintenanceLease({ ownerId, leaseToken, leaseMs }) {
+    return this.withMaintenanceLease({ ownerId, leaseToken }, async (tx) => {
+      await tx.pool.query("UPDATE iabt_maintenance SET lease_expires_at = clock_timestamp() + $2 * interval '1 millisecond' WHERE owner_id = $1", [ownerId, leaseMs]);
+      return true;
+    });
+  }
+
+  async saveMaintenanceProgress({ ownerId, leaseToken, checkpoint, summary }) {
+    return this.withMaintenanceLease({ ownerId, leaseToken }, async (tx) => {
+      const result = await tx.pool.query(`UPDATE iabt_maintenance SET checkpoint = COALESCE($2::jsonb, checkpoint),
+        summary = COALESCE($3::jsonb, summary), updated_at = now() WHERE owner_id = $1 RETURNING *`,
+      [ownerId, checkpoint === undefined ? null : JSON.stringify(checkpoint), summary === undefined ? null : JSON.stringify(summary)]);
+      return maintenanceFromRow(result.rows[0]);
+    });
+  }
+
+  async finishMaintenance({ ownerId, leaseToken, checkpoint, summary, nextRunAt, failed = false }) {
+    return this.withMaintenanceLease({ ownerId, leaseToken }, async (tx) => {
+      const result = await tx.pool.query(`UPDATE iabt_maintenance SET checkpoint = $2::jsonb, summary = $3::jsonb,
+        next_run_at = $4, consecutive_failures = CASE WHEN $5 THEN consecutive_failures + 1 ELSE 0 END,
+        last_completed_at = now(), updated_at = now(), lease_token = NULL, locked_by = NULL, lease_expires_at = NULL
+        WHERE owner_id = $1 RETURNING *`, [ownerId, JSON.stringify(checkpoint), JSON.stringify(summary), nextRunAt, failed]);
+      return maintenanceFromRow(result.rows[0]);
+    });
+  }
+
+  async listMaintenanceJobs({ ownerId, cursor = null, limit = 25 }) {
+    const result = await this.pool.query(`SELECT *, to_char(completed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS maintenance_completed_at FROM iabt_jobs WHERE owner_id = $1
+      AND status IN ('succeeded', 'failed', 'needs_setup') AND completed_at IS NOT NULL
+      AND ($2::timestamptz IS NULL OR (completed_at, id) > ($2::timestamptz, $3::uuid))
+      ORDER BY completed_at, id LIMIT $4`, [ownerId, cursor?.completed_at || null, cursor?.job_id || null, Math.max(1, Math.min(25, limit))]);
+    return result.rows.map((row) => ({ ...jobFromRow(row), maintenance_cursor: { completed_at: row.maintenance_completed_at, job_id: row.id } }));
   }
 }

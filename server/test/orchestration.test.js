@@ -1,0 +1,481 @@
+import assert from "node:assert/strict";
+import { createHash, randomUUID } from "node:crypto";
+import { test } from "node:test";
+import { loadConfig } from "../src/config.js";
+import { MemoryRepository } from "../src/memory-repository.js";
+import { createProviderRegistry } from "../src/providers/provider-registry.js";
+import { createJobWorker } from "../src/worker.js";
+import { invokeTool, registeredTools, toolDefinitions } from "../src/autonomy/tools.js";
+import { creationCreditPolicy } from "../src/creation/credit-settlement.js";
+
+const call = (name, args, id = "call_document") => ({ type: "function_call", call_id: id, name, arguments: JSON.stringify({ ...(["inspect_file", "create_document", "create_source"].includes(name) ? { node_id: "document" } : {}), ...args }) });
+const document = () => call("create_document", { title: "Bookstore report", markdown: "# Bookstore report\n\nA substantive report with a reproducible review checklist." });
+const plan = () => call("plan_execution", { objective: "Create a bookstore report", nodes: [{ id: "document", tool: "create_document", objective: "Create document formats", depends_on: [] }] }, "call_plan");
+const response = (id, output = [], status = "completed") => ({ id, status, output: output.some((item) => item.name === "create_document") ? [plan(), ...output] : output });
+const completed = () => response("resp_done", [{ type: "message", content: [{ type: "output_text", text: "Created three document files. Visual and factual review remain pending." }] }]);
+
+const fixture = async ({ env = {}, replies = [], approval = true, budget = 6 } = {}) => {
+  const repository = new MemoryRepository();
+  const user = await repository.createUser({ email: "orchestrator@example.com", passwordHash: "unused", emailVerified: true });
+  await repository.grantCredits({ ownerId: user.id, amount: 10, idempotencyKey: "opening" });
+  const config = loadConfig({ NODE_ENV: "test", OPENAI_API_KEY: "test-key-never-exposed", IABT_ENABLE_PAID_AI: "true", IABT_ENABLE_ORCHESTRATION: "true", IABT_ORCHESTRATION_BUDGET_ACCEPTED: "true", IABT_OPENAI_RESPONSE_COST_CENTS: "2", IABT_ORCHESTRATION_BUDGET_CENTS: "6", ...env });
+  const objects = new Map();
+  const storage = {
+    kind: "test",
+    corrupt: false,
+    health: async () => ({ ok: true }),
+    async put({ ownerId, objectId, bytes }) {
+      objects.set(ownerId + "/" + objectId, Buffer.from(bytes));
+      return { storage_provider: "test", storage_key: ownerId + "/" + objectId };
+    },
+    async read(key) { return this.corrupt ? Buffer.from("corruption") : objects.get(key); }
+  };
+  const requests = [];
+  const providers = createProviderRegistry(config, { fetchImpl: async (url, options) => {
+    requests.push({ url, options });
+    const next = replies.shift();
+    if (next instanceof Error) throw next;
+    if (next?.httpStatus) return new Response("{}", { status: next.httpStatus });
+    assert.ok(next, "Unexpected provider call");
+    return Response.json(next);
+  } });
+  const queued = await repository.enqueueJob({ ownerId: user.id, jobType: "creation.orchestrated", input: { intent: "document", title: "Bookstore report", request_text: "Create a report about a neighborhood bookstore.", orchestration_budget_cents: budget }, approval: approval ? { approved: true, approval_id: "signed-plan-approval", max_cost_cents: budget } : {}, idempotencyKey: "orchestration-job", creditAmount: 1, maxAttempts: 3 });
+  const worker = createJobWorker({ repository, storage, providers, config, workerId: "orchestration-worker" });
+  const step = async () => {
+    repository.jobs.get(queued.id).available_at = "2000-01-01T00:00:00.000Z";
+    return worker.runOnce();
+  };
+  const drain = async () => {
+    for (let i = 0; i < 40; i += 1) {
+      const result = await step();
+      if (!result || ["succeeded", "failed", "needs_setup"].includes(result.job.status)) return result;
+    }
+    throw new Error("Workflow did not terminate within test budget");
+  };
+  return { repository, user, config, storage, objects, providers, queued, worker, step, drain, requests };
+};
+
+test("document length failures repair the same node before exporting any files", async () => {
+  const c = await fixture({ budget: 8, env: { OPENAI_MODEL: "gpt-5.6-terra", IABT_ORCHESTRATION_BUDGET_CENTS: "8" }, replies: [
+    { id: "resp_plan", status: "completed", output: [plan()] },
+    { id: "resp_short", status: "completed", output: [call("create_document", { title: "Guide", markdown: "word ".repeat(20) }, "short")] },
+    { id: "resp_repair", status: "completed", output: [call("create_document", { title: "Guide", markdown: "word ".repeat(35) }, "repair")] }, completed()
+  ] });
+  Object.assign(c.repository.jobs.get(c.queued.id).input, { document_output_contract: "composed_document_v1", request_text: "Write a guide of 30 to 40 words." });
+  const result = await c.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 3);
+  assert.equal(result.job.output.orchestration.calls.find(call => call.call_id === "short").result.error, "document_length_mismatch");
+  assert.equal(result.job.output.orchestration.execution_graph.nodes[0].attempts.length, 2);
+  assert.equal(result.job.output.artifact_manifest.every(file => file.metadata.length_check.word_count === 35), true);
+  const posts = c.requests.map(request => JSON.parse(request.options.body));
+  assert.deepEqual(posts[0].reasoning, { effort: "low" });
+  const context = JSON.parse(posts[0].input[0].content);
+  assert.deepEqual(context.document_word_range, { min: 30, max: 40 });
+  assert.deepEqual(context.available_tools, ["plan_execution", "create_document"]);
+  assert.equal(context.capabilities, undefined);
+  assert.ok(JSON.stringify(context).length < 16000, "The full unrelated operator curriculum must not consume creation context");
+  assert.doesNotMatch(JSON.stringify(context), /stripe-webhook|neon_postgres|billing\.payment/);
+  assert.match(posts[2].input[0].output, /Measured 20 words; required 30-40/);
+  await c.worker.stop();
+});
+
+test("separate format nodes reuse one export set without rewriting graph history or capturing twice", async () => {
+  const args = { title: "Guide", markdown: "# Guide\n\nA complete guide with practical instructions for volunteers." };
+  const c = await fixture({ replies: [
+    { id: "resp_plan", status: "completed", output: [call("plan_execution", { objective: "Export a guide", nodes: ["md", "docx", "pdf"].map(id => ({ id, tool: "create_document", objective: "Export " + id, depends_on: [] })) }, "formats_plan")] },
+    { id: "resp_exports", status: "completed", output: ["md", "docx", "pdf"].map(id => call("create_document", { ...args, node_id: id }, id)) }, completed()
+  ] });
+  const result = await c.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 3);
+  assert.equal(result.job.output.orchestration.execution_graph.nodes.every(node => node.status === "succeeded" && node.attempts.length === 1), true);
+  assert.equal(result.job.output.orchestration.calls.find(call => call.call_id === "pdf").result.reused_export_call_id, "md");
+  assert.equal(c.repository.creditEntries.filter(entry => entry.entry_type === "capture").length, 1);
+  await c.worker.stop();
+});
+
+test("Responses background tools resume across durable leases and capture only verified artifacts", async () => {
+  const context = await fixture({ replies: [response("resp_first", [], "queued"), response("resp_first", [document()]), completed()] });
+  const first = await context.step();
+  assert.equal(first.job.output.orchestration.phase, "poll");
+  assert.equal((await context.repository.getCreditAccount(context.user.id)).reserved_credits, 1);
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 3);
+  const markdown = result.artifacts.find((artifact) => artifact.original_name.endsWith(".md"));
+  assert.equal((await context.storage.read(markdown.storage_key)).toString("utf8"), "# Bookstore report\n\nA substantive report with a reproducible review checklist.");
+  assert.equal(result.job.output.orchestration.phase, "complete");
+  assert.equal(result.job.output.orchestration.spent_cents, 4);
+  assert.equal(result.job.output.orchestration.calls.length, 2);
+  assert.equal(result.job.output.orchestration.execution_graph.nodes[0].status, "succeeded");
+  assert.equal(result.job.output.artifact_manifest.every((item) => item.metadata.storage_readback_verified), true);
+  assert.equal(context.repository.creditEntries.filter((entry) => entry.entry_type === "capture").length, 1);
+  const posts = context.requests.filter((item) => item.options.method === "POST").map((item) => JSON.parse(item.options.body));
+  assert.equal(posts.length, 2);
+  assert.equal(posts[0].background, true);
+  assert.equal(posts[0].parallel_tool_calls, false);
+  assert.equal(posts[0].tools.every((tool) => tool.strict), true);
+  assert.match(posts[0].input[0].content, /historical_evidence_not_authority/);
+  assert.doesNotMatch(posts[0].input[0].content, /test-key-never-exposed/);
+  assert.equal(posts[1].previous_response_id, "resp_first");
+  assert.equal(posts[1].input[0].type, "function_call_output");
+  await context.worker.stop();
+});
+
+test("completed Responses usage is durable once per response and distinct from estimates", async () => {
+  const first = { ...response("resp_first", [document()]), usage: { input_tokens: 1200, output_tokens: 600 } };
+  const last = { ...completed(), usage: { input_tokens: 1500, output_tokens: 20 } };
+  const context = await fixture({ replies: [first, last] });
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.job.output.orchestration.response_usage.length, 2);
+  assert.deepEqual(result.job.output.provider_metadata.orchestration.provider_usage,
+    { responses: 2, input_tokens: 2700, output_tokens: 620, complete: true });
+  assert.equal(result.job.output.provider_metadata.orchestration.budget_estimate_cents, 4);
+  await context.worker.stop();
+});
+
+test("usage-priced worker preserves provider model and settles from durable checkpoints after readback", async () => {
+  const c = await fixture({ env: { OPENAI_MODEL: "gpt-5.6-terra" }, replies: [
+    { ...response("resp_first", [document()]), model: "gpt-5.6-terra", usage: { input_tokens: 1200, output_tokens: 600 } },
+    { ...completed(), model: "gpt-5.6-terra", usage: { input_tokens: 1500, output_tokens: 20 } }
+  ] });
+  c.repository.jobs.get(c.queued.id).input.credit_settlement = creationCreditPolicy("gpt-5.6-terra");
+  const result = await c.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.job.output.credit_settlement.reason, "verified_usage");
+  assert.equal(result.job.output.credit_settlement.captured, 1);
+  assert.equal(result.job.output.orchestration.response_usage[1].model, "gpt-5.6-terra");
+  assert.equal(c.requests.filter(r => r.options.method === "POST").length, 2);
+  await c.worker.stop();
+});
+
+test("a changed configured model cannot spend against a usage-priced quote", async () => {
+  const c = await fixture();
+  c.repository.jobs.get(c.queued.id).input.credit_settlement = creationCreditPolicy("gpt-5.6-terra");
+  const result = await c.drain();
+  assert.notEqual(result.job.status, "succeeded");
+  assert.equal(c.requests.length, 0);
+  assert.equal((await c.repository.getCreditAccount(c.user.id)).available_credits, 10);
+  await c.worker.stop();
+});
+
+test("numeric graph IDs receive actionable repair and cannot bypass accepted planning", async () => {
+  const invalidPlan = call("plan_execution", { objective: "Create a bookstore report", nodes: [{ id: "1", tool: "create_document", objective: "Create document formats", depends_on: [] }] }, "numeric_plan");
+  const context = await fixture({ budget: 8, env: { IABT_ORCHESTRATION_BUDGET_CENTS: "8" }, replies: [
+    response("resp_invalid_plan", [invalidPlan]), response("resp_valid_plan", [plan()]),
+    { id: "resp_document", status: "completed", output: [document()] }, completed()
+  ] });
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 3);
+  const posts = context.requests.map(item => JSON.parse(item.options.body));
+  assert.equal(posts.length, 4);
+  assert.deepEqual(posts[0].tool_choice, { type: "function", name: "plan_execution" });
+  assert.deepEqual(posts[1].tool_choice, posts[0].tool_choice);
+  assert.equal(posts[2].tool_choice, undefined);
+  const repair = JSON.parse(posts[1].input[0].output);
+  assert.equal(repair.error, "invalid_tool_input");
+  assert.match(repair.message, /start with a letter/);
+  assert.match(repair.message, /create_app/);
+  assert.equal(result.job.output.orchestration.execution_graph.nodes[0].id, "document");
+  assert.equal(result.job.output.orchestration.execution_graph.nodes[0].attempts.length, 1);
+  assert.equal(context.repository.creditEntries.filter(entry => entry.entry_type === "capture").length, 1);
+  await context.worker.stop();
+});
+
+test("provider schemas and local tools reject invalid graph and execution identifiers", async () => {
+  const context = await fixture();
+  const job = context.queued;
+  const tools = registeredTools({ ...context, job });
+  const definitions = toolDefinitions(tools, context.user, job);
+  const graph = definitions.find(tool => tool.name === "plan_execution").parameters.properties.nodes.items.properties;
+  const pattern = new RegExp(graph.id.pattern);
+  assert.equal(pattern.test("create_app"), true);
+  assert.equal(pattern.test("A" + "x".repeat(63)), true);
+  for (const id of ["1", "", "read file", "A" + "x".repeat(64)]) {
+    assert.equal(pattern.test(id), false);
+    const args = { objective: "Create a report", nodes: [{ id, tool: "create_document", objective: "Write the report", depends_on: [] }] };
+    await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("plan_execution", args) }), { code: "invalid_tool_input" });
+    await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("create_document", { node_id: id, title: "Report", markdown: "A substantive document that must not be generated for an invalid node." }) }), { code: "invalid_tool_input" });
+  }
+  assert.equal(graph.depends_on.items.pattern, graph.id.pattern);
+  assert.equal(definitions.filter(tool => tool.name !== "plan_execution").every(tool => tool.parameters.properties.node_id.pattern === graph.id.pattern), true);
+  const badDependency = { objective: "Create a report", nodes: [{ id: "document", tool: "create_document", objective: "Write the report", depends_on: ["1"] }] };
+  await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("plan_execution", badDependency) }), { code: "invalid_tool_input" });
+  assert.equal(context.requests.length, 0);
+  assert.equal(context.objects.size, 0);
+  await context.worker.stop();
+});
+
+test("new creations cannot plan inspections of nonexistent or future files", async () => {
+  const context = await fixture();
+  for (const input of [{}, { app_output_contract: "self_contained_html_v1", file_references: [] }]) {
+    const job = { ...context.queued, input };
+    const tools = registeredTools({ ...context, job });
+    const definitions = toolDefinitions(tools, context.user, job);
+    assert.equal(definitions.some(tool => tool.name === "inspect_file"), false);
+    const allowed = definitions.find(tool => tool.name === "plan_execution").parameters.properties.nodes.items.properties.tool.enum;
+    assert.deepEqual(allowed, definitions.filter(tool => tool.name !== "plan_execution").map(tool => tool.name));
+    if (input.app_output_contract) assert.deepEqual(allowed, ["create_web_app"]);
+    await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("plan_execution", {
+      objective: "Create a new deliverable", nodes: [{ id: "read_future", tool: "inspect_file", objective: "Inspect the future output", depends_on: [] }]
+    }) }), { code: "invalid_tool_input" });
+    await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("inspect_file", { file_id: "future-output" }) }), { code: "unauthorized_tool" });
+  }
+  assert.equal(context.requests.length, 0);
+  assert.equal(context.objects.size, 0);
+  await context.worker.stop();
+});
+
+test("inspection schemas expose only approved source IDs and validate the same scope locally", async () => {
+  const context = await fixture();
+  const sourceId = randomUUID();
+  const job = { ...context.queued, input: { file_references: [{ file_id: sourceId }, { file_id: sourceId }] } };
+  const tools = registeredTools({ ...context, job });
+  const definitions = toolDefinitions(tools, context.user, job);
+  assert.deepEqual(definitions.find(tool => tool.name === "inspect_file").parameters.properties.file_id.enum, [sourceId]);
+  await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("inspect_file", { file_id: randomUUID() }) }), { code: "invalid_tool_input" });
+  assert.equal(toolDefinitions(tools, context.user, context.queued).some(tool => tool.name === "inspect_file"), false);
+  assert.equal(tools.find(tool => tool.name === "inspect_file").input_schema.properties.file_id.enum, undefined);
+  assert.equal(context.requests.length, 0);
+  await context.worker.stop();
+});
+
+test("an impossible inspection plan is rejected before graph evidence and can be repaired within budget", async () => {
+  const impossible = call("plan_execution", { objective: "Create a bookstore report", nodes: [
+    { id: "read_future", tool: "inspect_file", objective: "Inspect the future report", depends_on: [] },
+    { id: "document", tool: "create_document", objective: "Write the report", depends_on: ["read_future"] }
+  ] }, "impossible_plan");
+  const context = await fixture({ budget: 8, env: { IABT_ORCHESTRATION_BUDGET_CENTS: "8" }, replies: [
+    response("resp_impossible", [impossible]), response("resp_repaired", [plan()]),
+    { id: "resp_write", status: "completed", output: [document()] }, completed()
+  ] });
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 3);
+  assert.equal(result.job.output.orchestration.execution_graph.nodes.some(node => node.tool === "inspect_file"), false);
+  assert.deepEqual(result.job.output.orchestration.failures.map(item => item.code), ["invalid_tool_input"]);
+  const posts = context.requests.map(item => JSON.parse(item.options.body));
+  assert.equal(posts.length, 4);
+  assert.match(JSON.parse(posts[1].input[0].output).message, /no attached files/);
+  assert.deepEqual(posts[1].tool_choice, { type: "function", name: "plan_execution" });
+  assert.equal(context.repository.creditEntries.filter(entry => entry.entry_type === "capture").length, 1);
+  await context.worker.stop();
+});
+
+test("missing provider usage remains unverified rather than a zero-cost claim", async () => {
+  const context = await fixture({ replies: [response("resp_first", [document()]), completed()] });
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.job.output.provider_metadata.orchestration.provider_usage.complete, false);
+  assert.equal(result.job.output.orchestration.response_usage.every(item => item.input_tokens === null && item.output_tokens === null), true);
+  await context.worker.stop();
+});
+
+test("disabled document composition restores credits without spending or a template substitute", async () => {
+  const context = await fixture({ env: { IABT_ORCHESTRATION_BUDGET_ACCEPTED: "false" } });
+  const result = await context.drain();
+  assert.equal(context.requests.length, 0);
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.job.last_error_code, "document_creation_incomplete");
+  assert.equal(result.released_credits, 1);
+  assert.equal(context.objects.size, 0);
+  await context.worker.stop();
+});
+
+test("nonzero Responses cost requires the exact job approval even with configured credentials", async () => {
+  const context = await fixture({ approval: false });
+  const result = await context.drain();
+  assert.equal(context.requests.length, 0);
+  assert.equal(result.job.status, "needs_setup");
+  assert.equal(result.job.last_error_code, "explicit_approval_required");
+  assert.equal(result.released_credits, 1);
+  await context.worker.stop();
+});
+
+test("ambiguous POST recovery never submits another billable request", async () => {
+  const context = await fixture({ replies: [Object.assign(new Error("connection lost"), { code: "ECONNRESET" })] });
+  const result = await context.drain();
+  assert.equal(context.requests.length, 1);
+  assert.equal(result.job.output.orchestration.phase, "fallback");
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.job.last_error_code, "document_creation_incomplete");
+  assert.equal(result.released_credits, 1);
+  assert.equal(context.objects.size, 0);
+  assert.equal(await context.step(), null);
+  await context.worker.stop();
+});
+
+test("a worker recovered after submission checkpoint fails without a template or duplicate spend", async () => {
+  const context = await fixture();
+  context.repository.jobs.get(context.queued.id).output.orchestration = { version: 1, phase: "submitting", turn: 0, polls: 0, spent_cents: 2, calls: [], artifacts: [], failures: [], execution_graph: [], inspected_file_ids: [] };
+  const result = await context.drain();
+  assert.equal(context.requests.length, 0);
+  assert.equal(result.job.output.orchestration.failures[0].code, "provider_submission_outcome_unknown");
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.released_credits, 1);
+  assert.equal(context.objects.size, 0);
+  await context.worker.stop();
+});
+
+test("GET outage retries the saved response instead of submitting the prompt again", async () => {
+  const context = await fixture({ replies: [response("resp_first", [], "queued"), { httpStatus: 503 }, response("resp_first", [document()]), completed()] });
+  await context.step();
+  const retry = await context.step();
+  assert.equal(retry.job.status, "queued");
+  assert.equal(retry.job.output.orchestration.response_id, "resp_first");
+  assert.equal(retry.job.output.repair_history[0].recovery, "retry_with_backoff");
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(context.requests.filter((item) => item.options.method === "POST").length, 2);
+  assert.equal(context.requests.filter((item) => item.url.endsWith("/resp_first")).length, 2);
+  await context.worker.stop();
+});
+
+test("invalid tools return bounded repair feedback without granting new capabilities", async () => {
+  const context = await fixture({ replies: [response("resp_first", [call("run_shell", { command: "secret" }, "rejected_shell")]), response("resp_repair", [document()]), completed()] });
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.job.output.orchestration.calls[0].status, "failed");
+  assert.equal(result.job.output.orchestration.failures[0].code, "unauthorized_tool");
+  const second = JSON.parse(context.requests[1].options.body);
+  assert.equal(JSON.parse(second.input[0].output).error, "unauthorized_tool");
+  assert.equal(result.artifacts.length, 3);
+  await context.worker.stop();
+});
+
+test("run budget cannot expand when operator configuration increases after approval", async () => {
+  const context = await fixture({ budget: 2, env: { IABT_ORCHESTRATION_BUDGET_CENTS: "100" }, replies: [response("resp_first", [document()])] });
+  const result = await context.drain();
+  assert.equal(context.requests.length, 1);
+  assert.equal(result.job.output.orchestration.phase, "fallback");
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.job.last_error_code, "document_creation_incomplete");
+  assert.equal(result.job.output.orchestration.artifacts.length, 3, "Partial work is preserved in its existing checkpoint");
+  assert.equal(result.job.output.artifact_manifest?.length || 0, 0);
+  assert.equal(result.released_credits, 1);
+  assert.equal(context.objects.size, 0);
+  await context.worker.stop();
+});
+
+test("artifact storage retry resumes finished Responses state without another model call", async () => {
+  const context = await fixture({ replies: [response("resp_first", [document()]), completed()] });
+  context.storage.corrupt = true;
+  await context.step();
+  await context.step();
+  await context.step();
+  const retry = await context.step();
+  assert.equal(retry.job.status, "queued");
+  assert.equal(retry.job.last_error_code, "storage_verification_failed");
+  assert.equal(retry.job.output.orchestration.phase, "complete");
+  context.storage.corrupt = false;
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(context.requests.length, 2);
+  assert.equal(context.objects.size, 3);
+  assert.equal(context.repository.creditEntries.filter((entry) => entry.entry_type === "capture").length, 1);
+  await context.worker.stop();
+});
+
+test("source tools reject foreign ownership and source path traversal", async () => {
+  const context = await fixture();
+  const other = await context.repository.createUser({ email: "other@example.com", passwordHash: "unused", emailVerified: true });
+  const bytes = Buffer.from("private source");
+  const file = await context.repository.createStoredObject({ ownerId: other.id, storageProvider: "test", storageKey: "private/source", originalName: "source.txt", contentType: "text/plain", sizeBytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") });
+  const job = { ...context.queued, input: { file_references: [{ file_id: file.id }] } };
+  const tools = registeredTools({ ...context, job });
+  await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("inspect_file", { file_id: file.id }) }), { code: "source_not_found" });
+  await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("create_source", { title: "Unsafe", files: [{ name: "../escape.js", content: "console.log(1)" }, { name: "README.md", content: "Review before use." }] }) }), { code: "invalid_artifact" });
+  await assert.rejects(invokeTool({ tools, job, user: { ...context.user, id: randomUUID() }, call: document() }), { code: "unauthorized_tool" });
+  const result = await invokeTool({ tools, job, user: context.user, call: call("create_source", { title: "Example", files: [{ name: "src/index.js", content: "export const value = 1;" }, { name: "README.md", content: "Review and test before use." }] }) });
+  assert.equal(result.artifacts[0].metadata.runtime_tested, false);
+  await context.worker.stop();
+});
+
+test("missing storage readback prevents credit capture in every environment", async () => {
+  const context = await fixture({ replies: [response("resp_first", [document()]), completed()] });
+  delete context.storage.read;
+  const result = await context.drain();
+  assert.equal(result.job.status, "needs_setup");
+  assert.equal(result.job.last_error_code, "storage_readback_not_configured");
+  assert.equal(context.repository.creditEntries.some((entry) => entry.entry_type === "capture"), false);
+  await context.worker.stop();
+});
+
+test("completed source packaging cannot stand in for the requested document", async () => {
+  const sourcePlan = call("plan_execution", { objective: "Create a report", nodes: [{ id: "document", tool: "create_source", objective: "Package source", depends_on: [] }] }, "source_plan");
+  const source = call("create_source", { title: "Not a document", files: [{ name: "README.md", content: "Only a source package, not the requested report." }, { name: "test.js", content: "// Review before use." }] }, "source_package");
+  const context = await fixture({ replies: [response("resp_wrong", [sourcePlan, source]), completed()] });
+  const result = await context.drain();
+  assert.equal(result.job.output.orchestration.phase, "complete");
+  assert.equal(result.job.status, "failed");
+  assert.equal(result.job.last_error_code, "document_creation_incomplete");
+  assert.equal(result.released_credits, 1);
+  assert.equal(context.objects.size, 0);
+  assert.equal(context.repository.creditEntries.some((entry) => entry.entry_type === "capture"), false);
+  await context.worker.stop();
+});
+
+test("legacy paid jobs persist provider output before storage retries", async () => {
+  const context = await fixture();
+  const saved = context.repository.jobs.get(context.queued.id);
+  saved.job_type = "provider.openai.response";
+  context.storage.corrupt = true;
+  let submissions = 0;
+  context.providers.execute = async () => { submissions += 1; return { bytes: Buffer.from("safe output"), filename: "output.txt", contentType: "text/plain" }; };
+  const retry = await context.step();
+  assert.equal(retry.job.status, "queued");
+  assert.ok(retry.job.output.provider_result);
+  context.storage.corrupt = false;
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(submissions, 1);
+  assert.equal(context.objects.size, 1);
+  await context.worker.stop();
+});
+
+test("the executor blocks a graph dependency bypass and allows a corrected ready call", async () => {
+  const nodes = [
+    { id: "first", tool: "create_document", objective: "Create the first report", depends_on: [] },
+    { id: "second", tool: "create_document", objective: "Create the second report", depends_on: ["first"] }
+  ];
+  const make = (node_id, callId) => call("create_document", { node_id, title: node_id, markdown: "# Evidence\n\nA finished report with substantive content for verification." }, callId);
+  const initial = { id: "resp_graph", status: "completed", output: [
+    call("plan_execution", { objective: "Create two related reports", nodes }, "graph_plan"),
+    make("second", "too_early"), make("first", "first_ready"), make("second", "second_ready")
+  ] };
+  const context = await fixture({ replies: [initial, completed()] });
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 6);
+  const state = result.job.output.orchestration;
+  assert.equal(state.calls.find((item) => item.call_id === "too_early").result.error, "graph_dependency_not_ready");
+  assert.equal(state.execution_graph.nodes.every((node) => node.status === "succeeded"), true);
+  assert.equal(state.execution_graph.nodes[1].attempts.length, 1);
+  await context.worker.stop();
+});
+
+test("a crash after graph start resumes the same tool call without duplicate graph attempts", async () => {
+  const context = await fixture({ replies: [response("resp_first", [document()]), completed()] });
+  await context.step();
+  const original = context.repository.checkpointJob.bind(context.repository);
+  let interrupted = false;
+  context.repository.checkpointJob = async (input) => {
+    const result = await original(input);
+    if (!interrupted && input.outputPatch.orchestration?.execution_graph?.nodes?.some((node) => node.status === "running")) {
+      interrupted = true;
+      throw Object.assign(new Error("simulated lease interruption"), { code: "job_lease_lost" });
+    }
+    return result;
+  };
+  await assert.rejects(context.step(), { code: "job_lease_lost" });
+  context.repository.jobs.get(context.queued.id).locked_at = "2000-01-01T00:00:00.000Z";
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 3);
+  assert.equal(result.job.output.orchestration.execution_graph.nodes[0].attempts.length, 1);
+  assert.equal(context.requests.length, 2);
+  await context.worker.stop();
+});

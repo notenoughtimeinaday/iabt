@@ -58,6 +58,64 @@ const postgresTest = (name, callback) => test(name, {
   timeout: 30000
 }, callback);
 
+postgresTest("postgres: workspace scalar filtering and pagination transfer only the requested rows", async (t) => {
+  const f = await fixture(t);
+  await f.repository.pool.query(`INSERT INTO iabt_entity_records(entity_name, id, owner_id, payload, created_at)
+    SELECT 'CreationPlan', md5($1 || ordinal::text)::uuid, $2::uuid,
+      jsonb_build_object('conversation_id', CASE WHEN ordinal <= 5 THEN 'selected' ELSE 'unrelated' END,
+        'ordinal', ordinal, 'source', repeat('unneeded-source-', 100)),
+      '2020-01-01'::timestamptz + ordinal * interval '1 second'
+    FROM generate_series(1, 5006) AS ordinal`, [randomUUID(), f.users.founder.id]);
+  await f.repository.createRecord("CreationPlan", f.users.outsider, { conversation_id: "selected", ordinal: 999 });
+  const originalQuery = f.repository.pool.query.bind(f.repository.pool);
+  let transferredRows = 0;
+  f.repository.pool.query = async (...args) => {
+    const result = await originalQuery(...args);
+    transferredRows += result.rows.length;
+    return result;
+  };
+  const records = await f.repository.listRecords("CreationPlan", f.users.founder, {
+    query: { conversation_id: "selected" }, sort: "created_date", limit: 2, skip: 1
+  });
+  assert.deepEqual(records.map((row) => row.ordinal), [2, 3]);
+  assert.equal(transferredRows, 2, "filtering and pagination must happen before rows leave Postgres");
+  assert.ok(records.every((row) => row.owner_id === f.users.founder.id));
+  const literal = "selected' OR TRUE --";
+  await f.repository.createRecord("CreationPlan", f.users.founder, { conversation_id: literal });
+  assert.equal((await f.repository.listRecords("CreationPlan", f.users.founder, { query: { conversation_id: literal } })).length, 1);
+});
+
+postgresTest("postgres: lightweight workspace jobs retain status and manifests without transferring durable source", async (t) => {
+  const f = await fixture(t);
+  const source = "PRIVATE_SOURCE_".repeat(40000);
+  const job = await f.repository.enqueueJob({ ownerId: f.users.founder.id, jobType: "creation.orchestrated",
+    input: { conversation_id: "chat", request_text: source }, approval: { pricing_version: "test", secret: source }, idempotencyKey: "summary" });
+  const metadata = { runtime_tested: false, revision_of_file_id: randomUUID() };
+  const output = {
+    plan_id: "plan", artifact_manifest: [{ id: randomUUID(), kind: "app", metadata }],
+    provider_metadata: { delivery_mode: "web_app_source", limitations: ["Untested behavior"] },
+    orchestration: { phase: "complete", turn: 3, inspected_file_ids: [randomUUID()], failures: [{ code: "repaired" }],
+      pending_response: source, artifacts: [{ content_base64: source }],
+      execution_graph: { nodes: [{ id: "build", tool: "create_web_app", status: "succeeded", depends_on: [], attempts: [{ result: source }] }] } }
+  };
+  await f.repository.pool.query("UPDATE iabt_jobs SET output=$2::jsonb WHERE id=$1", [job.id, JSON.stringify(output)]);
+  const full = await f.repository.getJob(job.id, f.users.founder);
+  const summary = await f.repository.getJob(job.id, f.users.founder, { summaryOnly: true });
+  assert.equal(full.input.request_text, source, "worker recovery retains exact durable input");
+  assert.equal(full.output.orchestration.pending_response, source);
+  assert.equal(summary.id, full.id);
+  assert.equal(summary.status, full.status);
+  assert.equal(summary.input.conversation_id, "chat");
+  assert.deepEqual(summary.output.artifact_manifest, output.artifact_manifest);
+  assert.deepEqual(summary.output.provider_metadata, output.provider_metadata);
+  assert.deepEqual(summary.output.orchestration.execution_graph.nodes, [{ id: "build", tool: "create_web_app", status: "succeeded", depends_on: [] }]);
+  assert.equal(JSON.stringify(summary).includes("PRIVATE_SOURCE_"), false);
+  assert.ok(JSON.stringify(summary).length < JSON.stringify(full).length / 100);
+  assert.equal(await f.repository.getJob(job.id, f.users.outsider, { summaryOnly: true }), null);
+  assert.deepEqual(await f.repository.listJobs(f.users.outsider, { summaryOnly: true }), []);
+  assert.deepEqual((await f.repository.listJobs(f.users.founder, { summaryOnly: true }))[0], summary);
+});
+
 postgresTest("postgres: an older active block remains effective behind 5,001 newer unrelated records", async (t) => {
   const f = await fixture(t);
   const block = await f.repository.createRecord("ExchangeBlock", f.users.member, {

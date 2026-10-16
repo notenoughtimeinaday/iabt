@@ -13,9 +13,12 @@ import {
   Sparkles,
   Video,
 } from "lucide-react";
-import { base44 } from "@/api/iabtClient";
+import { base44, platformRuntime } from "@/api/iabtClient";
+import { storedFileId, resolveFileDownload, openFileDownload } from "@/lib/stored-files";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
+import DocumentPreview from "@/components/DocumentPreview";
+import { artifactFormat, canReadArtifact, groupArtifactResults } from "@/lib/artifact-display";
 
 function readable(value = "") {
   return String(value).replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -63,15 +66,18 @@ export default function Deliverables() {
   const [artifacts, setArtifacts] = useState([]);
   const [accessUrls, setAccessUrls] = useState({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [resolving, setResolving] = useState({});
   const [query, setQuery] = useState("");
 
   async function load() {
     setLoading(true);
+    setLoadError("");
     try {
       const rows = await base44.entities.CreationArtifact.list("-created_date", 250);
       setArtifacts(Array.isArray(rows) ? rows : []);
     } catch (error) {
+      setLoadError("Your files could not load. They have not been changed. Please try Refresh.");
       toast({
         title: "Could not load deliverables",
         description: error?.message || "Please try again.",
@@ -88,11 +94,14 @@ export default function Deliverables() {
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return artifacts;
-    return artifacts.filter((artifact) =>
-      [artifact.name, artifact.kind, artifact.mime_type, artifact.metadata?.requested_kind]
+    const groups = platformRuntime.backend === "standalone"
+      ? groupArtifactResults(artifacts)
+      : artifacts.map((primary) => ({ primary, files: [primary] }));
+    if (!term) return groups;
+    return groups.filter((group) => group.files.some((artifact) =>
+      [artifact.name, artifact.kind, artifact.mime_type, artifact.metadata?.requested_kind, artifactFormat(artifact)]
         .some((value) => String(value || "").toLowerCase().includes(term))
-    );
+    ));
   }, [artifacts, query]);
 
   async function resolvePrivateArtifact(artifact) {
@@ -122,19 +131,31 @@ export default function Deliverables() {
     }
   }
 
+  async function downloadStoredArtifact(artifact) {
+    setResolving((current) => ({ ...current, [artifact.id]: true }));
+    try {
+      const url = await resolveFileDownload(base44, artifact, true);
+      openFileDownload(url, artifact.name, true);
+    } catch (error) {
+      toast({ title: "File could not be downloaded", description: error.message, variant: "destructive" });
+    } finally {
+      setResolving((current) => ({ ...current, [artifact.id]: false }));
+    }
+  }
+
   return (
     <div className="iabt-home iabt-library-page">
       <header className="iabt-home-nav">
         <Link to="/" className="iabt-home-brand">
           <img className="iabt-mark" src="/iabt-mark.svg" alt="" />
           <div>
-            <strong>Intelligent Application Building Tool</strong>
-            <span>IABT · Deliverable Library</span>
+            <strong>Jericho</strong>
+            <span>My files</span>
           </div>
         </Link>
         <div className="iabt-home-user">
           <Button size="sm" asChild>
-            <Link to="/studio"><Sparkles className="h-4 w-4 mr-1" /> JERICHO Studio</Link>
+            <Link to="/studio?new=1"><Sparkles className="h-4 w-4 mr-1" /> Create</Link>
           </Button>
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
             <RefreshCw className={"h-4 w-4 mr-1 " + (loading ? "animate-spin" : "")} /> Refresh
@@ -145,31 +166,32 @@ export default function Deliverables() {
       <main className="iabt-home-main">
         <section className="iabt-library-heading">
           <div>
-            <p className="iabt-eyebrow"><Download className="h-4 w-4" /> Permanent creation history</p>
-            <h1>Your deliverables</h1>
-            <p>Every completed IABT artifact is collected here, independently of the conversation that created it.</p>
+            <h1>My files</h1>
+            <p>Find your saved work, download it, or return to make a change.</p>
           </div>
           <label className="iabt-library-search">
-            <span>Search deliverables</span>
+            <span>Search files</span>
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Audio brief, document, video…"
+              placeholder="Search by name…"
             />
           </label>
         </section>
 
         {loading ? (
-          <div className="iabt-library-empty"><Loader2 className="animate-spin" /><span>Loading deliverables…</span></div>
+          <div className="iabt-library-empty"><Loader2 className="animate-spin" /><span>Loading files…</span></div>
+        ) : loadError ? (
+          <div className="iabt-library-empty" role="alert"><AlertTriangle /><strong>Files are temporarily unavailable</strong><span>{loadError}</span><Button variant="outline" onClick={load}>Try again</Button></div>
         ) : filtered.length === 0 ? (
           <div className="iabt-library-empty">
             <FileText />
-            <strong>{query ? "No deliverables match your search" : "No completed deliverables yet"}</strong>
-            <span>{query ? "Try a different term." : "Create something in JERICHO Studio and it will appear here."}</span>
+            <strong>{query ? "No files match your search" : "Your files will appear here"}</strong>
+            <span>{query ? "Try a different name." : "Start a project to create your first file."}</span>
           </div>
         ) : (
           <section className="creator-artifacts iabt-library-grid" aria-label="Deliverable library">
-            {filtered.map((artifact) => {
+            {filtered.map(({ primary: artifact, files }) => {
               const Icon = iconFor(artifact);
               const cached = accessUrls[artifact.id];
               const signedReady = cached?.url && new Date(cached.expires_at || 0).getTime() > Date.now();
@@ -194,7 +216,7 @@ export default function Deliverables() {
                     </p>
                   )}
 
-                  {artifact.content && (
+                  {canReadArtifact(artifact) ? <DocumentPreview artifact={artifact} /> : artifact.content && (
                     <details className="iabt-library-preview">
                       <summary>Preview document</summary>
                       <pre>{artifact.content}</pre>
@@ -212,24 +234,25 @@ export default function Deliverables() {
                   )}
 
                   <div className="creator-artifact-info">
-                    <small>{artifact.mime_type || "IABT deliverable"} · verified delivery</small>
+                    <small>Saved {formatDate(artifact.created_date)}</small>
                     <div>
-                      {artifact.content && (
-                        <button type="button" onClick={() => downloadInlineArtifact(artifact)}>
-                          <Download /> Download file
+                      {artifact.conversation_id && <Link to={"/studio?conversation=" + encodeURIComponent(artifact.conversation_id)}><ArrowUpRight /> Open workspace</Link>}
+                      {files.map((file) => (file.content || (platformRuntime.backend === "standalone" && storedFileId(file))) && (
+                        <button key={file.id} type="button" disabled={resolving[file.id]} onClick={() => platformRuntime.backend === "standalone" && storedFileId(file) ? downloadStoredArtifact(file) : downloadInlineArtifact(file)}>
+                          <Download /> {artifactFormat(file)}
                         </button>
-                      )}
-                      {deliveryUrl && (
+                      ))}
+                      {deliveryUrl && platformRuntime.backend !== "standalone" && (
                         <a href={deliveryUrl} target="_blank" rel="noreferrer">
                           <ArrowUpRight /> Open
                         </a>
                       )}
-                      {deliveryUrl && (
+                      {deliveryUrl && platformRuntime.backend !== "standalone" && (
                         <a href={deliveryUrl} download>
                           <Download /> Download
                         </a>
                       )}
-                      {!deliveryUrl && artifact.file_uri && (
+                      {!deliveryUrl && artifact.file_uri && platformRuntime.backend !== "standalone" && (
                         <button type="button" onClick={() => resolvePrivateArtifact(artifact)} disabled={resolving[artifact.id]}>
                           {resolving[artifact.id] ? <Loader2 className="animate-spin" /> : <Download />}
                           Prepare secure download

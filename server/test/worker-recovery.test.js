@@ -16,10 +16,15 @@ const fixture = async () => {
   const user = await repository.createUser({ email: "worker@example.com", passwordHash: "unused", emailVerified: true });
   await repository.grantCredits({ ownerId: user.id, amount: 5, idempotencyKey: "opening" });
   let stored = 0;
+  const objects = new Map();
   const storage = {
-    async put({ objectId }) {
+    async put({ objectId, bytes }) {
       stored += 1;
+      objects.set("private/" + objectId, Buffer.from(bytes));
       return { storage_provider: "test", storage_key: "private/" + objectId };
+    },
+    async read(key) {
+      return objects.get(key);
     }
   };
   const config = loadConfig({ NODE_ENV: "test", IABT_JOB_LEASE_MS: "60", IABT_JOB_POLL_MS: "10" });

@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { createIabtHandler } from "./app.js";
 import { createRuntime } from "./runtime.js";
 import { createJobWorker } from "./worker.js";
+import { probeOfferProviderTerms } from "./billing/offers.js";
 
 const runtime = await createRuntime();
 const { config, repository, storage, providers } = runtime;
@@ -20,6 +21,11 @@ server.listen(config.port, () => {
     })
   );
   if (config.worker.enabled) worker.start();
+  if (process.env.IABT_BILLING_OFFER_PROBE) {
+    void probeOfferProviderTerms({ config, offerId: process.env.IABT_BILLING_OFFER_PROBE })
+      .then((result) => console.log(JSON.stringify({ event: "billing_offer_startup_probe", ...result })))
+      .catch(() => console.error(JSON.stringify({ event: "billing_offer_startup_probe", status: "failed", code: "internal_error" })));
+  }
 });
 
 let shuttingDown = false;
