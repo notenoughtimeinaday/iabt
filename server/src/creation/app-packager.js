@@ -62,7 +62,10 @@ export const buildInteractiveArtifacts = ({ title, requestText, spec = {} }) => 
   }
 
   if (spec.starter_id) {
-    const result = buildWebAppArtifacts({ title: definition.app?.name || title, html: implementation.preview_html });
+    // Versioned built-in starters retain their reviewed source. The stricter
+    // new-authoring contract applies to model-created apps, not retroactively
+    // to internal templates. Syntax and source delivery checks still run.
+    const result = buildWebAppArtifacts({ title: definition.app?.name || title, html: implementation.preview_html, authoringContract: false });
     const starterMetadata = { delivery_mode: "named_starter", starter_id: spec.starter_id, objective_completed: false, generation_strategy: implementation.generation_strategy };
     result.metadata = { ...result.metadata, ...starterMetadata };
     for (const artifact of result.artifacts) artifact.metadata = { ...artifact.metadata, ...starterMetadata };

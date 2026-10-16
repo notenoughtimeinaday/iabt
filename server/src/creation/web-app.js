@@ -41,10 +41,10 @@ export async function readRevisionSource({ repository, storage, user, fileId, ex
   return source;
 }
 
-export function buildWebAppArtifacts({ title, html, request = "", revision = null, revisionText = null }) {
+export function buildWebAppArtifacts({ title, html, request = "", revision = null, revisionText = null, authoringContract = true }) {
   const name = String(title || "My app").replace(/[^a-zA-Z0-9 ._-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 100).replace(/[. ]+$/, "") || "My app";
   const content = prepareWebAppHtml(html);
-  const scriptChecks = validateWebAppScripts(content);
+  const scriptChecks = validateWebAppScripts(content, { authoringContract });
   if (revision) {
     if (typeof revisionText !== "string") throw fail("revision_source_required", "Read the verified original HTML before creating its revision.");
     if (comparableSource(content) === comparableSource(revisionText)) {

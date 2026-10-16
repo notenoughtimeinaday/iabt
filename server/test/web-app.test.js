@@ -18,6 +18,14 @@ const completeMaintenanceHtml = `<!doctype html><html lang="en"><head><meta char
 const toolCall = (name, args, id) => ({ type: "function_call", name, call_id: id, arguments: JSON.stringify(args) });
 const response = (id, output = []) => ({ id, status: "completed", output });
 
+test("shift planning recognizes coordinated editing, searchable lists and hour totals", () => {
+  const request = "Add and edit shifts with date, task, volunteer name and positive hours; searchable list; mark shifts complete; totals for planned and completed hours.";
+  assert.throws(() => validateWebAppObjective({ request, html: "<button>Add</button><button>Complete</button>" }), error => {
+    assert.deepEqual(error.missing_requirements, ["edit existing items", "search", "planned and completed hour totals"]);
+    return true;
+  });
+});
+
 async function fixture({ ai = true, profile = "core", role = "user", maxTurns = 8 } = {}) {
   const repository = new MemoryRepository();
   const user = await repository.createUser({ email: "builder@example.test", passwordHash: "unused", emailVerified: true, role });

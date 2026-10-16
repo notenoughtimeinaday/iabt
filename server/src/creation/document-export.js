@@ -66,6 +66,11 @@ const readableBlocks = (markdown) => {
   return blocks;
 };
 
+// Count readable headings, lists and prose, not Markdown delimiters or URLs.
+// Hyphenated/apostrophized words count as one. This is a length measure only.
+export const countDocumentWords = markdown => readableBlocks(markdown)
+  .reduce((sum, block) => sum + (block.text.match(/[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*/gu)?.length || 0), 0);
+
 const docxParagraph = ({ text: value, heading, bullet, literal }) => {
   if (!value.trim()) return "<w:p/>";
   const style = literal ? "CodeBlock" : heading ? "Heading" + heading : bullet ? "ListParagraph" : "Normal";

@@ -36,6 +36,19 @@ const fixture = async () => {
   return { repository, user, other, env, config, providers, storage, plan: result.plan, requests, replies };
 };
 
+test("reviewed Terra acceptance requires its higher estimate without relaxing owner or plan bounds", async () => {
+  const c = await fixture();
+  const values = { ...c.env, OPENAI_MODEL: "gpt-5.6-terra", IABT_OPENAI_RESPONSE_COST_CENTS: "20", IABT_ORCHESTRATION_BUDGET_CENTS: "160", IABT_ORCHESTRATION_MAX_OUTPUT_TOKENS: "8000", IABT_AI_ACCEPTANCE_PLAN_IDS: c.plan.id };
+  const config = loadConfig(values);
+  assert.equal(privateAcceptanceAccess(config, c.user, { planId: c.plan.id }), true);
+  assert.equal(privateAcceptanceAccess(config, c.other, { planId: c.plan.id }), false);
+  assert.equal(privateAcceptanceAccess(config, c.user, { planId: randomUUID() }), false);
+  assert.equal(config.orchestration.maxOutputTokens, 8000);
+  assert.equal(privateAcceptanceAccess({ ...config, orchestration: { ...config.orchestration, maxOutputTokens: 8001 } }, c.user), false);
+  for (const changed of [{ IABT_OPENAI_RESPONSE_COST_CENTS: "19" }, { IABT_ORCHESTRATION_BUDGET_CENTS: "161" }, { OPENAI_MODEL: "gpt-4.1-mini-2025-04-14" }, { OPENAI_MODEL: "gpt-4o-mini" }])
+    assert.equal(privateAcceptanceAccess(loadConfig({ ...values, ...changed }), c.user), false);
+});
+
 test("private acceptance is owner scoped and validates expiry, model, mode and request bounds", async () => {
   const c = await fixture();
   assert.equal(orchestrationConfigured(c.config, c.user), true);

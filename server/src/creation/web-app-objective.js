@@ -1,7 +1,7 @@
 const includes = (pattern) => (text) => pattern.test(text);
 const all = (...patterns) => (text) => patterns.every((pattern) => pattern.test(text));
 const actionWords = "(?:add|create|insert|edit|modify|update|complete|finish|delete|remove)";
-const itemWords = "(?:items?|tasks?|records?|entries|rows?|notes?|products?|contacts?|events?|transactions?|expenses?|equipment|appointments?|projects?|habits?|reminders?|customers?|orders?|recipes?|bookmarks?)";
+const itemWords = "(?:items?|tasks?|shifts?|records?|entries|rows?|notes?|products?|contacts?|events?|transactions?|expenses?|equipment|appointments?|projects?|habits?|reminders?|customers?|orders?|recipes?|bookmarks?)";
 const itemModifiers = "(?:(?:a|an|the|new|existing|maintenance|selected|saved|inventory|personal)\\s+){0,5}";
 // A generic request to complete an app, add dark mode or remove clutter is not
 // a request for item CRUD. Coordinated verbs may share their final item noun.
@@ -31,7 +31,8 @@ const REQUIREMENTS = Object.freeze([
   { id: "priority", label: "priority", requested: fieldRequest("priorit(?:y|ies)"), evidenced: includes(/\bpriorit(?:y|ies)\b/i) },
   { id: "due_date", label: "due date", requested: includes(/\bdue\s+date\b/i), evidenced: includes(/\bdue\s+date\b|\bdeadline\b/i) },
   { id: "notes", label: "notes", requested: fieldRequest("notes?"), evidenced: includes(/\b(?:notes?|memo)\b/i) },
-  { id: "search", label: "search", requested: includes(/\bsearch\b/i), evidenced: includes(/\bsearch\b/i) },
+  { id: "search", label: "search", requested: includes(/\bsearch(?:able|ing)?\b/i), evidenced: includes(/\bsearch\b/i) },
+  { id: "hour_totals", label: "planned and completed hour totals", requested: all(/\btotals?\b/i, /\bplanned\b/i, /\bcompleted\s+hours\b/i), evidenced: all(/\bplanned\b/i, /\bcompleted\b/i, /\b(?:hours|totals?)\b/i, /\.\s*reduce\s*\(|\+=/) },
   { id: "filter", label: "filters", requested: includes(/\bfilter(?:s|ed|ing)?\b/i), evidenced: includes(/\bfilter(?:s|ed|ing)?\b/i) },
   { id: "status", label: "status", requested: includes(/\b(?:set|track|assign|choose|select|by|fields?)\b[^.;]{0,80}\bstatus\b|\bstatus\s+(?:fields?|filters?|selection|tracking)\b/i), evidenced: includes(/\b(?:status|state|progress)\b/i) },
   { id: "overdue", label: "overdue summary", requested: includes(/\boverdue\b/i), evidenced: includes(/\boverdue\b/i) },

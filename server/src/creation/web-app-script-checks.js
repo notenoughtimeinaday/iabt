@@ -102,7 +102,7 @@ function unambiguousForeignSelfClose(attributes) {
 // or retain the compiled object. This is not a sandbox for executing code.
 // It checks neither event-handler attributes nor code in strings, DOM APIs,
 // inter-script global conflicts, browser compatibility or actual interactions.
-export function validateWebAppScripts(html) {
+export function validateWebAppScripts(html, { authoringContract = false } = {}) {
   if (typeof html !== "string") throw markupFailure();
   if (Buffer.byteLength(html) > SOURCE_LIMITS.fileBytes || html.split(/\r?\n/).length > SOURCE_LIMITS.fileLines) {
     throw fail("web_app_too_large", "Keep this app within 128 KiB and 2,000 lines of readable HTML.");
@@ -153,6 +153,12 @@ export function validateWebAppScripts(html) {
           // No parser message, source snippet, stack, or engine internals are
           // returned through the public repair loop.
           throw fail("web_app_script_syntax_invalid", "An inline classic JavaScript block has invalid syntax. Correct its JavaScript syntax and submit the complete HTML again.");
+        }
+        // A conservative authoring contract, not a security parser or runtime
+        // certification. These common APIs either fail in the opaque preview
+        // or invite interpolation of user/imported text as active markup.
+        if (authoringContract && /\b(?:alert|confirm|prompt)\s*\(|\.\s*(?:innerHTML|outerHTML)\s*=|\.\s*insertAdjacentHTML\s*\(|\bdocument\s*\.\s*write(?:ln)?\s*\(/.test(source)) {
+          throw fail("web_app_preview_api_unsupported", "Use inline feedback and safe DOM text rendering in the private app preview.");
         }
         classicCount++;
       } else dataCount++;

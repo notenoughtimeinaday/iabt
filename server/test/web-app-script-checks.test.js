@@ -4,6 +4,12 @@ import { validateWebAppScripts } from "../src/creation/web-app-script-checks.js"
 
 const html = (body) => `<!doctype html><html lang="en"><head><title>App</title></head><body>${body}</body></html>`;
 
+test("preview-incompatible dialogs and active-markup rendering are rejected for bounded repair", () => {
+  for (const source of ["alert('Oops')", "window.confirm('Delete?')", "prompt('Name')", "row.innerHTML = userInput", "row.outerHTML = text", "row.insertAdjacentHTML('beforeend', text)", "document.write(text)"])
+    assert.throws(() => validateWebAppScripts(html(`<script>${source}</script>`), { authoringContract: true }), { code: "web_app_preview_api_unsupported" });
+  assert.equal(validateWebAppScripts(html("<script>const row = document.createElement('p'); row.textContent = 'Saved';</script>")).inline_classic_scripts_checked, 1);
+});
+
 test("inline classic scripts are syntax compiled independently and metadata never claims execution", () => {
   const result = validateWebAppScripts(html(`<script>const x = 1; function add(a, b) { return a + b; }</script><script type="text/javascript">const x = 2;</script>`));
   assert.deepEqual(result, {

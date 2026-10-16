@@ -54,6 +54,46 @@ const fixture = async ({ env = {}, replies = [], approval = true, budget = 6 } =
   return { repository, user, config, storage, objects, providers, queued, worker, step, drain, requests };
 };
 
+test("document length failures repair the same node before exporting any files", async () => {
+  const c = await fixture({ budget: 8, env: { OPENAI_MODEL: "gpt-5.6-terra", IABT_ORCHESTRATION_BUDGET_CENTS: "8" }, replies: [
+    { id: "resp_plan", status: "completed", output: [plan()] },
+    { id: "resp_short", status: "completed", output: [call("create_document", { title: "Guide", markdown: "word ".repeat(20) }, "short")] },
+    { id: "resp_repair", status: "completed", output: [call("create_document", { title: "Guide", markdown: "word ".repeat(35) }, "repair")] }, completed()
+  ] });
+  Object.assign(c.repository.jobs.get(c.queued.id).input, { document_output_contract: "composed_document_v1", request_text: "Write a guide of 30 to 40 words." });
+  const result = await c.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 3);
+  assert.equal(result.job.output.orchestration.calls.find(call => call.call_id === "short").result.error, "document_length_mismatch");
+  assert.equal(result.job.output.orchestration.execution_graph.nodes[0].attempts.length, 2);
+  assert.equal(result.job.output.artifact_manifest.every(file => file.metadata.length_check.word_count === 35), true);
+  const posts = c.requests.map(request => JSON.parse(request.options.body));
+  assert.deepEqual(posts[0].reasoning, { effort: "low" });
+  const context = JSON.parse(posts[0].input[0].content);
+  assert.deepEqual(context.document_word_range, { min: 30, max: 40 });
+  assert.deepEqual(context.available_tools, ["plan_execution", "create_document"]);
+  assert.equal(context.capabilities, undefined);
+  assert.ok(JSON.stringify(context).length < 16000, "The full unrelated operator curriculum must not consume creation context");
+  assert.doesNotMatch(JSON.stringify(context), /stripe-webhook|neon_postgres|billing\.payment/);
+  assert.match(posts[2].input[0].output, /Measured 20 words; required 30-40/);
+  await c.worker.stop();
+});
+
+test("separate format nodes reuse one export set without rewriting graph history or capturing twice", async () => {
+  const args = { title: "Guide", markdown: "# Guide\n\nA complete guide with practical instructions for volunteers." };
+  const c = await fixture({ replies: [
+    { id: "resp_plan", status: "completed", output: [call("plan_execution", { objective: "Export a guide", nodes: ["md", "docx", "pdf"].map(id => ({ id, tool: "create_document", objective: "Export " + id, depends_on: [] })) }, "formats_plan")] },
+    { id: "resp_exports", status: "completed", output: ["md", "docx", "pdf"].map(id => call("create_document", { ...args, node_id: id }, id)) }, completed()
+  ] });
+  const result = await c.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 3);
+  assert.equal(result.job.output.orchestration.execution_graph.nodes.every(node => node.status === "succeeded" && node.attempts.length === 1), true);
+  assert.equal(result.job.output.orchestration.calls.find(call => call.call_id === "pdf").result.reused_export_call_id, "md");
+  assert.equal(c.repository.creditEntries.filter(entry => entry.entry_type === "capture").length, 1);
+  await c.worker.stop();
+});
+
 test("Responses background tools resume across durable leases and capture only verified artifacts", async () => {
   const context = await fixture({ replies: [response("resp_first", [], "queued"), response("resp_first", [document()]), completed()] });
   const first = await context.step();

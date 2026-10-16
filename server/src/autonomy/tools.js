@@ -5,6 +5,7 @@ import { readTextSources } from "../files/text-sources.js";
 import { evaluateAction } from "./policy.js";
 import { buildWebAppArtifacts, readRevisionSource } from "../creation/web-app.js";
 import { GRAPH_NODE_ID_PATTERN } from "./execution-graph.js";
+import { validateDocumentLength, priorDocumentExport } from "../creation/document-contract.js";
 
 const objectSchema = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 const string = { type: "string" };
@@ -52,12 +53,15 @@ export function registeredTools({ job, repository, storage, user }) {
     },
     {
       ...common, name: "create_document",
-      description: "Create original finished Markdown, DOCX and PDF deliverables. This validates file structure, not factual correctness or visual layout.",
+      description: "Write the complete finished document and call this ONCE per distinct document: one call automatically exports the same content to Markdown, DOCX and PDF. Do not plan separate nodes for file formats. Meet the user's requested length and sections before calling. Numeric word ranges are checked; file structure and length do not prove factual correctness or visual layout.",
       input_schema: objectSchema({ node_id: nodeId, title: string, markdown: string }),
       execute: async ({ title, markdown }) => {
         if (!safeName(title) || markdown.length < 20 || markdown.length > 100_000) throw fail("invalid_tool_input", "Use a simple title and substantive Markdown up to 100000 characters");
+        const length = validateDocumentLength({ request: job.input.request_text, markdown });
+        const prior = priorDocumentExport(job.output?.orchestration, { title, markdown });
+        if (prior) return { created: prior.result.created, reused_export_call_id: prior.call_id, verified_format: true, runtime_tested: false };
         const result = buildDocumentArtifactSet({ title, markdown });
-        return { artifacts: result.artifacts.map(({ bytes, ...item }) => ({ ...item, content_base64: bytes.toString("base64") })) };
+        return { artifacts: result.artifacts.map(({ bytes, ...item }) => ({ ...item, metadata: { ...item.metadata, length_check: length }, content_base64: bytes.toString("base64") })) };
       }
     },
     {
@@ -100,10 +104,12 @@ export function registeredTools({ job, repository, storage, user }) {
 export function toolDefinitions(tools, user, job) {
   if (!user?.email_verified || user.id !== job.owner_id) return [];
   const appOnly = job.input?.app_output_contract === "self_contained_html_v1";
+  const documentOnly = job.input?.document_output_contract === "composed_document_v1";
   const fileIds = [...new Set((job.input?.file_references || []).map(file => file.file_id).filter(id => typeof id === "string" && id))];
   const available = tools.filter(tool =>
     (tool.name !== "inspect_file" || fileIds.length > 0) &&
     (!appOnly || ["plan_execution", "inspect_file", "create_web_app"].includes(tool.name)) &&
+    (!documentOnly || ["plan_execution", "inspect_file", "create_document"].includes(tool.name)) &&
     evaluateAction(tool, { authorized: true }).automatic);
   const executionTools = available.filter(tool => tool.name !== "plan_execution").map(tool => tool.name);
   return available.map(tool => {

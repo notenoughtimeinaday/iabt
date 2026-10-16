@@ -5,6 +5,7 @@ const targetedSteps = Object.freeze({
   complete: "Mark an item complete, undo it if supported, and check the displayed status and totals.",
   delete: "Delete an item and confirm the intended item is removed and totals update.",
   search: "Search for an existing and a missing item; clear the search and confirm all items return.",
+  hour_totals: "Add and complete entries with different hours, edit and delete them, and verify planned and completed totals after each action.",
   filter: "Try each filter, combine filters where supported, and confirm resetting them restores all results.",
   overdue: "Create a past-due item and confirm the overdue summary updates correctly.",
   upcoming: "Create an upcoming item and confirm the upcoming summary uses the intended date window.",

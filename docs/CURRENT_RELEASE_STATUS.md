@@ -1,5 +1,39 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 16 UTC: real-output quality repair candidate
+
+The scoped-planning release `991ac33` passed CI and generated a custom app in
+three provider responses, but manual source/preview review rejected its quality:
+editing, search and hour totals were absent; imported text used active HTML and
+the app depended on blocked browser dialogs and unguarded local storage. The
+document run produced three duplicate export sets and only 496 measured words
+against a requested 600–800. Neither result is acceptance evidence. Their files
+and graph histories remain preserved. Each completed job captured eight staging
+credits; the earlier failed planning job released its eight-credit reservation.
+The three runs used 233,068 input and 8,096 output tokens: $0.0398178 at published
+uncached GPT-4o mini rates, an estimate rather than an invoice receipt. Paid
+creation was disabled again; cleanup deploy `dep-db8p1h67bikc73drke7g` is live.
+
+This candidate checks numeric document length before export and reuses identical
+document exports across format nodes. Creation context now contains relevant
+rules and actual tools instead of the full operator curriculum/registry. App
+checks recognize shift editing, searchable lists and hour totals, and reject
+common preview-incompatible dialogs and active-markup assignment. Inline
+feedback, guarded storage and copyable JSON fallbacks are authoring requirements.
+These remain bounded static checks, not functional or security certification.
+
+Official OpenAI model documentation marks GPT-4o mini and GPT-4.1 mini deprecated.
+The private acceptance profile adds GPT-5.6 Terra with low reasoning, up to eight
+8,000-output-token requests, a 20-cent request estimate and $1.60 job estimate.
+The operator's $9.90 existing-balance approval covers replacement acceptance;
+no top-up or budget increase is authorized. Public defaults and launch gates are
+unchanged. Profiles are request controls, not provider-enforced dollar caps.
+Reference: https://developers.openai.com/api/docs/models/gpt-5.6-terra
+Its verified standard prices are $2/M input and $12/M output; cache writes may
+cost more than uncached input. Model/account access and useful output require
+the next hosted checks. All 67 focused regressions and all 543 full-suite tests pass without failures or skips; lint, type checks and production build also pass.
+CI and hosted acceptance must be recorded separately before rollout claims.
+
 ## October 15 Central / October 16 UTC: hosted recovery and scoped planning repair
 
 Neon Launch activation restored isolated staging database access. Both staging
