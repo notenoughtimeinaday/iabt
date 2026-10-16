@@ -1,43 +1,39 @@
 # Jericho Studio 1.0 private release kit
 
-Open START-HERE.html for the product presentation, intended prices and quick start. This is the standalone Jericho product. IABT Lite / Italy is separate; TreEbay and unmerged MCP candidates remain outside this kit. Base44 is not needed by this runtime.
+Jericho's production site is https://jericho-studio.onrender.com. This is the standalone IABT/Jericho product; Base44 is not needed by this runtime. TreEbay and IABT Lite remain separate.
 
-This is an owner review and engineering handoff, not approval to sell. Running Jericho requires its API/worker, PostgreSQL, private storage and email provider. The frontend is not a self-contained AI service or Windows installer.
+This is an owner handoff with sales closed. The production account and customer-delivery checks, public AI operating limits and recurring off-device recovery remain unfinished. The owner must enter the new production account password and email verification privately. The existing staging account and records remain intact.
 
 ## Contents
 
-- source.zip: exact source revision shown in manifest.json. Extract into a new folder, install both lockfiles with npm ci and npm ci --prefix server, then follow README.md and STANDALONE_DEPLOYMENT.md.
-- frontend/: compiled hash-routed preview targeting the isolated staging API. Host over HTTP(S). Rebuild before selecting a different API origin.
-- product.json: product scope, intended offers and explicit release gates.
-- THIRD-PARTY-NOTICES.txt: dependency metadata and available license text; not a new grant of source rights or a certification of generated content.
-- manifest.json: source revision, file sizes and SHA-256 checksums. No account backups, credentials or environment secrets belong in this package.
+- source.zip: the exact committed source identified in manifest.json. Extract into a new directory and follow README.md and STANDALONE_DEPLOYMENT.md.
+- frontend/: a hash-routed build targeting the production API identified in manifest.json. Host over HTTP(S). It needs the configured API, database, private storage and email service; it is not a self-contained AI service or Windows installer.
+- START-HERE.html and product.json: product scope, intended offers, quick start and unresolved release gates.
+- THIRD-PARTY-NOTICES.txt: dependency notices; no additional source license or generated-content certification is implied.
+- manifest.json: file sizes and SHA-256 checksums. No account exports or infrastructure credentials are included.
 
-## Verified application, October 16 UTC
+## Completed evidence
 
-Application commit 9044626485e3f2892752fc295f21e02676d49ea7 is live on both isolated staging services. All 559 tests, lint, typecheck and build passed; CI 712 succeeded. Later package-documentation changes do not claim an additional deployed application revision.
+Application revision 9e71b33b2e283076dd8857572a58f1b4a63b69d0 passed all 563 local tests with no skips, lint, type checks and build. GitHub verification 714 passed. The environment label follows the server's billing mode. A default-off, expiring owner-only introductory Checkout window allows bounded review while public sales remain closed. It does not authorize any card charge or paid AI usage.
 
-Credit pricing now uses a signed, versioned Terra usage policy. A new quote reserves the approved maximum; after verified durable delivery, completion captures the calculated usage charge and returns the unused reservation atomically. Invalid or incomplete usage returns the reservation and remains an operator reconciliation issue. Existing settled jobs and old quotes retain their terms. Recorded usage for the three completed examples computes 4, 3 and 11 credits instead of the earlier fixed 54. These are examples, not promises that every future job costs the same. Both repository adapters and worker behavior passed tests; no paid generation was repeated just to check settlement.
+Credit pricing reserves an approved maximum, captures verified usage after durable delivery and atomically returns unused credits. The three preserved examples calculate to 4, 3 and 11 credits; those are examples, not fixed prices for every job. Historical quotes and settled jobs are unchanged.
 
-The preserved private app, its source-bound revision and a 781-word original guide passed scoped acceptance. App review covered add/edit, search/filter, completion, totals, validation, confirmation, JSON round trip and reload. Original Markdown, Word and PDF hashes are retained; Word and PDF received visual review. A separate reviewed copy corrects one helper-text contrast rule. These results apply to the exact reviewed files, not every application Jericho might generate.
+Completed staging evidence is retained: useful custom app, owned-source revision and 781-word original guide; scoped app interactions and source checks; Word/PDF visual review; password recovery and invalidation; account isolation; five support-address deliveries; 18-table database restore; and 130 objects restored with matching hashes. Stripe test acceptance covers the $4.99 introduction, $12 renewal, effective cancellation, retained credits/files and duplicate-event protection. Do not repeat those workflows merely to refresh this package.
 
-Password recovery and session invalidation, account isolation, all five published support-address deliveries, an 18-table database restore and all 130 current private objects' hash-verified backup/restore are complete. Do not recreate the accounts, resend those emails or repeat accepted purchases and generation jobs. The existing Stripe test acceptance covers the $4.99 first month, $12 renewal, cancellation to Free, retained credits/files and duplicate-event protection.
+## Production installed
 
-Conservative cumulative OpenAI usage is $0.5156508 of the approved $9.90 existing balance. No top-up or new paid generation was made by the pricing repair. Paid AI and orchestration are off. The OpenAI budget is not approval for a new hosting subscription or real card purchase.
+The single approved Render API is jericho-production-api (srv-db9063vf3r2c73fkvhv0), with the jericho-studio static frontend (srv-db906dc9v7es73e3emjg). The API costs the approved $7/month base plus applicable taxes and metered costs. Billing has started. Existing Neon usage and AI usage remain separate; this is not a total operating-cost cap. Auto-deploy is off and the deployed revision is checked during build and start.
 
-## Prepared live environment
+The separate jericho_live_v1 database has nine migrations and three immutable monthly price contracts. The separate private bucket preserves live/test isolation. The restricted live Stripe key, dedicated webhook and customer portal are installed with exact production URLs. Live account/price/coupon reads passed through the actual restricted key. Initial database/storage/email readiness passed; unsigned payment notifications, anonymous account requests and foreign origins are rejected.
 
-The live Stripe account has charges and payouts enabled with no outstanding requirements. Matching live products/prices and the Starter-only $7.01 first-month discount exist, but all four products remain inactive. No real Checkout or card charge was submitted. The browser form for a restricted live billing key is prepared and awaits the owner's action-time approval.
+All four live products remain inactive. Subscription and top-up selectors, the private acceptance window and paid AI remain closed. No real Checkout payment has been made. Conservative OpenAI usage remains $0.5156508 of the previously approved $9.90 balance; this release added no paid AI call or funds.
 
-A new empty database, jericho_live_v1, on the existing production Neon compute has nine migrations, an immutable live environment binding and the three monthly price contracts. A separate private bucket passed upload, exact-byte readback and anonymous-access denial. No new compute/project/branch was created. The old production-named database contains test credits/events and remains intact; never switch it into live billing. Credentials are stored privately outside Git and this kit.
+## Remaining launch work
 
-Render's October 16 pricing page lists $7/month for its 0.5c-512mb service. That is a proposed always-on compute cost, not a purchased plan or a complete operating-cost cap. Bandwidth/build overages, taxes, existing Neon usage and AI usage are separate. The existing Neon compute maxima remain 0.25 CU; a size limit does not cap total metered spending. No additional hosting subscription was activated by this kit. Pricing source: https://render.com/pricing .
+1. Complete the owner production account and verify the authenticated file-to-delivery workflow on the deployed production services. Reuse existing paid-AI output evidence rather than regenerating the same examples.
+2. Complete non-charging live Checkout/configuration review. Do not charge the owner's card as a test: Stripe's testing guidance prohibits testing in live mode with real payment details. Retain the completed test-mode purchase, renewal and cancellation evidence. A genuine later customer purchase has its own fulfillment record; configuration readiness must not be described as observed revenue.
+3. Agree and enforce the public AI operating budget before enabling paid creation. The prior private-testing balance does not authorize unbounded public operating spend.
+4. Establish recurring off-device recovery and support ownership. The current external-drive recovery copy is not an independent second-device backup. Review applicable tax/commercial obligations before public offers are activated.
+5. Activate the verified product, credit and AI settings only after their corresponding gates pass. Do not merge main, change production DNS or overwrite old accounts as part of this kit.
 
-## Remaining launch sequence
-
-1. Obtain approval for the prepared restricted live Stripe key, create it and store it privately in the production service. Never publish its value.
-2. Prepare the production API/frontend with the new live-only database, private storage, account email, origin restrictions and locked application revision. Keep live offers and paid AI disabled until acceptance. Confirm an approved always-on hosting budget before purchasing it.
-3. Configure the dedicated live webhook and customer portal, verify live price/discount/renewal terms through the actual restricted key, then finish production checkout, fulfillment and customer delivery acceptance. A real payment requires its own specific authorization; the OpenAI allowance cannot fund it.
-4. Establish recurring off-device backups and production recovery ownership. Retain existing restore receipts; provider retention is not an independent backup. Assign support Inbox and Spam review. Complete the applicable tax and commercial release review.
-5. Only after these gates pass, activate the verified live products, offers and paid creation with an agreed operating budget, then announce sales. Do not merge main, change production DNS or overwrite old user data as part of this private kit.
-
-Full local receipts are under E:/Jericho-Master/evidence/product-release-20261015. Start with credit-pricing-release-20261016.json and the production preparation receipts. The source status file distinguishes earlier checkpoints. This release deliberately leaves commercial gates closed instead of claiming test acceptance proves a public launch.
+Stripe testing guidance: https://docs.stripe.com/testing . Current deployment IDs, source revisions and local acceptance receipts are in E:/Jericho-Master/evidence/product-release-20261015. START-HERE.md in E:/Jericho-Master is the continuation entry point. Credentials are kept outside this kit and Git.

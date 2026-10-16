@@ -1,7 +1,7 @@
 {
   "name": "Jericho Studio",
   "publisher": "Insured Spending, LLC",
-  "version": "1.0.0-preview.4",
+  "version": "1.0.0-preview.5",
   "channel": "private-preview",
   "public_sale_approved": false,
   "positioning": "Turn a clear idea into useful work you can keep.",
@@ -11,7 +11,7 @@
     "Documents in Word, PDF and Markdown",
     "Saved source, previews, downloads and revisions"
   ],
-  "scope_note": "Private custom app, owned-source revision and document delivery passed scoped acceptance. Usage-based credit settlement is verified and deployed. Production billing is prepared with sales disabled; final live runtime and commercial acceptance remain.",
+  "scope_note": "Scoped app, revision and document acceptance is preserved. Usage-based credit settlement and private live-offer safeguards are verified. Production hosting, restricted Stripe key, webhook and portal are installed; owner account, public operating budget and recovery schedule remain.",
   "proposed_usd_offers": [
     {
       "name": "Meet Jericho",
@@ -51,8 +51,8 @@
   "release_gates": [
     {
       "id": "hosted_availability",
-      "status": "passed_staging",
-      "evidence": "Both isolated services run application commit 9044626. CI 712 and all 559 tests, lint, types and build passed. Hosted smoke and the existing signed-in workspace passed."
+      "status": "passed_production_http_readiness",
+      "evidence": "Production API/frontend are live at application 9e71b33. All 563 local tests and CI 714 passed. Deployment and browser checks have separate external receipts."
     },
     {
       "id": "custom_app_revision_document",
@@ -67,7 +67,7 @@
     {
       "id": "live_commerce",
       "status": "prepared_not_launched",
-      "evidence": "Live Stripe account is enabled, four products remain inactive, price/discount readback matches and three immutable monthly contracts are registered in the empty live-only database. Restricted live key approval, production runtime, webhook/portal and final live customer payment/delivery acceptance remain."
+      "evidence": "Live account, exact prices and coupon pass read verification. Restricted live key, dedicated webhook and portal are installed. Public sales remain disabled; production owner workflow and non-charging Checkout review remain. Real-card test charges are not a launch requirement."
     },
     {
       "id": "recovery_and_isolation",
