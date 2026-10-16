@@ -1015,9 +1015,9 @@ const handleFunction = async ({
           total_iabt_credits_remaining: account.available_credits,
           base44_required: false,
           billing: { ...(providers?.readiness?.().stripe || {}), credit_pack_size: config.providers.stripe.creditPackSize,
-            offers: publicBillingOffers(config), new_offers_enabled: newOffersAvailable(config),
+            offers: publicBillingOffers(config, user), new_offers_enabled: newOffersAvailable(config, user),
             pending_offer: await pendingOfferSummary({ repository, config, user, providers }),
-            intro_eligibility: newOffersAvailable(config) ? await introEligibility({ repository, config, user }) : null }
+            intro_eligibility: newOffersAvailable(config, user) ? await introEligibility({ repository, config, user }) : null }
         }
       }
     };
@@ -1288,7 +1288,8 @@ export const createIabtHandler = ({
           standalone: true,
           public_settings: {
             app_name: "Intelligent Application Building Tool",
-            operator: "Insured Spending, LLC"
+            operator: "Insured Spending, LLC",
+            billing_mode: config.providers.stripe.mode
           }
         }
       };

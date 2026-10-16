@@ -128,7 +128,7 @@ export const createSubscriptionCheckout = async ({
 
   assertCheckoutReady(providers);
 
-  const offer = offerId ? configuredOffer(config, offerId) : null;
+  const offer = offerId ? configuredOffer(config, offerId, user, now()) : null;
   const offerTerms = offer ? offerAcceptance(offer, acceptance) : null;
   if (offer) plan = offer.plan;
   const selectedPrice = offer?.price_id || config.providers.stripe.prices[plan];

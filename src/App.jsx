@@ -32,6 +32,12 @@ import { platformRuntime } from '@/api/iabtClient';
 import { Navigate, useLocation } from 'react-router-dom';
 const Router = routingMode === "hash" ? HashRouter : BrowserRouter;
 
+const WorkspaceEnvironmentBadge = () => {
+  const { appPublicSettings } = useAuth();
+  if (platformRuntime.backend !== 'standalone' || appPublicSettings?.public_settings?.billing_mode !== 'test') return null;
+  return <div className="fixed bottom-2 right-2 z-[40] pointer-events-none rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-900">Test workspace</div>;
+};
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, checkAppState } = useAuth();
   const { pathname, search, hash } = useLocation();
@@ -105,11 +111,7 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <ScrollToTop />
-          {platformRuntime.backend === 'standalone' && (
-            <div className="fixed bottom-2 right-2 z-[40] pointer-events-none rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-900">
-              Test workspace
-            </div>
-          )}
+          <WorkspaceEnvironmentBadge />
           <AuthenticatedApp />
         </Router>
         <Toaster />

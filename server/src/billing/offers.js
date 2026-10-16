@@ -21,11 +21,25 @@ export const BILLING_OFFERS = Object.freeze([
 const fail = (code, message, status = 409) => { throw Object.assign(new Error(message), { code, status }); };
 const enabled = (value) => /^(1|true|yes|on)$/i.test(String(value || "").trim());
 
+// A short owner-only acceptance window does not open public sales. Invalid
+// configuration fails closed, and identity always comes from the server session.
+const acceptanceWindow = (raw) => {
+  try {
+    const value = JSON.parse(raw || "null");
+    const start = Date.parse(value?.starts_at), end = Date.parse(value?.expires_at);
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(value?.user_id || "") ||
+        value?.offer_id !== INTRO_OFFER_ID || !Number.isFinite(start) || !Number.isFinite(end) ||
+        end <= start || end - start > 24 * 60 * 60 * 1000) return null;
+    return Object.freeze({ userId: value.user_id, offerId: value.offer_id, start, end });
+  } catch { return null; }
+};
+
 export const loadOfferConfig = (env) => Object.freeze({
   enabled: enabled(env.IABT_NEW_OFFERS_ENABLED),
   liveEnabled: enabled(env.IABT_LIVE_OFFERS_ENABLED),
   introEnabled: enabled(env.IABT_MEET_JERICHO_ENABLED),
   acceptedTerms: env.IABT_NEW_OFFER_TERMS_VERSION || "",
+  acceptanceWindow: acceptanceWindow(env.IABT_BILLING_ACCEPTANCE_JSON),
   accountId: env.IABT_STRIPE_ACCOUNT_ID || "",
   couponId: env.IABT_MEET_JERICHO_COUPON_ID || "",
   priceIds: Object.freeze({ starter: env.IABT_STRIPE_STARTER_PRICE_ID || "",
@@ -34,13 +48,25 @@ export const loadOfferConfig = (env) => Object.freeze({
 
 // Live sales require a separate explicit operator gate. Test activation alone
 // must never enable real purchases; provider terms are verified before Checkout.
-export const newOffersAvailable = (config) => (config.providers.stripe.mode === "test" ||
+const publicOffersEnabled = (config) => (config.providers.stripe.mode === "test" ||
   (config.providers.stripe.mode === "live" && config.providers.stripe.offers?.liveEnabled === true)) &&
   config.providers.stripe.offers?.enabled === true &&
   config.providers.stripe.offers.acceptedTerms === OFFER_TERMS_VERSION;
 
-export const configuredOffer = (config, id) => {
-  if (!newOffersAvailable(config)) fail("billing_offer_disabled", "The new offer has not been activated for this billing environment.");
+const acceptanceAvailable = (config, user, now) => {
+  const settings = config.providers.stripe.offers;
+  const window = settings?.acceptanceWindow;
+  return config.providers.stripe.mode === "live" && settings?.acceptedTerms === OFFER_TERMS_VERSION &&
+    Boolean(window && user?.email_verified === true && user.id === window.userId && now >= window.start && now < window.end);
+};
+
+export const newOffersAvailable = (config, user, now = Date.now()) =>
+  publicOffersEnabled(config) || acceptanceAvailable(config, user, now);
+
+export const configuredOffer = (config, id, user, now = Date.now()) => {
+  if (!publicOffersEnabled(config) && !(acceptanceAvailable(config, user, now) && id === INTRO_OFFER_ID)) {
+    fail("billing_offer_disabled", "The new offer has not been activated for this billing environment.");
+  }
   const offer = BILLING_OFFERS.find((item) => item.id === id);
   if (!offer) fail("billing_offer_unknown", "Select a current versioned offer.", 400);
   const settings = config.providers.stripe.offers;
@@ -71,11 +97,11 @@ export const offerAcceptance = (offer, acceptance) => {
   return Object.freeze({ ...terms, terms_sha256: createHash("sha256").update(JSON.stringify(terms)).digest("hex") });
 };
 
-export const publicBillingOffers = (config) => {
-  if (!newOffersAvailable(config)) return [];
+export const publicBillingOffers = (config, user, now = Date.now()) => {
+  if (!newOffersAvailable(config, user, now)) return [];
   return BILLING_OFFERS.flatMap((item) => {
     try {
-      const offer = configuredOffer(config, item.id);
+      const offer = configuredOffer(config, item.id, user, now);
       const rights = planEntitlementsForContract(offer.plan, offer.price_contract);
       return [{ id: offer.id, plan: offer.plan, name: offer.name, currency: offer.currency,
         amount_cents: offer.amount_cents, renewal_amount_cents: offer.renewal_amount_cents,

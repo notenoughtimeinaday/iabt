@@ -10,7 +10,7 @@ import { ensureBillingPriceCatalog } from "../src/billing/price-catalog.js";
 import { createSubscriptionCheckout, pendingOfferSummary } from "../src/billing/stripe-checkout.js";
 import { processStripeWebhook } from "../src/billing/stripe-webhook.js";
 import { introEligibility } from "../src/billing/intro-eligibility.js";
-import { OFFER_CATALOG_VERSION, OFFER_TERMS_VERSION, INTRO_OFFER_ID, publicBillingOffers, probeOfferProviderTerms } from "../src/billing/offers.js";
+import { OFFER_CATALOG_VERSION, OFFER_TERMS_VERSION, INTRO_OFFER_ID, publicBillingOffers, probeOfferProviderTerms, configuredOffer } from "../src/billing/offers.js";
 import { createProjectsWithinQuota } from "../src/billing/project-quota.js";
 import { PLAN_DEFAULTS } from "../src/billing/plans.js";
 import { createIabtHandler } from "../src/app.js";
@@ -104,6 +104,90 @@ const invoiceFor = (user, price, metadata = {}, start = 1788523200) => ({ id: "i
   currency: "usd", customer: "cus_fixture", billing_reason: "subscription_create",
   parent: { subscription_details: { subscription: "sub_" + price, metadata: { iabt_app_id: "6a849bcd3e04d068553b4af7", user_id: user.id, user_email: user.email, ...metadata } } },
   lines: { data: [{ amount: 1200, quantity: 1, type: "subscription", price: { id: price }, period: { start, end: start + 30 * 86400 } }] } });
+
+const ownerWindowConfig = (user, start, overrides = {}) => configFor({
+  IABT_STRIPE_MODE: "live", STRIPE_SECRET_KEY: "rk_live_fixture", IABT_NEW_OFFERS_ENABLED: "false", IABT_LIVE_OFFERS_ENABLED: "false",
+  IABT_BILLING_ACCEPTANCE_JSON: JSON.stringify({ user_id: user.id, offer_id: INTRO_OFFER_ID,
+    starts_at: new Date(start).toISOString(), expires_at: new Date(start + 600000).toISOString() }), ...overrides
+});
+const liveFixture = (f) => {
+  f.transform(x => x.id === "acct_fixture" ? { ...x, charges_enabled: true, payouts_enabled: true } : { ...x, livemode: true });
+  const execute = f.providers.execute;
+  f.providers.execute = async (...args) => {
+    const result = await execute(...args);
+    result.data.livemode = true;
+    return result;
+  };
+};
+
+test("private live acceptance is verified-owner-only, intro-only, time-bounded and fails closed", async (t) => {
+  const f = await fixture(t), start = Date.now(), config = ownerWindowConfig(f.user, start);
+  assert.deepEqual(publicBillingOffers(config), []);
+  assert.deepEqual(publicBillingOffers(config, f.user, start).map(x => x.id), [INTRO_OFFER_ID]);
+  for (const [user, time] of [[undefined, start], [{ ...f.user, id: "another-owner" }, start],
+    [{ ...f.user, email_verified: false }, start], [f.user, start - 1], [f.user, start + 600000]]) {
+    assert.deepEqual(publicBillingOffers(config, user, time), []);
+    if (user) await assert.rejects(f.create({ config, user, now: () => time }), { code: "billing_offer_disabled" });
+  }
+  assert.throws(() => configuredOffer(config, "pro-2026-10", f.user, start), { code: "billing_offer_disabled" });
+  for (const value of ["", "{", "null", JSON.stringify({ user_id: f.user.id, offer_id: INTRO_OFFER_ID,
+    starts_at: new Date(start).toISOString(), expires_at: new Date(start + 86400001).toISOString() })]) {
+    assert.deepEqual(publicBillingOffers(ownerWindowConfig(f.user, start, { IABT_BILLING_ACCEPTANCE_JSON: value }), f.user, start), []);
+  }
+  assert.deepEqual(publicBillingOffers(ownerWindowConfig(f.user, start, { IABT_NEW_OFFER_TERMS_VERSION: "old" }), f.user, start), []);
+  assert.equal(f.reads.length, 0); assert.equal(f.calls.length, 0);
+});
+
+test("private acceptance HTTP routes use the authenticated account rather than submitted identity", async t => {
+  const f = await fixture(t), config = ownerWindowConfig(f.user, Date.now() - 1000);
+  const other = await f.repository.createUser({ email: "http-other@example.test", passwordHash: "unused", emailVerified: true });
+  const tokens = [];
+  for (const user of [f.user, other]) {
+    const token = createOpaqueToken(); tokens.push(token);
+    await f.repository.createSession({ userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 600000).toISOString() });
+  }
+  const server = createServer(createIabtHandler({ repository: f.repository, config, providers: f.providers }));
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const request = async (token, name, body = {}) => {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/functions/${name}`, {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + token }, body: JSON.stringify(body)
+    });
+    return { status: response.status, body: await response.json() };
+  };
+  assert.deepEqual((await request(tokens[0], "get-account-entitlement")).body.data.billing.offers.map(x => x.id), [INTRO_OFFER_ID]);
+  const spoof = { user_id: f.user.id, email: f.user.email, role: "admin", email_verified: true,
+    offer_id: INTRO_OFFER_ID, disclosure_acceptance: { accepted: true, version: OFFER_TERMS_VERSION } };
+  assert.deepEqual((await request(tokens[1], "get-account-entitlement", spoof)).body.data.billing.offers, []);
+  const rejected = await request(tokens[1], "stripe-create-checkout", spoof);
+  assert.equal(rejected.status, 409); assert.equal(rejected.body.error, "billing_offer_disabled");
+  assert.equal(f.calls.length, 0); assert.equal(f.reads.length, 0);
+});
+
+for (const adapter of ["memory", "postgres"]) {
+  test(`${adapter}: private live acceptance rechecks expiry inside admission and preserves one existing purchase`,
+    { skip: adapter === "postgres" && !databaseUrl }, async t => {
+      const f = await fixture(t, adapter), start = Date.now(), config = ownerWindowConfig(f.user, start);
+      liveFixture(f);
+      let clock = start, advanceDuringProbe = true;
+      const read = f.providers.fetch;
+      f.providers.fetch = async (...args) => { const result = await read(...args); if (advanceDuringProbe) clock = start + 600000; return result; };
+      await assert.rejects(f.create({ config, now: () => clock }), { code: "billing_offer_disabled" });
+      assert.equal(f.calls.length, 0);
+      assert.deepEqual(await f.repository.listRecordsExact("BillingOfferAcceptance", f.user), []);
+      advanceDuringProbe = false; clock = start;
+      const checkout = await f.create({ config, now: () => clock });
+      assert.equal(checkout.kind, "checkout");
+      assert.equal(f.calls.length, 1);
+      clock = start + 600000;
+      const resumed = await f.create({ repository: f.reopen(), config, now: () => clock });
+      assert.equal(resumed.session_id, checkout.session_id); assert.equal(f.calls.length, 1);
+      const other = await f.repository.createUser({ email: "private-window-other@example.test", passwordHash: "unused", emailVerified: true });
+      await assert.rejects(f.create({ config, user: other, now: () => start }), { code: "billing_offer_disabled" });
+      assert.equal(f.calls.length, 1);
+      assert.equal((await f.repository.getCreditAccount(f.user.id)).available_credits, 0);
+    });
+}
 
 test("new offers require accepted terms and separate explicit live activation", async (t) => {
   const f = await fixture(t);

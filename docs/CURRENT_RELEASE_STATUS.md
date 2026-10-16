@@ -1,5 +1,38 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 16 UTC: production hosting and private acceptance
+
+The approved $7/month API and static frontend are live at
+https://jericho-production-api.onrender.com and https://jericho-studio.onrender.com.
+The separate live database, private storage, email configuration, nine migrations,
+restricted live Stripe key, dedicated signed webhook and live customer portal
+are configured. Initial HTTP readiness and read-only Stripe price/account checks
+passed. No real card purchase or additional paid generation has occurred.
+The owner account registration and live customer journey remain pending.
+
+The workspace badge now follows server-reported billing mode. A private live
+billing acceptance window can admit only the exact verified account and the
+introductory offer for at most 24 hours while both public offer switches remain
+off. It rechecks expiry during transaction admission and retains recovery for
+an already admitted purchase. This does not authorize a charge, public sales,
+paid AI or release completion. Invalid window configuration fails closed.
+
+Operator configuration: `IABT_BILLING_ACCEPTANCE_JSON` is empty by default, or a
+JSON object with `user_id`, `offer_id` (`meet-jericho-2026-10`), `starts_at` and
+`expires_at` (ISO timestamps). It also requires the accepted offer terms version
+and intro switch. Use the authenticated database user ID, never an unverified
+email. Clear the window after acceptance. Keep legacy subscription selectors
+and the separate credit-pack price selector empty until their sale is authorized.
+The window does not revoke an already issued Stripe Checkout session.
+
+All 563 local tests passed without skips, together with lint, type checking and
+the production build. They include owner isolation, spoofed request identity,
+expiry during admission and durable recovery after the private window closes.
+The deployed API rejects unsigned webhooks, anonymous account reads and foreign
+origins. CI and rollout of this candidate still require separate receipts.
+Existing staging acceptance, exports, support delivery and restoration receipts
+are retained and must not be repeated.
+
 ## October 16 UTC: usage-based credits and guarded live-offer support
 
 The credit-pricing repair binds a versioned Terra usage policy into new signed

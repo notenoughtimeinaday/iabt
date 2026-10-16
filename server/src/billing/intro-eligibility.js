@@ -28,7 +28,7 @@ export async function introEligibility({ repository, user, config }) {
 // Private record types are deliberately absent from generic entity routes.
 export async function admitOfferAttempt({ tx, config, user, attemptId, offerTerms, now }) {
   if (!offerTerms) return;
-  const current = offerAcceptance(configuredOffer(config, offerTerms.offer_id), { accepted: true, version: offerTerms.disclosure_version });
+  const current = offerAcceptance(configuredOffer(config, offerTerms.offer_id, user, now()), { accepted: true, version: offerTerms.disclosure_version });
   if (current.terms_sha256 !== offerTerms.terms_sha256) fail("billing_intro_reconciliation_required");
   const owner = ownerOf(user);
   if (offerTerms.offer_id === INTRO_OFFER_ID) {
