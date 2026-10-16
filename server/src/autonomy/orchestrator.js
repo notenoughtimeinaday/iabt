@@ -17,7 +17,7 @@ const now = () => new Date().toISOString();
 // Static repair hints explain public input constraints without forwarding
 // provider, storage or other exception messages into the model context.
 const repairHints = Object.freeze({
-  invalid_tool_input: "Match the tool schema. Node IDs must start with a letter and contain at most 64 letters, digits, underscores or hyphens, for example create_app; use that exact ID for dependencies and execution calls.",
+  invalid_tool_input: "Match the current tool schema. Plan only tools in its enum and inspect only listed attached file IDs; never invent a source file or inspect a future deliverable. With no attached files, plan creation directly. Node IDs must start with a letter and contain at most 64 letters, digits, underscores or hyphens, for example create_app; use that exact ID for dependencies and execution calls.",
   graph_invalid_node: "Use unique node IDs beginning with a letter, for example create_app, and unique dependency IDs from the same graph. IDs may contain at most 64 letters, digits, underscores or hyphens.",
   graph_required: "Call plan_execution successfully before creating a deliverable. Use the accepted graph's ready node_id for each execution call.",
   graph_tool_mismatch: "Use the exact node_id and tool from the accepted execution graph.",

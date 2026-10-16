@@ -34,7 +34,7 @@ export function registeredTools({ job, repository, storage, user }) {
   return [
     {
       ...common, name: "plan_execution", risk_class: "plan",
-      description: "Propose a bounded dependency graph before execution using inspect_file, create_document, create_web_app or create_source. Preserve completed and running nodes when replanning. Each call names its ready node_id. Planning grants no additional permission.",
+      description: "Propose a bounded dependency graph before execution using only the tools listed in the node schema. Inspect only approved attached files, never a future output. With no attached files, plan creation directly. Preserve executed nodes when replanning. Each call names its ready node_id. Planning grants no additional permission.",
       input_schema: objectSchema({ objective: string, nodes: { type: "array", minItems: 1, maxItems: 16, items: objectSchema({ id: nodeId, tool: { type: "string", enum: ["inspect_file", "create_document", "create_web_app", "create_source"] }, objective: string, depends_on: { type: "array", maxItems: 16, items: nodeId } }) } }),
       execute: async (execution_plan) => ({ execution_plan })
     },
@@ -100,7 +100,20 @@ export function registeredTools({ job, repository, storage, user }) {
 export function toolDefinitions(tools, user, job) {
   if (!user?.email_verified || user.id !== job.owner_id) return [];
   const appOnly = job.input?.app_output_contract === "self_contained_html_v1";
-  return tools.filter((tool) => (!appOnly || ["plan_execution", "inspect_file", "create_web_app"].includes(tool.name)) && evaluateAction(tool, { authorized: true }).automatic).map((tool) => ({ type: "function", name: tool.name, description: tool.description, parameters: tool.input_schema, strict: true }));
+  const fileIds = [...new Set((job.input?.file_references || []).map(file => file.file_id).filter(id => typeof id === "string" && id))];
+  const available = tools.filter(tool =>
+    (tool.name !== "inspect_file" || fileIds.length > 0) &&
+    (!appOnly || ["plan_execution", "inspect_file", "create_web_app"].includes(tool.name)) &&
+    evaluateAction(tool, { authorized: true }).automatic);
+  const executionTools = available.filter(tool => tool.name !== "plan_execution").map(tool => tool.name);
+  return available.map(tool => {
+    // The provider schema and local validation share the actual job scope.
+    // Future deliverables are not attached source files and cannot be read.
+    const parameters = structuredClone(tool.input_schema);
+    if (tool.name === "plan_execution") parameters.properties.nodes.items.properties.tool.enum = executionTools;
+    if (tool.name === "inspect_file") parameters.properties.file_id.enum = fileIds;
+    return { type: "function", name: tool.name, description: tool.description, parameters, strict: true };
+  });
 }
 
 function validateInput(schema, value) {
@@ -112,11 +125,12 @@ function validateInput(schema, value) {
 
 export async function invokeTool({ tools, call, user, job }) {
   const tool = tools.find((item) => item.name === call.name);
-  if (!tool || !toolDefinitions(tools, user, job).some((item) => item.name === call.name)) throw fail("unauthorized_tool", "Tool is not authorized for this workflow");
+  const definition = toolDefinitions(tools, user, job).find(item => item.name === call.name);
+  if (!tool || !definition) throw fail("unauthorized_tool", "Tool is not authorized for this workflow");
   if (typeof call.arguments !== "string" || Buffer.byteLength(call.arguments) > 600_000) throw fail("invalid_tool_input", "Tool arguments are too large");
   let args;
   try { args = JSON.parse(call.arguments); } catch { throw fail("invalid_tool_input", "Tool input must be JSON"); }
-  if (!validateInput(tool.input_schema, args)) throw fail("invalid_tool_input", "Tool input does not match its schema");
+  if (!validateInput(definition.parameters, args)) throw fail("invalid_tool_input", "Tool input does not match its schema");
   const result = await tool.execute(args);
   if (!result || typeof result !== "object") throw fail("invalid_tool_result", "Tool returned no result");
   return result;

@@ -143,6 +143,62 @@ test("provider schemas and local tools reject invalid graph and execution identi
   await context.worker.stop();
 });
 
+test("new creations cannot plan inspections of nonexistent or future files", async () => {
+  const context = await fixture();
+  for (const input of [{}, { app_output_contract: "self_contained_html_v1", file_references: [] }]) {
+    const job = { ...context.queued, input };
+    const tools = registeredTools({ ...context, job });
+    const definitions = toolDefinitions(tools, context.user, job);
+    assert.equal(definitions.some(tool => tool.name === "inspect_file"), false);
+    const allowed = definitions.find(tool => tool.name === "plan_execution").parameters.properties.nodes.items.properties.tool.enum;
+    assert.deepEqual(allowed, definitions.filter(tool => tool.name !== "plan_execution").map(tool => tool.name));
+    if (input.app_output_contract) assert.deepEqual(allowed, ["create_web_app"]);
+    await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("plan_execution", {
+      objective: "Create a new deliverable", nodes: [{ id: "read_future", tool: "inspect_file", objective: "Inspect the future output", depends_on: [] }]
+    }) }), { code: "invalid_tool_input" });
+    await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("inspect_file", { file_id: "future-output" }) }), { code: "unauthorized_tool" });
+  }
+  assert.equal(context.requests.length, 0);
+  assert.equal(context.objects.size, 0);
+  await context.worker.stop();
+});
+
+test("inspection schemas expose only approved source IDs and validate the same scope locally", async () => {
+  const context = await fixture();
+  const sourceId = randomUUID();
+  const job = { ...context.queued, input: { file_references: [{ file_id: sourceId }, { file_id: sourceId }] } };
+  const tools = registeredTools({ ...context, job });
+  const definitions = toolDefinitions(tools, context.user, job);
+  assert.deepEqual(definitions.find(tool => tool.name === "inspect_file").parameters.properties.file_id.enum, [sourceId]);
+  await assert.rejects(invokeTool({ tools, job, user: context.user, call: call("inspect_file", { file_id: randomUUID() }) }), { code: "invalid_tool_input" });
+  assert.equal(toolDefinitions(tools, context.user, context.queued).some(tool => tool.name === "inspect_file"), false);
+  assert.equal(tools.find(tool => tool.name === "inspect_file").input_schema.properties.file_id.enum, undefined);
+  assert.equal(context.requests.length, 0);
+  await context.worker.stop();
+});
+
+test("an impossible inspection plan is rejected before graph evidence and can be repaired within budget", async () => {
+  const impossible = call("plan_execution", { objective: "Create a bookstore report", nodes: [
+    { id: "read_future", tool: "inspect_file", objective: "Inspect the future report", depends_on: [] },
+    { id: "document", tool: "create_document", objective: "Write the report", depends_on: ["read_future"] }
+  ] }, "impossible_plan");
+  const context = await fixture({ budget: 8, env: { IABT_ORCHESTRATION_BUDGET_CENTS: "8" }, replies: [
+    response("resp_impossible", [impossible]), response("resp_repaired", [plan()]),
+    { id: "resp_write", status: "completed", output: [document()] }, completed()
+  ] });
+  const result = await context.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.artifacts.length, 3);
+  assert.equal(result.job.output.orchestration.execution_graph.nodes.some(node => node.tool === "inspect_file"), false);
+  assert.deepEqual(result.job.output.orchestration.failures.map(item => item.code), ["invalid_tool_input"]);
+  const posts = context.requests.map(item => JSON.parse(item.options.body));
+  assert.equal(posts.length, 4);
+  assert.match(JSON.parse(posts[1].input[0].output).message, /no attached files/);
+  assert.deepEqual(posts[1].tool_choice, { type: "function", name: "plan_execution" });
+  assert.equal(context.repository.creditEntries.filter(entry => entry.entry_type === "capture").length, 1);
+  await context.worker.stop();
+});
+
 test("missing provider usage remains unverified rather than a zero-cost claim", async () => {
   const context = await fixture({ replies: [response("resp_first", [document()]), completed()] });
   const result = await context.drain();

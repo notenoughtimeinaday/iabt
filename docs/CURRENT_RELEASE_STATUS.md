@@ -1,5 +1,33 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 15 Central / October 16 UTC: hosted recovery and scoped planning repair
+
+Neon Launch activation restored isolated staging database access. Both staging
+services deployed `5dc5390`; health, existing account continuity, saved-file
+reading and a matching-hash document download passed. The billing UI remains
+explicitly test mode. This is not public-sale acceptance.
+
+The owner reconfirmed use of the existing approved $9.90 OpenAI balance after
+raising a card-funding concern. No top-up is authorized. A private custom-app
+run then failed after planning `inspect_file` against a nonexistent future
+deliverable, leaving creation blocked on that failed dependency. Its eight
+Responses used 105,865 input and 3,544 output tokens (about $0.01800615 at
+uncached published rates, not an invoice receipt). Its eight IABT credits were
+restored. Paid execution was disabled before source repair; preserve the failed
+job and its evidence rather than resubmitting its canonical identity.
+
+The repair makes provider schemas and local tool validation share the actual
+job scope: no file-inspection tool without approved attached sources, only
+approved file IDs when inspection is available, and a planning enum containing
+only that job's available execution tools. Impossible inspection plans are
+rejected before execution creates immutable failed graph evidence. Existing
+ownership, checksum, source-inspection and graph-evidence protections remain.
+Three regression cases reproduce rejection and bounded repair without paid
+provider requests. Full local verification passed 536 tests with no failures or
+skips, plus lint, types and production build, using only disposable local
+PostgreSQL. The final tool-description adjustment also passed all 54 focused
+tests. CI, deployment and replacement real-app acceptance remain separate.
+
 ## October 16 UTC: authorized API budget preserved while restoring database access
 
 The owner authorized up to $9.90 of the existing OpenAI balance for tests that
