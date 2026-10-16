@@ -1,7 +1,7 @@
 {
   "name": "Jericho Studio",
   "publisher": "Insured Spending, LLC",
-  "version": "1.0.0-preview.2",
+  "version": "1.0.0-preview.4",
   "channel": "private-preview",
   "public_sale_approved": false,
   "positioning": "Turn a clear idea into useful work you can keep.",
@@ -11,7 +11,7 @@
     "Documents in Word, PDF and Markdown",
     "Saved source, previews, downloads and revisions"
   ],
-  "scope_note": "Private custom app, owned-source revision and original document delivery have passed scoped checks. A generated helper-text contrast defect, quote calibration and final operational/commercial acceptance remain. Saved files are not universal proof of working software.",
+  "scope_note": "Private custom app, owned-source revision and document delivery passed scoped acceptance. Usage-based credit settlement is verified and deployed. Production billing is prepared with sales disabled; final live runtime and commercial acceptance remain.",
   "proposed_usd_offers": [
     {
       "name": "Meet Jericho",
@@ -40,7 +40,7 @@
       "credits": 100
     }
   ],
-  "offer_note": "Existing test-only offer contract. This file does not activate sales or change purchased entitlements. The introductory offer is for eligible new subscribers, then renews monthly. Cost per creation varies and is shown before approved paid work.",
+  "offer_note": "The offer passed scoped Stripe test acceptance. Matching live products, prices and a Starter-only introductory coupon are prepared but inactive. This package does not activate sales. New Terra work reserves an approved maximum and returns unused credits after verified delivery; historical settled jobs retain their terms.",
   "excluded_from_first_release": [
     "Autonomous repository changes and deployment",
     "App-store submission",
@@ -52,22 +52,27 @@
     {
       "id": "hosted_availability",
       "status": "passed_staging",
-      "evidence": "2026-10-16: owner-approved Neon Launch restored existing accounts and saved work; staged services live on faa3a6e."
+      "evidence": "Both isolated services run application commit 9044626. CI 712 and all 559 tests, lint, types and build passed. Hosted smoke and the existing signed-in workspace passed."
     },
     {
       "id": "custom_app_revision_document",
-      "status": "partial",
-      "evidence": "Three Terra jobs succeeded; revision repaired persistence/import bugs; document is 781 words with exactly three formats. Hashes and scoped browser evidence preserved. Generated helper text needs contrast correction and final PDF exporter deployment remains separately recorded."
+      "status": "passed_scoped_acceptance",
+      "evidence": "The three preserved Terra jobs delivered an app, owned-source revision and original 781-word guide. Scoped app behavior, source hashes and Word/PDF visual checks are complete. A separately reviewed contrast correction is retained; no universal generated-app quality claim."
+    },
+    {
+      "id": "credit_pricing",
+      "status": "passed_and_deployed",
+      "evidence": "Signed usage policy terra-usage-2026-10-16.1 captures verified usage and returns the unused reservation atomically. Saved usage fixtures compute 4, 3 and 11 credits. No new paid runs or historical ledger changes."
     },
     {
       "id": "live_commerce",
-      "status": "pending",
-      "evidence": "Prior sandbox monthly subscription and top-up checks are preserved. Production Stripe setup, introductory payment, renewal/cancellation/refund, tax and final terms require release acceptance."
+      "status": "prepared_not_launched",
+      "evidence": "Live Stripe account is enabled, four products remain inactive, price/discount readback matches and three immutable monthly contracts are registered in the empty live-only database. Restricted live key approval, production runtime, webhook/portal and final live customer payment/delivery acceptance remain."
     },
     {
       "id": "recovery_and_isolation",
-      "status": "pending",
-      "evidence": "Preserve prior recovery evidence; finish hosted account recovery, cross-account isolation and backup/restore acceptance before launch."
+      "status": "passed_staging_operational_schedule_pending",
+      "evidence": "Password reset/session invalidation, cross-account denial, all five support-address deliveries, 18-table database restore and all 130 current objects hash-verified. Separate live storage upload/readback/private-access check passed. Recurring off-device recovery and production-host recovery remain open."
     }
   ]
 }

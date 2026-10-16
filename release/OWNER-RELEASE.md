@@ -1,39 +1,43 @@
 # Jericho Studio 1.0 private release kit
 
-Open START-HERE.html for the product presentation, proposed pricing and customer quick start. This is the full standalone Jericho product; IABT Lite / Italy is a separate template product and its purchase does not include future Jericho access. TreEbay and the separate unmerged MCP candidate are preserved outside this package.
+Open START-HERE.html for the product presentation, intended prices and quick start. This is the standalone Jericho product. IABT Lite / Italy is separate; TreEbay and unmerged MCP candidates remain outside this kit. Base44 is not needed by this runtime.
 
-The package is complete as an owner review and engineering handoff. It is not accepted for public sales. The software needs a running API, worker, PostgreSQL, private object storage and email provider; the frontend folder is not a standalone AI service or Windows installer. Base44 is not needed for this runtime.
+This is an owner review and engineering handoff, not approval to sell. Running Jericho requires its API/worker, PostgreSQL, private storage and email provider. The frontend is not a self-contained AI service or Windows installer.
 
-## Contents and use
+## Contents
 
-- `source.zip`: exact Git source snapshot. Extract into a new folder, install using both lockfiles (`npm ci` and `npm ci --prefix server`), and follow README.md and STANDALONE_DEPLOYMENT.md. Preserve existing workspaces and settings.
-- `frontend/`: a compiled, hash-routed preview targeting the isolated staging API. Host over HTTP(S), not by opening index.html directly. Rebuild for a different API origin. No production endpoint is selected.
-- `THIRD-PARTY-NOTICES.txt`: installed dependency license metadata and available license text. This preserves dependency notices; it does not grant new rights to IABT source or certify supplier-generated content.
-- `product.json`: scope, price proposal and unresolved acceptance gates.
-- `manifest.json`: source revision, file sizes and SHA-256 checksums. Verify the archive before using it; never package live environment files or account backups into a customer distribution.
+- source.zip: exact source revision shown in manifest.json. Extract into a new folder, install both lockfiles with npm ci and npm ci --prefix server, then follow README.md and STANDALONE_DEPLOYMENT.md.
+- frontend/: compiled hash-routed preview targeting the isolated staging API. Host over HTTP(S). Rebuild before selecting a different API origin.
+- product.json: product scope, intended offers and explicit release gates.
+- THIRD-PARTY-NOTICES.txt: dependency metadata and available license text; not a new grant of source rights or a certification of generated content.
+- manifest.json: source revision, file sizes and SHA-256 checksums. No account backups, credentials or environment secrets belong in this package.
 
-## Current acceptance, October 16 UTC
+## Verified application, October 16 UTC
 
-The owner-approved Neon Launch activation restored the existing database and accounts. Isolated staging deployed `faa3a6e`; CI 709 and 543 local tests passed. Three private GPT-5.6 Terra checks delivered a volunteer planner, a source-bound revision and a 781-word original guide in Markdown, Word and PDF. The revision repaired empty-state persistence and date/import validation and added priority filtering. Browser checks covered add/edit, search/filter, completion, totals, confirmation, JSON round trip and mobile layout. One pale helper-text line remains a generated-app visual defect; this is not universal app-quality acceptance.
+Application commit 9044626485e3f2892752fc295f21e02676d49ea7 is live on both isolated staging services. All 559 tests, lint, typecheck and build passed; CI 712 succeeded. Later package-documentation changes do not claim an additional deployed application revision.
 
-Provider usage across the earlier and replacement tests is conservatively estimated at $0.5156508 against the approved $9.90 existing balance. No funds were added. Paid generation and orchestration are off again; the plan allowlist is empty and cleanup deployment `dep-db8piuon74is73cc2c2g` is live. Each replacement test captured its 54-credit staging quote once. This deliberately conservative test profile is not approved customer pricing. Calibrate credit quotes before opening sales.
+Credit pricing now uses a signed, versioned Terra usage policy. A new quote reserves the approved maximum; after verified durable delivery, completion captures the calculated usage charge and returns the unused reservation atomically. Invalid or incomplete usage returns the reservation and remains an operator reconciliation issue. Existing settled jobs and old quotes retain their terms. Recorded usage for the three completed examples computes 4, 3 and 11 credits instead of the earlier fixed 54. These are examples, not promises that every future job costs the same. Both repository adapters and worker behavior passed tests; no paid generation was repeated just to check settlement.
 
-The latest local exporter improvement gives PDFs clear heading hierarchy, bounded lines and paragraph-aware pagination. It does not recompose text or call an AI provider. Its deployment and re-export evidence must be recorded separately from the three original AI deliveries. Original outputs and histories remain intact.
+The preserved private app, its source-bound revision and a 781-word original guide passed scoped acceptance. App review covered add/edit, search/filter, completion, totals, validation, confirmation, JSON round trip and reload. Original Markdown, Word and PDF hashes are retained; Word and PDF received visual review. A separate reviewed copy corrects one helper-text contrast rule. These results apply to the exact reviewed files, not every application Jericho might generate.
 
-Current official Launch pricing is usage-based: $0.106/CU-hour, $0.35/GB-month database storage and $0.20/GB-month history, with 500 GB/project/month public transfer included. There is no monthly base minimum. At the existing fixed 0.25 CU, continuously active compute alone is about $19.35 per 730-hour month; storage, other projects and other services are additional. This is an estimate, not a hard cap. Upgrading an organization can affect its other projects. Review the exact account billing screen before committing.
+Password recovery and session invalidation, account isolation, all five published support-address deliveries, an 18-table database restore and all 130 current private objects' hash-verified backup/restore are complete. Do not recreate the accounts, resend those emails or repeat accepted purchases and generation jobs. The existing Stripe test acceptance covers the $4.99 first month, $12 renewal, cancellation to Free, retained credits/files and duplicate-event protection.
 
-Sources checked October 15: https://neon.com/pricing and https://neon.com/docs/introduction/network-transfer . Compute endpoints and project defaults are capped at 0.25 CU. This limits compute size, not the total organization bill; storage and other metered resources remain additional. Transfer-reduction changes are deployed but a new billing interval is needed to measure their effect. Do not discard existing data or create replacement projects to evade quotas.
+Conservative cumulative OpenAI usage is $0.5156508 of the approved $9.90 existing balance. No top-up or new paid generation was made by the pricing repair. Paid AI and orchestration are off. The OpenAI budget is not approval for a new hosting subscription or real card purchase.
 
-## Final launch sequence
+## Prepared live environment
 
-1. Preserve restored database availability, existing account continuity, saved work and private downloads. Keep paid generation off outside a specifically bounded authorized window.
-2. Retain the completed private app/revision/document evidence; close the remaining generated-output visual defect and pricing calibration. Do not repeat completed paid jobs or prior sandbox purchases. Review additional outputs within their actual scope before making broad quality claims.
-3. Finish hosted account recovery, isolation and backup/restore evidence. Confirm support mailbox delivery. The outage fix itself does not prove these flows.
-4. Prepare a separate production data/billing environment. Staging is permanently test-bound; never convert test-funded credits to live credits. Complete current checkout terms, introductory eligibility, renewal/cancellation/refund, taxes and actual customer delivery acceptance. The new-offer implementation currently rejects live mode and needs a reviewed production activation change after acceptance.
-5. Approve production configuration, source revision and commercial terms, then publish. Only then replace the private-preview label and open sales. No ongoing hosting or AI capacity was purchased by creating this kit.
+The live Stripe account has charges and payouts enabled with no outstanding requirements. Matching live products/prices and the Starter-only $7.01 first-month discount exist, but all four products remain inactive. No real Checkout or card charge was submitted. The browser form for a restricted live billing key is prepared and awaits the owner's action-time approval.
 
-## Preserve completed work
+A new empty database, jericho_live_v1, on the existing production Neon compute has nine migrations, an immutable live environment binding and the three monthly price contracts. A separate private bucket passed upload, exact-byte readback and anonymous-access denial. No new compute/project/branch was created. The old production-named database contains test credits/events and remains intact; never switch it into live billing. Credentials are stored privately outside Git and this kit.
 
-Baseline e94a01a, subsequent quality repairs and CI 709 are preserved. Earlier sandbox subscription/top-up evidence and recovery ZIPs remain intact. The earlier October 15 tracker delivery was incomplete; it must not be shown as a successful customer benchmark. Static source checks reject missing supported requirements and broken inline JavaScript but do not execute generated applications. Manual browser evidence applies only to the exact downloaded hashes reviewed.
+Render's October 16 pricing page lists $7/month for its 0.5c-512mb service. That is a proposed always-on compute cost, not a purchased plan or a complete operating-cost cap. Bandwidth/build overages, taxes, existing Neon usage and AI usage are separate. The existing Neon compute maxima remain 0.25 CU; a size limit does not cap total metered spending. No additional hosting subscription was activated by this kit. Pricing source: https://render.com/pricing .
 
-The additional change in this kit replaces invisible startup failure with an accessible connection/retry screen. Retrying only checks account state; it never recreates jobs or payments. Help and policies remain accessible during an outage. Local tests and browser evidence are recorded separately from deployed acceptance in docs/CURRENT_RELEASE_STATUS.md.
+## Remaining launch sequence
+
+1. Obtain approval for the prepared restricted live Stripe key, create it and store it privately in the production service. Never publish its value.
+2. Prepare the production API/frontend with the new live-only database, private storage, account email, origin restrictions and locked application revision. Keep live offers and paid AI disabled until acceptance. Confirm an approved always-on hosting budget before purchasing it.
+3. Configure the dedicated live webhook and customer portal, verify live price/discount/renewal terms through the actual restricted key, then finish production checkout, fulfillment and customer delivery acceptance. A real payment requires its own specific authorization; the OpenAI allowance cannot fund it.
+4. Establish recurring off-device backups and production recovery ownership. Retain existing restore receipts; provider retention is not an independent backup. Assign support Inbox and Spam review. Complete the applicable tax and commercial release review.
+5. Only after these gates pass, activate the verified live products, offers and paid creation with an agreed operating budget, then announce sales. Do not merge main, change production DNS or overwrite old user data as part of this private kit.
+
+Full local receipts are under E:/Jericho-Master/evidence/product-release-20261015. Start with credit-pricing-release-20261016.json and the production preparation receipts. The source status file distinguishes earlier checkpoints. This release deliberately leaves commercial gates closed instead of claiming test acceptance proves a public launch.
