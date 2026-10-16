@@ -105,7 +105,7 @@ const invoiceFor = (user, price, metadata = {}, start = 1788523200) => ({ id: "i
   parent: { subscription_details: { subscription: "sub_" + price, metadata: { iabt_app_id: "6a849bcd3e04d068553b4af7", user_id: user.id, user_email: user.email, ...metadata } } },
   lines: { data: [{ amount: 1200, quantity: 1, type: "subscription", price: { id: price }, period: { start, end: start + 30 * 86400 } }] } });
 
-test("new offers require explicit test activation and accepted terms; no live activation is possible", async (t) => {
+test("new offers require accepted terms and separate explicit live activation", async (t) => {
   const f = await fixture(t);
   assert.equal(publicBillingOffers(loadConfig({ NODE_ENV: "test" })).length, 0);
   for (const overrides of [{ IABT_NEW_OFFERS_ENABLED: "false" }, { IABT_NEW_OFFER_TERMS_VERSION: "" }, { IABT_NEW_OFFER_TERMS_VERSION: "old" },
@@ -118,6 +118,25 @@ test("new offers require explicit test activation and accepted terms; no live ac
   assert.deepEqual(publicBillingOffers(f.config).map((x) => [x.name, x.amount_cents, x.monthly_credits]),
     [["Meet Jericho", 499, 100], ["Starter", 1200, 100], ["Builder", 2900, 300], ["Pro", 5900, 650]]);
   assert.ok(publicBillingOffers(f.config).every((offer) => offer.commercial_use_enabled));
+});
+
+test("live offer probes require enabled payments and exact live prices and coupons without creating purchases", async t => {
+  const f = await fixture(t);
+  const config = configFor({ IABT_STRIPE_MODE: "live", STRIPE_SECRET_KEY: "rk_live_fixture", IABT_LIVE_OFFERS_ENABLED: "true" });
+  assert.equal(publicBillingOffers(config).length, 4);
+  const asLive = x => x.id === "acct_fixture" ? { ...x, charges_enabled: true, payouts_enabled: true } : { ...x, livemode: true };
+  f.transform(asLive);
+  assert.deepEqual(await probeOfferProviderTerms({ config, offerId: INTRO_OFFER_ID, fetchImpl: f.providers.fetch }), { status: "verified" });
+  for (const [change, code] of [
+    [x => x.id === "acct_fixture" ? { ...x, charges_enabled: false } : x, "billing_offer_account_not_ready"],
+    [x => x.id === "acct_fixture" ? { ...x, payouts_enabled: false } : x, "billing_offer_account_not_ready"],
+    [x => x.type === "recurring" ? { ...x, livemode: false } : x, "billing_offer_price_mismatch"],
+    [x => x.id === "coupon_intro" ? { ...x, livemode: false } : x, "billing_offer_discount_mismatch"]
+  ]) {
+    f.transform(x => change(asLive(x)));
+    assert.deepEqual(await probeOfferProviderTerms({ config, offerId: INTRO_OFFER_ID, fetchImpl: f.providers.fetch }), { status: "failed", code });
+  }
+  assert.equal(f.calls.length, 0);
 });
 
 test("missing or stale disclosure fails before provider calls; wrong prices, accounts and coupons fail before Checkout", async (t) => {

@@ -1,5 +1,37 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 16 UTC: usage-based credits and guarded live-offer support
+
+The credit-pricing repair binds a versioned Terra usage policy into new signed
+quotes. Successful durable delivery captures only the computed usage charge and
+returns the remainder atomically, with a visible receipt. Invalid or incomplete
+usage returns the full reservation. Existing quotes and settled jobs retain
+their terms. Recorded acceptance usage calculates 4, 3 and 11 credits instead
+of 54; those completed paid jobs were not repeated or rewritten.
+
+Live offers now require a separate default-off activation switch, the accepted
+terms version, an account with payments/payouts enabled, and matching live prices
+and product-scoped discount. Test switches cannot activate live purchases.
+All 559 local tests pass without skips, plus lint, types and production build.
+The initial verification's final build lacked VITE_IABT_API_URL; the complete
+rerun with the explicit staging origin passed. CI and hosted evidence remain
+separate and must be recorded before rollout claims.
+
+Live Stripe account acct_1TOYQhJQwCRZm16s has payments and payouts enabled with
+no outstanding requirements. Four new live catalog products are prepared but
+inactive: Starter $12/100 credits, Builder $29/300, Pro $59/650 and a one-time
+$10/100-credit pack. The pre-existing database named Production has 10 users,
+209 available credits and 42 test-mode Stripe events, so it must not be switched
+to live mode. Empty jericho_live_v1 was created on its existing Neon compute;
+the original database and records are preserved. No added compute, card charge
+or new AI request occurred. Conservative OpenAI estimate remains $0.5156508 of
+the approved $9.90. Live credentials, hosting, webhook/portal wiring, recovery
+operations and production customer acceptance remain explicit launch gates.
+
+Password reset/session invalidation, five support-address deliveries and all
+130 current private objects' backup/restore checks are completed in the external
+October 16 receipts. Do not repeat those workflows or resend their emails.
+
 ## October 16 UTC: introductory billing and cancellation acceptance
 
 On deployed `190f407`, the single verified acceptance account completed the

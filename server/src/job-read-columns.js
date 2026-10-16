@@ -14,6 +14,7 @@ export const JOB_SUMMARY_COLUMNS = `id, owner_id, job_type, status, credit_amoun
     'project_id', output->'project_id', 'intent', output->'intent',
     'artifact_id', output->'artifact_id', 'artifact_manifest', output->'artifact_manifest',
     'provider_metadata', output->'provider_metadata',
+    'credit_settlement', output->'credit_settlement',
     'incident_id', output->'incident_id', 'recovery', output->'recovery',
     'released_credits', output->'released_credits', 'provider_state', output->'provider_state',
     'orchestration', CASE WHEN jsonb_typeof(output->'orchestration') = 'object' THEN

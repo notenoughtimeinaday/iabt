@@ -84,7 +84,7 @@ export async function orchestrationStep({ job, workerId, repository, storage, pr
   const definitions = toolDefinitions(tools, user, job);
   const settings = config.orchestration || {};
   const state = structuredClone(job.output.orchestration || {
-    version: 1, phase: "request", turn: 0, polls: 0, spent_cents: 0, calls: [], artifacts: [], failures: [],
+    version: 1, phase: "request", turn: 0, polls: 0, spent_cents: 0, calls: [], artifacts: [], failures: [], usage_model: config.providers.openai.model,
     objective: String(job.input.request_text || "").slice(0, 20000),
     execution_graph: null, inspected_file_ids: []
   });
@@ -135,6 +135,8 @@ export async function orchestrationStep({ job, workerId, repository, storage, pr
   };
 
   if (state.phase === "request") {
+    if (job.input.credit_settlement && (job.input.credit_settlement.model !== config.providers.openai.model ||
+        state.usage_model !== job.input.credit_settlement.model)) return fallback("creation_model_changed_requote_required");
     try { await assertPrivateAcceptanceJob({ config, user, job, repository }); }
     catch (error) { return fallback(error.code || "ai_acceptance_not_authorized"); }
     if (state.turn >= settings.maxTurns || state.spent_cents + settings.responseCostCents > Math.min(settings.budgetCents, approvedBudget)) return fallback("orchestration_budget_exhausted");
@@ -197,6 +199,7 @@ export async function orchestrationStep({ job, workerId, repository, storage, pr
     if (!state.response_usage.some(item => item.response_id === state.response.id)) {
       const tokens = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
       state.response_usage.push({ response_id: state.response.id,
+        model: state.response.model || "",
         input_tokens: tokens(state.response.usage?.input_tokens), output_tokens: tokens(state.response.usage?.output_tokens) });
       await checkpoint();
     }

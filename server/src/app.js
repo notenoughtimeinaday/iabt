@@ -772,6 +772,7 @@ const publicJob = (job) => ({
           ? "reserved"
           : "none",
   artifact_id: job.output?.artifact_id || "",
+  credit_settlement: job.status === "succeeded" ? job.output?.credit_settlement || null : null,
   limitations: Array.isArray(job.output?.provider_metadata?.limitations) ? job.output.provider_metadata.limitations.map(String).slice(0, 12) : [],
   execution: job.output?.orchestration ? {
     phase: job.output.orchestration.phase,

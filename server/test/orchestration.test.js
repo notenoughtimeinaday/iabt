@@ -6,6 +6,7 @@ import { MemoryRepository } from "../src/memory-repository.js";
 import { createProviderRegistry } from "../src/providers/provider-registry.js";
 import { createJobWorker } from "../src/worker.js";
 import { invokeTool, registeredTools, toolDefinitions } from "../src/autonomy/tools.js";
+import { creationCreditPolicy } from "../src/creation/credit-settlement.js";
 
 const call = (name, args, id = "call_document") => ({ type: "function_call", call_id: id, name, arguments: JSON.stringify({ ...(["inspect_file", "create_document", "create_source"].includes(name) ? { node_id: "document" } : {}), ...args }) });
 const document = () => call("create_document", { title: "Bookstore report", markdown: "# Bookstore report\n\nA substantive report with a reproducible review checklist." });
@@ -133,6 +134,31 @@ test("completed Responses usage is durable once per response and distinct from e
     { responses: 2, input_tokens: 2700, output_tokens: 620, complete: true });
   assert.equal(result.job.output.provider_metadata.orchestration.budget_estimate_cents, 4);
   await context.worker.stop();
+});
+
+test("usage-priced worker preserves provider model and settles from durable checkpoints after readback", async () => {
+  const c = await fixture({ env: { OPENAI_MODEL: "gpt-5.6-terra" }, replies: [
+    { ...response("resp_first", [document()]), model: "gpt-5.6-terra", usage: { input_tokens: 1200, output_tokens: 600 } },
+    { ...completed(), model: "gpt-5.6-terra", usage: { input_tokens: 1500, output_tokens: 20 } }
+  ] });
+  c.repository.jobs.get(c.queued.id).input.credit_settlement = creationCreditPolicy("gpt-5.6-terra");
+  const result = await c.drain();
+  assert.equal(result.job.status, "succeeded");
+  assert.equal(result.job.output.credit_settlement.reason, "verified_usage");
+  assert.equal(result.job.output.credit_settlement.captured, 1);
+  assert.equal(result.job.output.orchestration.response_usage[1].model, "gpt-5.6-terra");
+  assert.equal(c.requests.filter(r => r.options.method === "POST").length, 2);
+  await c.worker.stop();
+});
+
+test("a changed configured model cannot spend against a usage-priced quote", async () => {
+  const c = await fixture();
+  c.repository.jobs.get(c.queued.id).input.credit_settlement = creationCreditPolicy("gpt-5.6-terra");
+  const result = await c.drain();
+  assert.notEqual(result.job.status, "succeeded");
+  assert.equal(c.requests.length, 0);
+  assert.equal((await c.repository.getCreditAccount(c.user.id)).available_credits, 10);
+  await c.worker.stop();
 });
 
 test("numeric graph IDs receive actionable repair and cannot bypass accepted planning", async () => {

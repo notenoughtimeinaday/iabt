@@ -1,4 +1,5 @@
 import { createId } from "./security.js";
+import { settleCreationCredits } from "./creation/credit-settlement.js";
 import { assertBillingBinding, assertBillingMode, memoryBillingEvidence, validateBillingEvidence } from "./billing/environment.js";
 import { assertSamePriceContract, normalizePriceContract, validatePriceContracts } from "./billing/price-catalog.js";
 
@@ -552,7 +553,13 @@ export class MemoryRepository {
     sizeBytes,
     sha256
   }) {
-    const record = {
+    const record = this.storedObjectRecord({ id, ownerId, jobId, storageProvider, storageKey, originalName, contentType, sizeBytes, sha256 });
+    this.storedObjects.set(id, record);
+    return clone(record);
+  }
+
+  storedObjectRecord({ id = createId(), ownerId, jobId, storageProvider, storageKey, originalName, contentType, sizeBytes, sha256 }) {
+    return {
       id,
       owner_id: ownerId,
       job_id: jobId,
@@ -564,8 +571,6 @@ export class MemoryRepository {
       sha256,
       created_date: nowIso()
     };
-    this.storedObjects.set(id, record);
-    return clone(record);
   }
 
   async getStoredObject(id, user) {
@@ -599,16 +604,20 @@ export class MemoryRepository {
         code: "durable_output_required"
       });
     }
-    const storedArtifacts = [];
-    for (const item of artifactInputs) {
-      storedArtifacts.push(await this.createStoredObject({ ...item, jobId }));
-    }
+    const settlement = settleCreationCredits(job);
+    const account = this.creditAccount(job.owner_id);
+    if (account.reserved_credits < job.credit_amount) throw Object.assign(new Error("Credit reservation missing"), { code: "credit_reservation_missing" });
+    // No await between lease validation and ledger commit: competing completions
+    // must not both observe a running job in the in-memory adapter either.
+    const storedArtifacts = artifactInputs.map(item => this.storedObjectRecord({ ...item, jobId }));
+    for (const stored of storedArtifacts) this.storedObjects.set(stored.id, clone(stored));
     const stored = storedArtifacts[0] || null;
     const timestamp = nowIso();
     job.status = "succeeded";
     job.output = {
       ...clone(job.output),
       ...clone(output),
+      credit_settlement: settlement,
       ...(stored
         ? {
             artifact_id: stored.id,
@@ -620,18 +629,19 @@ export class MemoryRepository {
     job.locked_by = null;
     job.updated_date = timestamp;
     job.completed_date = timestamp;
-    const account = this.creditAccount(job.owner_id);
     account.reserved_credits -= job.credit_amount;
+    account.available_credits += settlement.returned;
     account.updated_date = timestamp;
-    if (job.credit_amount > 0) {
+    for (const [entryType, amount] of [["capture", settlement.captured], ["release", settlement.returned]]) {
+      if (!amount) continue;
       this.creditEntries.push({
         id: createId(),
         owner_id: job.owner_id,
         job_id: job.id,
-        entry_type: "capture",
-        amount: job.credit_amount,
+        entry_type: entryType,
+        amount,
         idempotency_key: job.idempotency_key,
-        metadata: {},
+        metadata: { ...settlement },
         created_date: timestamp
       });
     }

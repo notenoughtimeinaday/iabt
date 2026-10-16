@@ -1028,7 +1028,7 @@ export default function Studio() {
             </div>
           )}
 
-          {activePlan?.status === "quoted" && <button type="button" className="creator-review-quote-link" onClick={() => { setWorkspaceView("results"); window.requestAnimationFrame(() => document.getElementById("creator-active-plan")?.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" })); }}><CheckCircle2 /><span>A quote is ready · {Number(activePlan.credit_cost || 0)} {Number(activePlan.credit_cost) === 1 ? "credit" : "credits"}</span><ChevronRight /></button>}
+          {activePlan?.status === "quoted" && <button type="button" className="creator-review-quote-link" onClick={() => { setWorkspaceView("results"); window.requestAnimationFrame(() => document.getElementById("creator-active-plan")?.scrollIntoView({ block: "start", behavior: reduceMotion ? "auto" : "smooth" })); }}><CheckCircle2 /><span>A quote is ready · {activePlan.normalized_spec?.credit_settlement ? "up to " : ""}{Number(activePlan.credit_cost || 0)} {Number(activePlan.credit_cost) === 1 ? "credit" : "credits"}</span><ChevronRight /></button>}
 
           {resourceError && <div className="creator-submission-error" role="alert">{resourceError} <button type="button" onClick={() => loadResources(conversation?.id)}>Retry saved results</button></div>}
           <form className="creator-composer creator-composer-auto" onSubmit={sendPrompt}>
@@ -1239,7 +1239,7 @@ export default function Studio() {
             )}
 
             <div className="creator-quote creator-quote-compact">
-              <dl><div className="is-total"><dt>Cost</dt><dd>{Number(activePlan.credit_cost || 0)} {Number(activePlan.credit_cost) === 1 ? "credit" : "credits"}</dd></div></dl>
+              <dl><div className="is-total"><dt>{activePlan.normalized_spec?.credit_settlement ? "Maximum reservation" : "Cost"}</dt><dd>{activePlan.normalized_spec?.credit_settlement ? "Up to " : ""}{Number(activePlan.credit_cost || 0)} {Number(activePlan.credit_cost) === 1 ? "credit" : "credits"}</dd></div></dl>
               <p>{activePlan.consent_summary || "No billing action occurs until you explicitly approve."}</p>
               {activePlan.status === "quoted" && <small className={quoteExpired ? "is-expired" : ""}>
                 {quoteExpired ? "This quote has expired. Ask JERICHO to refresh it." : "Valid until " + formatDate(activePlan.quote_expires_at)}
@@ -1286,7 +1286,7 @@ export default function Studio() {
               <div className="creator-approval">
                 <label>
                   <input type="checkbox" checked={quoteAccepted} onChange={(event) => setQuoteAccepted(event.target.checked)} />
-                  <span>I approve this work for {Number(activePlan.credit_cost || 0)} IABT {Number(activePlan.credit_cost) === 1 ? "credit" : "credits"}.</span>
+                  <span>I approve this work for {activePlan.normalized_spec?.credit_settlement ? "up to " : ""}{Number(activePlan.credit_cost || 0)} IABT {Number(activePlan.credit_cost) === 1 ? "credit" : "credits"}.</span>
                 </label>
                 <Button
                   onClick={approvePlan}
@@ -1327,6 +1327,7 @@ export default function Studio() {
                   )}
                 </div>
                 {job.error_message && <p className="creator-job-error">{job.error_message}</p>}
+                {job.credit_settlement && <p className="creator-credit-receipt">{job.credit_settlement.captured} {job.credit_settlement.captured === 1 ? "credit" : "credits"} used{job.credit_settlement.returned > 0 ? ` · ${job.credit_settlement.returned} returned` : ""}{job.credit_settlement.reason === "usage_unverified" ? " · Usage could not be verified; no credits charged." : ""}</p>}
                 <details className="creator-optional-details"><summary>Activity details</summary><p>{job.stage || readable(job.intent)}</p></details>
               </article>
             ))}

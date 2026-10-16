@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { creationCreditPolicy } from "./credit-settlement.js";
 import { documentTitleFromText } from "../../../shared/document-title.js";
 import { normalizeFileIds, readTextSources, referenceBinding, sourceReferences } from "../files/text-sources.js";
 import { readImageSources } from "../files/image-sources.js";
@@ -555,7 +556,8 @@ export const createCreationPlan = async ({
       ...(["app", "website"].includes(intent) ? { app_output_contract: "self_contained_html_v1" } : {}),
       ...(starter && !orchestrated ? { starter_id: starter } : {}),
       ...(revisionId ? { revision_source: references[0] } : {}),
-      ...(orchestrated ? { orchestration_budget_cents: config.orchestration.budgetCents } : {}),
+      ...(orchestrated ? { orchestration_budget_cents: config.orchestration.budgetCents,
+        ...(creationCreditPolicy(config.providers.openai.model) ? { credit_settlement: creationCreditPolicy(config.providers.openai.model) } : {}) } : {}),
       ...(intent === "audio"
         ? {
             prompt: request,
@@ -606,7 +608,8 @@ export const createCreationPlan = async ({
       capability.creditCost +
       " IABT credit" +
       (capability.creditCost === 1 ? "" : "s") +
-      " will be reserved only after explicit approval.",
+      " will be reserved only after explicit approval." + (orchestrated && creationCreditPolicy(config.providers.openai.model)
+        ? " You pay only the usage-based credits needed, up to this maximum. Unused credits return automatically. If usage cannot be verified, the reservation is returned." : ""),
     job_type: capability.jobType,
     commercial_summary: {
       execution_ready: capability.renderReady,

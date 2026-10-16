@@ -1,6 +1,6 @@
-# Gated Jericho offer candidate — October 6, 2026
+# Gated Jericho offers — October 16, 2026
 
-This implements a disabled, test-only candidate. The owner's authorization to
+This implements offers with separate test and live activation. The owner's authorization to
 complete affordable monetization covers the staging offer, introductory policy
 and disclosure below. It creates no Stripe products/prices/coupons and changes
 no service configuration by itself. Production launch, legal/tax acceptance,
@@ -44,6 +44,7 @@ All of these names are new server configuration, never frontend secrets:
 | Setting | Default / requirement |
 | --- | --- |
 | `IABT_NEW_OFFERS_ENABLED` | `false` |
+| `IABT_LIVE_OFFERS_ENABLED` | `false`; required in addition to the main offer gate for live mode |
 | `IABT_MEET_JERICHO_ENABLED` | `false` |
 | `IABT_NEW_OFFER_TERMS_VERSION` | Empty; explicit future acceptance must match `jericho-2026-10-review-1` |
 | `IABT_STRIPE_ACCOUNT_ID` | Empty; exact intended standalone Stripe account, separately authorized |
@@ -52,10 +53,30 @@ All of these names are new server configuration, never frontend secrets:
 | `IABT_STRIPE_PRO_V2_PRICE_ID` | Empty; new monthly USD 5900 price |
 | `IABT_MEET_JERICHO_COUPON_ID` | Empty; USD 701 off, once, restricted exclusively to the new Starter product |
 
-`IABT_STRIPE_MODE` must be `test`; this candidate refuses new-offer activation
-in live mode even when every switch is set. Existing legacy live behavior is not
-changed. Customer acceptance is separate: every new offer request must include
+`IABT_STRIPE_MODE=test` cannot enable real charges. Live mode additionally needs
+`IABT_LIVE_OFFERS_ENABLED=true`, an isolated live-bound database, a live credential,
+the intended account with payments and payouts enabled, and exact live prices and
+coupon. Provider terms are checked before creating Checkout. Existing legacy
+behavior is unchanged. Customer acceptance is separate: every new offer request must include
 the current disclosure version and affirmative acceptance.
+
+## Usage-based creation credits
+
+New `gpt-5.6-terra` quotes sign `terra-usage-2026-10-16.1` into their normalized
+arguments. The maximum reservation is unchanged. On successful durable artifact
+delivery, the worker's saved provider usage determines the final charge and
+unused credits return atomically. Existing fixed quotes/jobs keep their terms.
+Missing, incomplete, duplicated, invalid or unpriced-model usage returns all
+reserved credits; that does not mean the provider charged nothing.
+
+The retail weights are 2,500 nano-USD per input token and 12,000 per output token,
+including reasoning. Input uses the conservative cache-write rate. A response
+over 272,000 input tokens uses 2x input and 1.5x output weights. Sum across
+responses, divide by 30,000,000 nano-USD per credit, round up once and cap at the
+approved reservation. These weights are versioned retail policy, not an invoice.
+Rates were checked against https://developers.openai.com/api/docs/models/gpt-5.6-terra
+on October 16. Reused acceptance examples calculate 4, 3 and 11 credits instead
+of the former 54-credit capture. No historical ledger entry is rewritten.
 
 Keep existing `STRIPE_BUILDER_PRICE_ID`, `STRIPE_PRO_PRICE_ID`,
 `STRIPE_AGENCY_PRICE_ID`, `STRIPE_AI_CREDIT_PACK_PRICE_ID`, pack size, keys,

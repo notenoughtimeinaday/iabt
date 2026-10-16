@@ -1,4 +1,5 @@
 import pg from "pg";
+import { settleCreationCredits } from "./creation/credit-settlement.js";
 import { createId } from "./security.js";
 import { applyMigrations } from "./migrations.js";
 import { assertBillingBinding, assertBillingMode, BILLING_EVIDENCE_SQL, validateBillingEvidence } from "./billing/environment.js";
@@ -885,9 +886,11 @@ export class PostgresRepository {
         storedArtifacts.push(await this.createStoredObject({ ...item, jobId }, client));
       }
       const stored = storedArtifacts[0] || null;
+      const settlement = settleCreationCredits(job);
       const finalOutput = {
         ...job.output,
         ...output,
+        credit_settlement: settlement,
         ...(stored
           ? {
               artifact_id: stored.id,
@@ -900,14 +903,18 @@ export class PostgresRepository {
         [jobId, workerId, JSON.stringify(finalOutput)]
       );
       if (job.credit_amount > 0) {
-        await client.query(
-          "UPDATE iabt_credit_accounts SET reserved_credits = reserved_credits - $2, updated_at = now() WHERE owner_id = $1 AND reserved_credits >= $2",
-          [job.owner_id, job.credit_amount]
+        const balance = await client.query(
+          "UPDATE iabt_credit_accounts SET reserved_credits = reserved_credits - $2, available_credits = available_credits + $3, updated_at = now() WHERE owner_id = $1 AND reserved_credits >= $2",
+          [job.owner_id, job.credit_amount, settlement.returned]
         );
-        await client.query(
-          "INSERT INTO iabt_credit_entries (id, owner_id, job_id, entry_type, amount, idempotency_key) VALUES ($1,$2,$3,'capture',$4,$5)",
-          [createId(), job.owner_id, job.id, job.credit_amount, job.idempotency_key]
-        );
+        if (balance.rowCount !== 1) throw Object.assign(new Error("Credit reservation missing"), { code: "credit_reservation_missing" });
+        for (const [entryType, amount] of [["capture", settlement.captured], ["release", settlement.returned]]) {
+          if (!amount) continue;
+          await client.query(
+            "INSERT INTO iabt_credit_entries (id, owner_id, job_id, entry_type, amount, idempotency_key, metadata) VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)",
+            [createId(), job.owner_id, job.id, entryType, amount, job.idempotency_key, JSON.stringify(settlement)]
+          );
+        }
       }
       return {
         job: jobFromRow(updated.rows[0]),
