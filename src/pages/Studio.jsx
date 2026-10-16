@@ -580,6 +580,7 @@ export default function Studio() {
   useEffect(() => {
     if (!conversation?.id) return undefined;
     const timer = window.setInterval(() => {
+      if (document.hidden) return;
       void loadResources(conversation.id, true);
     }, 6500);
     return () => window.clearInterval(timer);

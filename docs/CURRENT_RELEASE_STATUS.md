@@ -1,5 +1,43 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 16 UTC: authorized API budget preserved while restoring database access
+
+The owner authorized up to $9.90 of the existing OpenAI balance for tests that
+directly advance completion. No API call or purchase has been made under that
+authorization in this continuation. Fresh Neon control-plane evidence confirms
+`noisy-bread-33052649` (IABT Isolated Staging) is on `free_v3` with
+6,245,714,826 transfer bytes for October; its reset is November 1 at 00:00 UTC.
+Current Render API logs still report the provider quota error, and the hosted
+workspace shows its connection-recovery screen. The API budget does not restore
+Neon service or authorize a separate organization-wide paid database plan.
+
+The source was refreshed through `ba1d121918e1832c7ce1dca4ae30419c657d80a7`.
+Code inspection found avoidable transfer, without proving the source of the
+historical quota exhaustion. Standard scalar entity filters and date/ID paging
+now run in SQL instead of fetching up to 5,000 complete records and filtering
+in Node. Job/status/artifact readers use compact SQL projections, while worker
+and recovery readers retain complete durable input/output. Multiple artifacts
+from one job reuse its summary within each request. Conversation subscriptions
+skip unchanged callbacks, overlapping requests and disposed subscribers;
+hidden tabs pause conversation and desk refreshes. Existing operator/custom
+sort queries retain their compatibility fallback.
+
+`npm run verify` passed locally: lint, typecheck, deterministic checks, 452
+executed tests and production build. This host cannot install/run its disposable
+PostgreSQL service, so 51 database tests were skipped. The new PostgreSQL
+regressions check SQL-side paging, owner isolation, reduced summary payloads and
+preservation of full recovery state; their CI result is a separate required
+gate. No hosted transfer reduction or successful paid creation is claimed.
+
+Restoration choices are an owner-approved Neon Launch billing upgrade or the
+provider's allowance reset. Current official Launch rates are $0.106/CU-hour
+and $0.35/GB-month of database storage, with no monthly minimum and 500 GB of
+public transfer per project. This is separate recurring usage billing, not an
+OpenAI-balance charge. Check all organization projects and compute limits before
+activation. After restoration: deploy the verified candidate to existing isolated
+staging, verify account/file access, then run bounded useful-app, source-revision
+and document acceptance. Public launch and live commerce remain unaccepted.
+
 ## October 15: product package and explicit startup recovery
 
 The private `1.0.0-preview.1` release kit contains a focused offering, customer

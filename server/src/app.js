@@ -805,11 +805,11 @@ const handleJobs = async ({ req, segments, repository }) => {
   const authenticated = await authenticate(req, repository);
   const user = { ...authenticated.user, role: "user" };
   if (req.method === "GET" && segments.length === 2) {
-    const jobs = await repository.listJobs(user, { limit: 100 });
+    const jobs = await repository.listJobs(user, { limit: 100, summaryOnly: true });
     return { status: 200, payload: jobs.map(publicJob) };
   }
   if (req.method === "GET" && segments[2]) {
-    const job = await repository.getJob(decodeURIComponent(segments[2]), user);
+    const job = await repository.getJob(decodeURIComponent(segments[2]), user, { summaryOnly: true });
     if (!job) throw new HttpError(404, "job_not_found", "Job was not found");
     return { status: 200, payload: publicJob(job) };
   }
@@ -827,8 +827,12 @@ const handleArtifacts = async ({ req, repository, storage }) => {
   }
   const objects = await repository.listStoredObjects(user, { limit: 250 });
   const artifacts = [];
+  const jobsById = new Map();
   for (const object of objects) {
-    const job = object.job_id ? await repository.getJob(object.job_id, user) : null;
+    if (object.job_id && !jobsById.has(object.job_id)) {
+      jobsById.set(object.job_id, await repository.getJob(object.job_id, user, { summaryOnly: true }));
+    }
+    const job = object.job_id ? jobsById.get(object.job_id) : null;
     const manifest = job?.output?.artifact_manifest || [];
     const details = manifest.find((item) => item.id === object.id) || {};
     artifacts.push({

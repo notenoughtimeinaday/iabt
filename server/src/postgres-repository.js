@@ -3,6 +3,7 @@ import { createId } from "./security.js";
 import { applyMigrations } from "./migrations.js";
 import { assertBillingBinding, assertBillingMode, BILLING_EVIDENCE_SQL, validateBillingEvidence } from "./billing/environment.js";
 import { assertSamePriceContract, normalizePriceContract, validatePriceContracts } from "./billing/price-catalog.js";
+import { JOB_SUMMARY_COLUMNS } from "./job-read-columns.js";
 
 const { Pool } = pg;
 const clone = (value) => structuredClone(value);
@@ -178,7 +179,7 @@ export class PostgresRepository {
 
   // Security decisions must filter before limiting results. In particular an
   // old active block cannot disappear behind newer unrelated records.
-  async listRecordsExact(entityName, user, { query = {}, sort = "-created_date", limit = 50 } = {}) {
+  async listRecordsExact(entityName, user, { query = {}, sort = "-created_date", limit = 50, skip = 0 } = {}) {
     const payload = {};
     const params = [entityName];
     const clauses = ["entity_name = $1"];
@@ -200,7 +201,7 @@ export class PostgresRepository {
       `SELECT entity_name, id, owner_id, payload, created_at, updated_at
        FROM iabt_entity_records WHERE ${clauses.join(" AND ")}
        ORDER BY ${order} ${descending ? "DESC" : "ASC"} NULLS LAST, id ASC
-       LIMIT $${params.push(bound)}`,
+       LIMIT $${params.push(bound)} OFFSET $${params.push(Math.max(0, Math.floor(Number(skip) || 0)))}`,
       params
     );
     return result.rows.map(recordFromRow);
@@ -452,6 +453,17 @@ export class PostgresRepository {
   }
 
   async listRecords(entityName, user, { query = {}, sort, limit = 50, skip = 0 } = {}) {
+    // The workspace's scalar filters and date paging belong in SQL. Keep the
+    // legacy operator/custom-sort path until its coercion semantics are ported.
+    const scalarQuery = Object.entries(query || {}).every(([key, value]) =>
+      !["created_date", "updated_date"].includes(key) &&
+      !Object.hasOwn(Object.prototype, key) &&
+      (value === null || ["string", "number", "boolean"].includes(typeof value)) &&
+      (!["id", "owner_id"].includes(key) || (typeof value === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value))));
+    if (scalarQuery && /^-?(?:created_date|updated_date|id|owner_id)$/.test(sort || "-created_date") &&
+        Number.isSafeInteger(limit) && limit > 0 && limit <= 5000 && Number.isSafeInteger(skip) && skip >= 0) {
+      return this.listRecordsExact(entityName, user, { query: query || {}, sort: sort || "-created_date", limit, skip });
+    }
     const params = [entityName];
     const ownerClause =
       user.role === "admin"
@@ -1041,22 +1053,22 @@ export class PostgresRepository {
     }));
   }
 
-  async getJob(id, user) {
+  async getJob(id, user, { summaryOnly = false } = {}) {
     const params = [id];
     const ownerClause = user.role === "admin" ? "" : " AND owner_id = $" + params.push(user.id);
     const result = await this.pool.query(
-      "SELECT * FROM iabt_jobs WHERE id = $1" + ownerClause + " LIMIT 1",
+      `SELECT ${summaryOnly ? JOB_SUMMARY_COLUMNS : "*"} FROM iabt_jobs WHERE id = $1` + ownerClause + " LIMIT 1",
       params
     );
     return jobFromRow(result.rows[0]);
   }
 
-  async listJobs(user, { limit = 50 } = {}) {
+  async listJobs(user, { limit = 50, summaryOnly = false } = {}) {
     const params = [];
     const ownerClause = user.role === "admin" ? "" : " WHERE owner_id = $" + params.push(user.id);
     params.push(Math.max(1, Math.min(250, limit)));
     const result = await this.pool.query(
-      "SELECT * FROM iabt_jobs" + ownerClause + " ORDER BY created_at DESC LIMIT $" + params.length,
+      `SELECT ${summaryOnly ? JOB_SUMMARY_COLUMNS : "*"} FROM iabt_jobs` + ownerClause + " ORDER BY created_at DESC LIMIT $" + params.length,
       params
     );
     return result.rows.map(jobFromRow);
