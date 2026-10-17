@@ -5,6 +5,9 @@ import { Download, Trash2, FileText, Image as ImageIcon, Music, Video, Archive, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { base44, platformRuntime } from "@/api/iabtClient";
+import { useToast } from "@/components/ui/use-toast";
+import { openFileDownload, resolveFileDownload } from "@/lib/stored-files";
 
 const KIND_ICONS = {
   document: FileText,
@@ -28,6 +31,20 @@ export default function AssetList({ assets, onDelete, onUpdate }) {
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState(null);
   const [notes, setNotes] = useState("");
+  const [downloading, setDownloading] = useState("");
+  const { toast } = useToast();
+
+  const download = async (asset) => {
+    setDownloading(asset.id);
+    try {
+      const url = await resolveFileDownload(base44, asset, platformRuntime.backend === "standalone");
+      openFileDownload(url, asset.name);
+    } catch (error) {
+      toast({ title: "File could not be downloaded", description: error.message, variant: "destructive" });
+    } finally {
+      setDownloading("");
+    }
+  };
 
   const filtered = assets.filter((a) => a.name.toLowerCase().includes(query.toLowerCase()));
 
@@ -71,10 +88,8 @@ export default function AssetList({ assets, onDelete, onUpdate }) {
                   </p>
                 </div>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                    <a href={asset.file_url} download={asset.name} target="_blank" rel="noreferrer">
-                      <Download className="h-4 w-4" />
-                    </a>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Download ${asset.name}`} disabled={downloading === asset.id} onClick={() => download(asset)}>
+                    <Download className="h-4 w-4" />
                   </Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => onDelete(asset)}>
                     <Trash2 className="h-4 w-4" />
@@ -102,10 +117,8 @@ export default function AssetList({ assets, onDelete, onUpdate }) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" asChild>
-              <a href={editing?.file_url} download={editing?.name} target="_blank" rel="noreferrer">
-                <Download className="h-4 w-4 mr-2" /> Download
-              </a>
+            <Button variant="outline" disabled={downloading === editing?.id} onClick={() => download(editing)}>
+              <Download className="h-4 w-4 mr-2" /> Download
             </Button>
             <Button onClick={saveNotes}>Save Notes</Button>
           </DialogFooter>

@@ -12,10 +12,11 @@
     "verify:exchange": "node scripts/verify-exchange.mjs",
     "verify:creation": "node scripts/verify-creation.mjs",
     "verify:standalone": "node --test server/test/*.test.js",
+    "verify:files": "node --test scripts/stored-files.test.mjs scripts/upload-batch.test.mjs",
     "verify:base44-export": "node scripts/verify-base44-export.mjs",
     "verify:staging": "node scripts/verify-staging.mjs",
     "verify:frontend": "node --test scripts/verify-frontend.mjs",
-    "verify": "npm run lint && npm run typecheck && npm run verify:exchange && npm run verify:creation && npm run verify:standalone && npm run verify:frontend && npm run build",
+    "verify": "npm run lint && npm run typecheck && npm run verify:exchange && npm run verify:creation && npm run verify:standalone && npm run verify:files && npm run verify:frontend && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {
