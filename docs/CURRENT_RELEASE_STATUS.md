@@ -1,5 +1,29 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 19 UTC: production starter delivery and R&D reconciliation
+
+The verified production owner created the named task-list starter on deployed
+commit `e685973`. It saved and downloaded both a standalone HTML application and
+a source ZIP, consumed exactly one included IABT credit (nine to eight), and made
+no external provider request. The generated preview accepted a new task, marked
+it complete and updated its remaining-task count. The ZIP contains `index.html`,
+`README.md` and `REVIEW.md`; its `index.html` is byte-identical to the downloaded
+HTML. The external receipt and both artifacts are preserved under
+`production-starter-20261019`.
+
+A fresh production reload also confirmed that the repaired owner-only Meet
+Jericho offer is checkout-ready while the disabled credit pack remains separate.
+Existing test-mode purchase, renewal, cancellation and fulfillment evidence is
+retained. Do not repeat a purchase, first delivery or named-starter check.
+
+Reconciliation with the "Jericho R&D Advancements" chat closes checkout repair
+and first production delivery as remaining gates. The material capability gap is
+production custom AI: the deterministic starter does not certify Jericho's custom
+application, revision or document-generation paths. Production has no configured
+`OPENAI_API_KEY`, and the prior $9.90 approval was limited to private tests rather
+than an ongoing public operating budget. Public paid offers therefore remain off.
+Recurring off-device recovery and final commercial review also remain open.
+
 ## October 19 UTC: production owner and independent purchase readiness
 
 Production registration and email verification are complete. One authenticated
