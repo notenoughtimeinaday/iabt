@@ -48,6 +48,15 @@ test("new sale cards do not relabel a legacy subscriber or replace a purchased a
   assert.equal(purchasedPlanSummary({ ...legacy, plan: "free", status: "canceled" }).monthlyCredits, 0);
 });
 
+test("an available versioned offer never enables an unconfigured credit pack", () => {
+  const view = billingViewState({}, { configured: true, checkout_ready: false, offer_checkout_ready: true, credit_checkout_ready: false });
+  assert.equal(view.checkoutReady, true);
+  assert.equal(view.creditCheckoutReady, false);
+  assert.equal(billingViewState({}, { checkout_ready: true, credit_checkout_ready: false }).creditCheckoutReady, false);
+  assert.equal(billingViewState({}, { ready: true }).creditCheckoutReady, true);
+  assert.equal(billingViewState({}, { configured: true, checkout_ready: false, offer_checkout_ready: false }).checkoutReady, false);
+});
+
 test("unpaid subscribers retain billing management when checkout is disabled", () => {
   const entitlement = { billing_provider: "stripe", provider_customer_id: "cus_existing", provider_subscription_id: "sub_existing", status: "unpaid" };
   const view = billingViewState(entitlement, { configured: true, checkout_ready: false });

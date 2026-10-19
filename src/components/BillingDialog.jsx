@@ -26,6 +26,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
   const pendingOffer = offerStatus?.pending_offer;
   const billingMode = billing.mode;
   const billingReady = billing.checkoutReady;
+  const purchasesReady = billingReady || billing.creditCheckoutReady;
   const hasStripeSubscription = billing.hasSubscription;
   const checkoutKeys = useRef({});
   const retryKey = (action) => {
@@ -125,7 +126,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
           <span><Zap /> Change plans through Stripe</span>
         </div>
 
-        {!billingReady && billing.loaded && (
+        {!purchasesReady && billing.loaded && (
           <div className="iabt-billing-economics" role="status">
             <div><ShieldCheck /></div>
             <p>
@@ -236,7 +237,7 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
             <strong>{billing.creditPackSize ? `${billing.creditPackSize.toLocaleString()} extra IABT credits` : "Extra IABT credit pack"}</strong>
             <p>Purchased credits stay available until used. Review the total, including any taxes, before paying.</p>
           </div>
-          <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan) || !billingReady}>
+          <Button variant="outline" onClick={startCreditCheckout} disabled={Boolean(busyPlan) || !billing.creditCheckoutReady}>
             {busyPlan === "credits" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             {billingMode === "live" ? "Buy credit pack" : "Test credit-pack checkout"}
           </Button>
@@ -244,10 +245,10 @@ export default function BillingDialog({ open, onOpenChange, entitlement, billing
 
         <p className="iabt-billing-note">
           {!billing.loaded ? "Billing status is unavailable. Reopen this page once your account has loaded." : billingMode === "live"
-            ? billingReady
+            ? purchasesReady
               ? "Live checkout can create real charges after you confirm payment in Stripe. Credits appear only after payment is verified."
               : "Live purchases are unavailable until billing setup is completed."
-            : billingReady
+            : purchasesReady
               ? "Test checkout is available. Credits from test payments are for testing this environment."
               : "Test checkout is unavailable until billing setup is completed."}
         </p>

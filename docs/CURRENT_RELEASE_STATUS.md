@@ -1,5 +1,34 @@
 # Current IABT release status — October 15, 2026 (UTC)
 
+## October 19 UTC: production owner and independent purchase readiness
+
+Production registration and email verification are complete. One authenticated
+text-export job saved Markdown, Word and PDF files. All three browser downloads
+match their private stored hashes; the saved conversation survives reload. One
+credit was captured, nine remain available and zero remain reserved. This used
+no paid provider request and did not repeat the prior three AI acceptance jobs.
+
+The private production billing review found that versioned offers were blocked
+by empty legacy plan and credit-pack selectors. The repair keeps the selected
+offer's price, contract, account, disclosure and activation checks, while removing
+those unrelated dependencies. Credit-pack availability is reported independently;
+an owner-only offer cannot unlock a disabled credit pack or another account.
+Local, CI and hosted acceptance receipts for this repair are separate gates.
+
+Do not require a real-card test purchase: Stripe's testing guidance prohibits
+real-payment testing in live mode (https://docs.stripe.com/testing). Retain the
+completed test-mode payment/renewal/cancellation evidence, review the unpaid live
+Checkout, and observe fulfillment only for a genuine authorized customer purchase.
+
+Public offers and paid AI remain off. The previously approved $9.90 is a private
+test budget, not an ongoing customer operating allowance. OpenAI's current project
+hard spending limit is an available provider control, with documented enforcement
+delay and possible slight overshoot; it is not a zero-overrun invoice guarantee.
+The existing Saas project also holds other application keys, so a project-wide
+limit affects those keys as well. No provider limit or public operating amount has
+been saved or approved. Scheduled off-device recovery and final commercial review
+remain open. External October 19 receipts supersede older owner-registration gates.
+
 ## October 16 UTC: production hosting and private acceptance
 
 The approved $7/month API and static frontend are live at

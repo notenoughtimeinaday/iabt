@@ -66,9 +66,13 @@ const createStripeSession = async ({
   return result.data;
 };
 
-const assertCheckoutReady = (providers) => {
+const assertCheckoutReady = (providers, kind = "legacy") => {
   const readiness = providers?.readiness?.().stripe;
-  if (!readiness?.checkout_ready) {
+  // Versioned offers verify their own selected price and contract below. They
+  // must not depend on retired legacy plans or an unrelated credit-pack price.
+  const ready = kind === "offer" ? readiness?.configured : kind === "credits"
+    ? (readiness?.credit_checkout_ready ?? readiness?.checkout_ready) : readiness?.checkout_ready;
+  if (!ready) {
     throw billingError(
       503,
       "stripe_checkout_not_ready",
@@ -126,7 +130,7 @@ export const createSubscriptionCheckout = async ({
       retrieve: (sessionId) => retrieveSubscriptionCheckout({ config, sessionId, fetchImpl: providers.fetch || globalThis.fetch }) });
   }
 
-  assertCheckoutReady(providers);
+  assertCheckoutReady(providers, offerId ? "offer" : "legacy");
 
   const offer = offerId ? configuredOffer(config, offerId, user, now()) : null;
   const offerTerms = offer ? offerAcceptance(offer, acceptance) : null;
@@ -196,7 +200,7 @@ export const createCreditCheckout = async ({
   idempotencyKey
 }) => {
   await ensureBillingPriceCatalog({ repository, config });
-  assertCheckoutReady(providers);
+  assertCheckoutReady(providers, "credits");
   const entitlement = await currentEntitlement(repository, user);
   const customer = customerId(entitlement);
   const metadata = {

@@ -7,7 +7,8 @@ import { loadConfig } from "../src/config.js";
 import { MemoryRepository } from "../src/memory-repository.js";
 import { PostgresRepository } from "../src/postgres-repository.js";
 import { ensureBillingPriceCatalog } from "../src/billing/price-catalog.js";
-import { createSubscriptionCheckout, pendingOfferSummary } from "../src/billing/stripe-checkout.js";
+import { createSubscriptionCheckout, createCreditCheckout, pendingOfferSummary } from "../src/billing/stripe-checkout.js";
+import { createProviderRegistry } from "../src/providers/provider-registry.js";
 import { processStripeWebhook } from "../src/billing/stripe-webhook.js";
 import { introEligibility } from "../src/billing/intro-eligibility.js";
 import { OFFER_CATALOG_VERSION, OFFER_TERMS_VERSION, INTRO_OFFER_ID, publicBillingOffers, probeOfferProviderTerms, configuredOffer } from "../src/billing/offers.js";
@@ -139,7 +140,10 @@ test("private live acceptance is verified-owner-only, intro-only, time-bounded a
 });
 
 test("private acceptance HTTP routes use the authenticated account rather than submitted identity", async t => {
-  const f = await fixture(t), config = ownerWindowConfig(f.user, Date.now() - 1000);
+  const f = await fixture(t), config = ownerWindowConfig(f.user, Date.now() - 1000, {
+    STRIPE_BUILDER_PRICE_ID: "", STRIPE_PRO_PRICE_ID: "", STRIPE_AGENCY_PRICE_ID: "", STRIPE_AI_CREDIT_PACK_PRICE_ID: ""
+  });
+  f.providers.readiness = () => createProviderRegistry(config).readiness();
   const other = await f.repository.createUser({ email: "http-other@example.test", passwordHash: "unused", emailVerified: true });
   const tokens = [];
   for (const user of [f.user, other]) {
@@ -155,16 +159,36 @@ test("private acceptance HTTP routes use the authenticated account rather than s
     });
     return { status: response.status, body: await response.json() };
   };
-  assert.deepEqual((await request(tokens[0], "get-account-entitlement")).body.data.billing.offers.map(x => x.id), [INTRO_OFFER_ID]);
+  const ownerBilling = (await request(tokens[0], "get-account-entitlement")).body.data.billing;
+  assert.deepEqual(ownerBilling.offers.map(x => x.id), [INTRO_OFFER_ID]);
+  assert.equal(ownerBilling.offer_checkout_ready, true);
+  assert.equal(ownerBilling.checkout_ready, false);
+  assert.equal(ownerBilling.credit_checkout_ready, false);
   const spoof = { user_id: f.user.id, email: f.user.email, role: "admin", email_verified: true,
     offer_id: INTRO_OFFER_ID, disclosure_acceptance: { accepted: true, version: OFFER_TERMS_VERSION } };
-  assert.deepEqual((await request(tokens[1], "get-account-entitlement", spoof)).body.data.billing.offers, []);
+  const otherBilling = (await request(tokens[1], "get-account-entitlement", spoof)).body.data.billing;
+  assert.deepEqual(otherBilling.offers, []);
+  assert.equal(otherBilling.offer_checkout_ready, false);
   const rejected = await request(tokens[1], "stripe-create-checkout", spoof);
   assert.equal(rejected.status, 409); assert.equal(rejected.body.error, "billing_offer_disabled");
   assert.equal(f.calls.length, 0); assert.equal(f.reads.length, 0);
 });
 
 for (const adapter of ["memory", "postgres"]) {
+  test(`${adapter}: versioned checkout needs no retired plan or credit-pack prices`,
+    { skip: adapter === "postgres" && !databaseUrl }, async t => {
+      const f = await fixture(t, adapter), config = ownerWindowConfig(f.user, Date.now() - 1000, {
+        STRIPE_BUILDER_PRICE_ID: "", STRIPE_PRO_PRICE_ID: "", STRIPE_AGENCY_PRICE_ID: "", STRIPE_AI_CREDIT_PACK_PRICE_ID: ""
+      });
+      liveFixture(f);
+      f.providers.readiness = () => createProviderRegistry(config).readiness();
+      assert.equal(f.providers.readiness().stripe.checkout_ready, false);
+      assert.equal((await f.create({ config })).kind, "checkout");
+      assert.equal(f.calls[0].params['line_items[0][price]'], 'price_new_starter');
+      assert.equal(f.calls[0].params['discounts[0][coupon]'], 'coupon_intro');
+      await assert.rejects(createCreditCheckout({ ...f, config, idempotencyKey: 'disabled-pack' }), { code: 'stripe_checkout_not_ready' });
+      assert.equal(f.calls.length, 1);
+    });
   test(`${adapter}: private live acceptance rechecks expiry inside admission and preserves one existing purchase`,
     { skip: adapter === "postgres" && !databaseUrl }, async t => {
       const f = await fixture(t, adapter), start = Date.now(), config = ownerWindowConfig(f.user, start);

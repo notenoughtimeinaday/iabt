@@ -31,7 +31,8 @@ export function billingViewState(entitlement, billingStatus) {
   return {
     loaded: Boolean(status),
     mode: status?.mode === "live" ? "live" : "test",
-    checkoutReady: Boolean(status?.checkout_ready ?? status?.ready),
+    checkoutReady: Boolean(status?.offer_checkout_ready || (status?.checkout_ready ?? status?.ready)),
+    creditCheckoutReady: Boolean(status?.credit_checkout_ready ?? status?.checkout_ready ?? status?.ready),
     portalReady: Boolean(status?.configured ?? status?.ready),
     hasSubscription,
     subscriptionStatus,

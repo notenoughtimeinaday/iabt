@@ -11,6 +11,7 @@ import { processStripeWebhook } from "../src/billing/stripe-webhook.js";
 import { createCreationPlan } from "../src/creation/planner.js";
 import { createJobWorker } from "../src/worker.js";
 import { LocalObjectStorage } from "../src/storage/local-storage.js";
+import { createProviderRegistry } from "../src/providers/provider-registry.js";
 
 // These are local contract checks using signed synthetic Stripe events. They
 // are not hosted Checkout, card-network, bank-refund or sandbox acceptance.
@@ -50,6 +51,21 @@ async function fixture(t) {
   const entitlement = async () => (await repository.listRecordsExact("AccountEntitlement", user, { limit: 1 }))[0];
   return { repository, user, config, storage, metadata, subscription, invoice, providers, calls, deliver, entitlement };
 }
+
+test("a configured credit pack is independent of unused subscription selectors", async t => {
+  const f = await fixture(t);
+  const config = loadConfig({ NODE_ENV: "test", STRIPE_SECRET_KEY: "sk_test_fixture", STRIPE_WEBHOOK_SECRET: "whsec_fixture", STRIPE_AI_CREDIT_PACK_PRICE_ID: "price_pack" });
+  f.providers.readiness = () => createProviderRegistry(config).readiness();
+  assert.equal(f.providers.readiness().stripe.checkout_ready, false);
+  await createCreditCheckout({ ...f, config, idempotencyKey: "standalone-pack" });
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].params['line_items[0][price]'], 'price_pack');
+  assert.equal(f.calls[0].params.mode, 'payment');
+  const blocked = loadConfig({ NODE_ENV: "test", STRIPE_AI_CREDIT_PACK_PRICE_ID: "price_pack" });
+  f.providers.readiness = () => createProviderRegistry(blocked).readiness();
+  await assert.rejects(createCreditCheckout({ ...f, config: blocked, idempotencyKey: "missing-key" }), { code: 'stripe_checkout_not_ready' });
+  assert.equal(f.calls.length, 1);
+});
 
 test("local billing contract: a signed purchase funds verified private delivery and failed delivery restores only IABT credits", async (t) => {
   const f = await fixture(t);

@@ -1015,6 +1015,7 @@ const handleFunction = async ({
           total_iabt_credits_remaining: account.available_credits,
           base44_required: false,
           billing: { ...(providers?.readiness?.().stripe || {}), credit_pack_size: config.providers.stripe.creditPackSize,
+            offer_checkout_ready: providers?.readiness?.().stripe?.configured === true && publicBillingOffers(config, user).length > 0,
             offers: publicBillingOffers(config, user), new_offers_enabled: newOffersAvailable(config, user),
             pending_offer: await pendingOfferSummary({ repository, config, user, providers }),
             intro_eligibility: newOffersAvailable(config, user) ? await introEligibility({ repository, config, user }) : null }

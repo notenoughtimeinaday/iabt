@@ -162,6 +162,7 @@ export class ProviderRegistry {
       stripe: {
         configured: stripe,
         checkout_ready: stripe && stripePricesReady,
+        credit_checkout_ready: stripe && /^price_[a-zA-Z0-9_]+$/.test(p.stripe.creditPackPriceId || ""),
         prices_ready: stripePricesReady,
         mode: p.stripe.mode,
         blocker_codes: [
