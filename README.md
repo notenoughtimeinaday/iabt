@@ -60,6 +60,8 @@ Production frontend builds require a valid absolute `VITE_IABT_API_URL` origin. 
 
 Orchestration is off by default. Enabling it requires an OpenAI key, `IABT_ENABLE_PAID_AI`, `IABT_ENABLE_ORCHESTRATION`, `IABT_ORCHESTRATION_BUDGET_ACCEPTED`, positive `IABT_OPENAI_RESPONSE_COST_CENTS` and `IABT_ORCHESTRATION_BUDGET_CENTS`, plus the user's accepted server quote for each paid workflow.
 
+Video rendering is excluded from the current product by default. `IABT_ENABLE_VIDEO_RENDERING=true` is a separate server-owned release gate; an advanced creation profile, provider key or media billing switch cannot enable a new video plan without it.
+
 The worker limits model turns, polls, output tokens and graph attempts. Configured supplier costs are **operator estimates, not provider-enforced dollar caps**. Review actual provider pricing, account limits and usage before authorizing live calls. Paid-provider regression tests use mocked transports; they do not prove a funded account or a live provider result.
 
 For a private staging acceptance window, set `IABT_AI_ACCEPTANCE_ONLY=true`,

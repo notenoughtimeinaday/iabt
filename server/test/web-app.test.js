@@ -56,7 +56,7 @@ test("the core profile rejects new extended plans without charges; advanced requ
   const customer = await fixture({ ai: false, profile: "advanced" });
   await assert.rejects(customer.plan({ requestText: "Create a video" }), { code: "creation_feature_paused" });
   const admin = await fixture({ ai: false, profile: "advanced", role: "admin" });
-  assert.equal((await admin.plan({ requestText: "Create a video" })).plan.intent, "video");
+  await assert.rejects(admin.plan({ requestText: "Create a video" }), (error) => error.code === "creation_feature_paused" && /not included/.test(error.message));
 });
 
 test("unavailable custom creation offers named starters instead of billing a generic app", async () => {

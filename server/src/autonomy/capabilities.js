@@ -32,6 +32,7 @@ export async function capabilityRegistry({ config = {}, providers, repository, s
     blockers: [...(state?.blocker_codes || []), "connectivity_not_verified"], fallback_capability: fallback
   });
   const privateReady = databaseOk === false || storageOk === false ? false : databaseOk === true && storageOk === true ? true : null;
+  const videoEnabled = config.creation?.videoEnabled === true;
   const privateBlockers = [...(databaseOk !== true ? ["database_not_verified"] : []), ...(storageOk !== true ? ["storage_not_verified"] : [])];
   const local = (id, limitations) => entry(id, { operational: privateReady, blockers: privateBlockers, implementation: "deterministic", limitations });
   const restricted = (capability) => ({ ...capability, public_creation_enabled: false, new_plan_access: config.creation?.profile === "advanced" ? "administrator_only" : "paused", adapter_preserved: true });
@@ -58,15 +59,23 @@ export async function capabilityRegistry({ config = {}, providers, repository, s
       resend: remote("resend", { configured: config.email?.provider === "resend" && Boolean(config.email?.apiKey && config.email?.from) }, null, null, "external_communication"),
       stripe: remote("stripe", readiness.stripe),
       elevenlabs: restricted(remote("elevenlabs", readiness.elevenlabs, "document")),
-      luma: restricted(remote("luma", readiness.luma, "document")),
+      luma: {
+        ...restricted(remote("luma", readiness.luma, "document")),
+        feature_enabled: videoEnabled,
+        new_plan_access: videoEnabled && config.creation?.profile === "advanced" ? "administrator_only" : "paused",
+        blocker_codes: [...new Set([...(readiness.luma?.blocker_codes || []), ...(!videoEnabled ? ["feature_paused"] : []), "connectivity_not_verified"])]
+      },
       image_to_video: {
         ...restricted(remote("image_to_video", readiness.luma)),
+        feature_enabled: videoEnabled,
+        new_plan_access: videoEnabled && config.creation?.profile === "advanced" ? "administrator_only" : "paused",
+        blocker_codes: [...new Set([...(readiness.luma?.blocker_codes || []), ...(!videoEnabled ? ["feature_paused"] : []), "connectivity_not_verified"])],
         input_formats: ["image/jpeg", "image/png"],
         max_input_files: 1,
         max_input_bytes: 5 * 1024 * 1024,
-        limitations: ["One owned, verified JPEG or PNG becomes the first video keyframe only after approval of a paid Luma quote.", "No image editing, face restoration or guarantee of visual fidelity. Provider configuration does not establish a funded account or a verified video."]
+        limitations: ["Video rendering is excluded from the current Jericho release. The adapter remains isolated for a separately approved future release.", "No image editing, face restoration or guarantee of visual fidelity. Provider configuration does not establish a funded account or a verified video."]
       },
-      file_processing: entry("file_processing", { configured: Boolean(storage), operational: storageOk, risk: "read", blockers: storageOk === true ? [] : ["storage_not_verified"], limitations: ["Bounded UTF-8 text/code extraction for source reviews; one verified JPEG/PNG input for approved image-to-video. Image editing, PDF/Office interpretation and uploaded-code execution remain unsupported."] }),
+      file_processing: entry("file_processing", { configured: Boolean(storage), operational: storageOk, risk: "read", blockers: storageOk === true ? [] : ["storage_not_verified"], limitations: ["Bounded UTF-8 text/code extraction for source reviews. A verified JPEG/PNG video input remains adapter-only while video rendering is excluded. Image editing, PDF/Office interpretation and uploaded-code execution remain unsupported."] }),
       background_jobs: entry("background_jobs", { configured: Boolean(repository), operational: null, blockers: ["worker_heartbeat_not_observed"] }),
       scheduled_maintenance: entry("scheduled_maintenance", { configured: Boolean(repository?.claimDueMaintenance && config.maintenance?.enabled), operational: null, risk: "validate", blockers: ["maintenance_pass_not_observed"], implementation: "durable_account_schedule", limitations: ["Requires a running worker; inspect the account maintenance snapshot for actual progress.", "Repairs derived records and checks bounded private files using existing infrastructure; does not charge credits or execute paid generation.", "Cannot edit code, deploy or certify launch readiness."] }),
       artifact_verification: entry("artifact_verification", { configured: Boolean(storage), operational: storageOk, risk: "validate", blockers: storageOk === true ? [] : ["storage_not_verified"] })

@@ -10,6 +10,9 @@ export const coreStarter = (request) => {
 };
 export const CORE_STARTER_MESSAGE = "Custom app creation is not available right now. You can create a piano, storefront demo, or task-list starter. Nothing was charged.";
 export function assertCreationProfile({ config, user, intent }) {
+  if (intent === "video" && config.creation?.videoEnabled !== true) {
+    throw Object.assign(new Error("Video rendering is not included in this Jericho release. Your saved work is still available. Nothing was charged."), { status: 422, code: "creation_feature_paused" });
+  }
   if (EXTENDED_INTENTS.has(intent) && !(config.creation?.profile === "advanced" && user?.role === "admin")) {
     throw Object.assign(new Error("Jericho currently focuses on apps, websites and documents. This feature is paused; your saved work is still available. Nothing was charged."), { status: 422, code: "creation_feature_paused" });
   }
