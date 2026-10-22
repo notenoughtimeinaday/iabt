@@ -86,7 +86,8 @@ export const loadConfig = (env = process.env) => {
     environment,
     creation: Object.freeze({
       profile: env.IABT_CREATION_PROFILE === "advanced" ? "advanced" : "core",
-      videoEnabled: asBoolean(env.IABT_ENABLE_VIDEO_RENDERING)
+      videoEnabled: asBoolean(env.IABT_ENABLE_VIDEO_RENDERING),
+      requirePaymentForPaidCreation: asBoolean(env.IABT_REQUIRE_PAYMENT_FOR_PAID_CREATION)
     }),
     port: asPositiveInteger(env.PORT, 8787),
     publicOrigin: env.IABT_PUBLIC_ORIGIN || "http://localhost:5173",

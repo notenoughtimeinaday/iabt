@@ -704,6 +704,20 @@ export class PostgresRepository {
     return result.rows[0] || null;
   }
 
+  async hasPaidCreditGrant({ ownerId, billingMode }) {
+    if (!ownerId || !["test", "live"].includes(billingMode)) throw new Error("Valid owner and billing mode are required");
+    const result = await this.pool.query(
+      `SELECT EXISTS (
+         SELECT 1 FROM iabt_credit_entries
+         WHERE owner_id = $1 AND entry_type = 'grant'
+           AND (idempotency_key LIKE $2 OR idempotency_key LIKE $3 OR
+             (idempotency_key ~ '^stripe:evt_[a-zA-Z0-9_]+$' AND metadata ->> 'billing_mode' = $4))
+       ) AS present`,
+      [ownerId, `stripe:${billingMode}:checkout:%`, `stripe:${billingMode}:cycle:%`, billingMode]
+    );
+    return result.rows[0]?.present === true;
+  }
+
   async grantCredits({ ownerId, amount, idempotencyKey, metadata = {} }) {
     const value = Math.floor(Number(amount));
     if (!Number.isInteger(value) || value <= 0) throw new Error("Credit grant must be positive");

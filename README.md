@@ -62,6 +62,8 @@ Orchestration is off by default. Enabling it requires an OpenAI key, `IABT_ENABL
 
 Video rendering is excluded from the current product by default. `IABT_ENABLE_VIDEO_RENDERING=true` is a separate server-owned release gate; an advanced creation profile, provider key or media billing switch cannot enable a new video plan without it.
 
+Set `IABT_REQUIRE_PAYMENT_FOR_PAID_CREATION=true` in a sales environment to require a durable Stripe-funded credit grant from that environment's bound billing mode before a non-admin account can use custom OpenAI creation. Free starter credits continue to support provider-free named starters, but cannot authorize a paid provider call.
+
 The worker limits model turns, polls, output tokens and graph attempts. Configured supplier costs are **operator estimates, not provider-enforced dollar caps**. Review actual provider pricing, account limits and usage before authorizing live calls. Paid-provider regression tests use mocked transports; they do not prove a funded account or a live provider result.
 
 For a private staging acceptance window, set `IABT_AI_ACCEPTANCE_ONLY=true`,

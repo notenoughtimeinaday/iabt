@@ -416,6 +416,15 @@ export class MemoryRepository {
       entry.entry_type === "grant" && entry.idempotency_key === idempotencyKey) || null);
   }
 
+  async hasPaidCreditGrant({ ownerId, billingMode }) {
+    if (!ownerId || !["test", "live"].includes(billingMode)) throw new Error("Valid owner and billing mode are required");
+    const prefix = `stripe:${billingMode}:`;
+    return this.creditEntries.some((entry) => entry.owner_id === ownerId && entry.entry_type === "grant" &&
+      (String(entry.idempotency_key || "").startsWith(prefix + "checkout:") ||
+       String(entry.idempotency_key || "").startsWith(prefix + "cycle:") ||
+       (/^stripe:evt_[a-zA-Z0-9_]+$/.test(String(entry.idempotency_key || "")) && entry.metadata?.billing_mode === billingMode)));
+  }
+
   async grantCredits({ ownerId, amount, idempotencyKey, metadata = {} }) {
     const existing = this.creditEntries.find(
       (entry) =>

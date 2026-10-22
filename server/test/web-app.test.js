@@ -26,11 +26,12 @@ test("shift planning recognizes coordinated editing, searchable lists and hour t
   });
 });
 
-async function fixture({ ai = true, profile = "core", role = "user", maxTurns = 8 } = {}) {
+async function fixture({ ai = true, profile = "core", role = "user", maxTurns = 8, requirePayment = false } = {}) {
   const repository = new MemoryRepository();
   const user = await repository.createUser({ email: "builder@example.test", passwordHash: "unused", emailVerified: true, role });
   await repository.grantCredits({ ownerId: user.id, amount: 20, idempotencyKey: "opening" });
   const config = loadConfig({ NODE_ENV: "test", IABT_AUTH_SECRET: "web-app-test-only", IABT_CREATION_PROFILE: profile, IABT_ORCHESTRATION_MAX_TURNS: String(maxTurns),
+    IABT_REQUIRE_PAYMENT_FOR_PAID_CREATION: requirePayment ? "true" : "false",
     ...(ai ? { OPENAI_API_KEY: "not-a-live-key", IABT_ENABLE_PAID_AI: "true", IABT_ENABLE_ORCHESTRATION: "true", IABT_ORCHESTRATION_BUDGET_ACCEPTED: "true", IABT_OPENAI_RESPONSE_COST_CENTS: "2", IABT_ORCHESTRATION_BUDGET_CENTS: "12" } : {}) });
   const objects = new Map();
   const storage = { kind: "test", health: async () => ({ ok: true }), async put({ ownerId, objectId, bytes }) { const key = ownerId + "/" + objectId; objects.set(key, Buffer.from(bytes)); return { storage_provider: "test", storage_key: key }; }, async read(key) { return objects.get(key); }, async createReadUrl(record) { return "https://example.invalid/private/" + record.id; } };
@@ -44,6 +45,30 @@ async function fixture({ ai = true, profile = "core", role = "user", maxTurns = 
   const drain = async () => { for (let i = 0; i < 30; i++) { for (const job of repository.jobs.values()) job.available_at = "2000-01-01T00:00:00.000Z"; const result = await worker.runOnce(); if (!result || ["succeeded", "failed", "needs_setup"].includes(result.job.status)) return result; } throw new Error("Worker did not finish"); };
   return { ...context, calls, replies, objects, worker, plan, execute, upload, drain };
 }
+
+test("custom paid creation requires a verified Stripe purchase before planning or provider use", async () => {
+  const f = await fixture({ requirePayment: true });
+  await assert.rejects(f.plan({ automatic: true }), { code: "paid_creation_purchase_required", status: 402 });
+  assert.equal((await f.repository.listRecords("CreationPlan", f.user)).length, 0);
+  assert.equal((await f.repository.getCreditAccount(f.user.id)).reserved_credits, 0);
+  assert.equal(f.calls.length, 0);
+
+  await f.repository.grantCredits({
+    ownerId: f.user.id,
+    amount: 100,
+    idempotencyKey: "stripe:test:checkout:cs_paid_builder",
+    metadata: { billing_mode: "test", product_type: "ai_credit_pack" }
+  });
+  const paid = await f.plan();
+  assert.equal(paid.plan.provider, "openai");
+  assert.equal(paid.plan.status, "quoted");
+  assert.equal(f.calls.length, 0);
+
+  const other = await f.repository.createUser({ email: "admin@example.test", passwordHash: "unused", emailVerified: true, role: "admin" });
+  await f.repository.grantCredits({ ownerId: other.id, amount: 20, idempotencyKey: "admin-opening" });
+  const admin = await createCreationPlan({ ...f, user: other, requestText: "Build a private counter app" });
+  assert.equal(admin.plan.provider, "openai");
+});
 
 test("the core profile rejects new extended plans without charges; advanced requires an administrator", async () => {
   for (const role of ["user", "admin"]) {

@@ -487,6 +487,15 @@ export const createCreationPlan = async ({
     }
   }
   const orchestrated = !documentExport && !namedStarterRequested && (!references.length || revisionId || sourceApp) && ["app", "website", "document", "code", "design"].includes(intent) && aiReady;
+  if (orchestrated && config.creation.requirePaymentForPaidCreation && user.role !== "admin") {
+    if (typeof repository.hasPaidCreditGrant !== "function") {
+      throw Object.assign(new Error("Paid creation purchase verification is temporarily unavailable. No plan was created, no credits were reserved, and no provider was contacted."), { status: 503, code: "paid_creation_verification_unavailable" });
+    }
+    const purchased = await repository.hasPaidCreditGrant({ ownerId: user.id, billingMode: config.providers.stripe.mode });
+    if (!purchased) {
+      throw Object.assign(new Error("Choose a paid plan or credit pack before custom AI creation. No plan was created, no credits were reserved, and no provider was contacted."), { status: 402, code: "paid_creation_purchase_required" });
+    }
+  }
   if (orchestrated) {
     capability.id = "openai-responses-orchestration-v1";
     capability.provider = "openai";
