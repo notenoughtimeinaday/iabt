@@ -1,0 +1,300 @@
+# Standalone billing contract
+
+Free accounts receive **10 starter credits once** after verified account access.
+Registration alone does not fund an unverified account. Successful verification,
+sign-in and verified password recovery check the original `signup:free:v1`
+allowance identity. Authenticated `get-account-entitlement` performs the same
+check, repairing older verified accounts with an existing session that never
+went through current registration. The amount and owner come from the server;
+request fields cannot select a recipient, quantity or replacement grant key.
+
+The check reloads the verified account and looks for its earlier starter grant
+by that stable key or the recorded `source: initial_free_allowance` provenance.
+An identified grant under an older or reviewed import key is preserved. Its
+amount is not topped up, even when the balance is now zero. Existing purchased
+credits remain intact; an account that has never received the starter allowance
+can receive it once alongside purchased credits. Parallel requests and restarts
+reuse the ledger's existing grant transaction and key rather than replenishing
+spent credits.
+
+A temporary allowance failure does not burn successful authentication or the
+one-time verification/recovery code: the auth response includes
+`starter_credits_pending: true`, and the next entitlement read retries the check.
+This is a normal account workflow, not an operator SQL credit adjustment.
+`server/test/starter-credits.test.js` covers verification, migrated recovery,
+historical provenance, spent balances, owner isolation and concurrent API reads
+against both memory and disposable PostgreSQL repositories.
+
+This check does not infer or import Base44 balances from an email address, a
+plan label or a zero balance. Runtime billing/credit migration still needs a
+reviewed converter and reconciliation; known starter provenance must be
+preserved during such a migration to prevent duplication. No live account is
+changed by these code tests, and IABT credits are not cash or a funded supplier
+account.
+
+The legacy monthly offers grant Builder 100, Pro 500 or Agency 2,000 credits after a
+verified `invoice.paid` for subscription creation or a regular monthly renewal.
+Credits accumulate in the execution ledger and are not erased by cancellation.
+Trial invoices, failed or incomplete payments and mid-cycle proration invoices
+do not refill credits. A plan change affects the next eligible monthly grant;
+there is no automatic mid-cycle allowance top-up.
+
+Credit packs use the server-set quantity captured in Checkout metadata at
+purchase time. Later configuration changes cannot alter an existing purchase.
+Unpaid delayed-payment sessions are acknowledged as pending; their later
+`checkout.session.async_payment_succeeded` event performs fulfillment.
+
+The payment identity is the Checkout session or the subscription period start,
+not the webhook event ID. Server-only `BillingFulfillment` receipts and stable
+ledger grant keys prevent duplicate grants, including across instances. A
+process interruption between the ledger commit and receipt completion resumes
+without issuing a second grant. These entities remain outside generic CRUD.
+
+A webhook already being processed receives a retryable 503 rather than a false
+success acknowledgment. Failed events can retry; processing claims abandoned
+for 15 minutes can be reclaimed. Successful event IDs remain terminal regardless
+of age. Completion and failure writes carry the current claim token, preventing
+an older handler from overwriting a newer claim after recovery.
+
+Subscription snapshots can arrive out of order, including events with the same
+timestamp. Subscription events trigger a bounded read of the current Stripe
+subscription before entitlement updates. `BillingSubscriptionSync` generations
+are scoped to each subscription so a slow response cannot overwrite newer
+state or suppress reconciliation of a different subscription. Transient reads
+fail for retry while preserving existing access and credit balances. The Stripe
+restricted key needs subscription read permission as well as Checkout and portal
+permissions; keep it in server secrets. No credentials or provider error bodies
+are stored in billing records.
+
+The read request pins `2026-08-26.dahlia`, confirmed against Stripe's
+[published changelog](https://docs.stripe.com/changelog) and
+[versioning policy](https://docs.stripe.com/sdks/versioning) on 2026-09-20.
+The webhook parser still supports earlier invoice shapes because event payloads
+retain their webhook destination's API version.
+
+The UI consumes standalone `checkout_ready` and `configured` separately.
+Existing subscribers can manage overdue or incomplete subscriptions even when
+new purchases are unavailable. New subscription checkout cannot silently replace
+an existing recoverable subscription. Builder accepts the standalone flat
+entitlement response, so paid export flags reach the editor.
+
+## One pending subscription Checkout
+
+The [pending Checkout guard](../server/src/billing/checkout-attempt.js) stores one
+private attempt per account and Stripe mode. Concurrent requests, tabs and
+restarts reuse its unexpired session. A short database transaction claims the
+attempt; provider calls happen after commit. Retry keeps the same server-owned
+Stripe idempotency key and frozen parameters, including plan, price, app/user
+metadata and expiry. Late handlers cannot overwrite a reclaimed lease.
+
+Sessions request 31 minutes of validity, providing a transmission margin above
+Stripe's [30-minute minimum](https://docs.stripe.com/api/checkout/sessions/create#checkout_session_create-expires_at).
+An elapsed local timestamp is insufficient to open another session: Stripe must
+confirm expiry. Completed Checkout waits for entitlement reconciliation; a
+verified canceled prior subscription can start a later purchase. Existing active
+or recoverable subscriptions continue through the customer portal.
+
+The browser's cancel return can reopen the same still-payable offer; it does not
+expire the session. A different pending plan or price produces an explicit
+conflict until the previous offer is resolved or Stripe confirms expiry. Unknown
+creation outcomes cannot switch credentials/terms, and retries stop before
+Stripe's documented [idempotency retention boundary](https://docs.stripe.com/api/idempotent_requests)
+instead of risking a new purchase. Operators need Checkout read permission to
+verify existing sessions. `BillingCheckoutAttempt` is outside generic entity
+routes; its URLs and frozen account parameters are not public registry facts.
+
+Memory and real local PostgreSQL tests cover concurrency, restart, lost
+responses, stale lease owners, changed terms and verified expiry/cancellation.
+The [sandbox acceptance matrix](BILLING_ACCEPTANCE.md) remains separate evidence.
+
+## Project capacity
+
+The [server project quota](../server/src/billing/project-quota.js) enforces
+Free 1, Builder 5, Pro 25 and Agency unlimited cloud projects. Active, trialing
+and past-due subscriptions retain their tier under the existing webhook policy;
+inactive or unknown plans use free capacity. Single and bulk creation count only
+the authenticated owner's projects, including for administrators. A transaction
+checks the canonical plan and inserts the whole batch, preventing concurrent API
+requests from exceeding capacity. Browser fields and stored numeric overrides
+cannot increase that limit.
+
+Over-limit accounts retain access to existing projects and can edit or delete
+them. Internal migration tooling can preserve imported records above the limit;
+it is not an alternate public creation path. No project is automatically deleted
+and no credits are charged by quota enforcement. The
+[quota regression suite](../server/test/project-quota.test.js) verifies HTTP
+bypass rejection, concurrent instances, atomic failure and migration preservation
+with memory and disposable PostgreSQL repositories.
+
+## Configuration and acceptance
+
+### Versioned monthly allowance contracts
+
+The disabled future-offer implementation, proposed policy, exact configuration
+and rollback are in [PRICING_OFFER_ROLLOUT.md](PRICING_OFFER_ROLLOUT.md). Migration
+009 adds Starter to the allowed registry tiers without rewriting legacy hashes
+or allowances. It does not activate any price or change existing subscriptions.
+
+Migration `008_billing_price_contracts.sql` adds a private append-only registry
+keyed by Stripe mode and price ID. Each contract fixes a version, tier and monthly
+credit allowance. API/worker startup and billing entry points register configured
+contracts before provider calls or webhook receipt writes. Conflicting first
+definitions serialize in PostgreSQL; a later redefinition fails closed. There
+is no application reset or overwrite endpoint. Unchanged definitions use a
+read-only lookup instead of taking the shared record lock.
+
+With `IABT_STRIPE_PRICE_CATALOG_JSON` unset, the existing
+`STRIPE_BUILDER_PRICE_ID`, `STRIPE_PRO_PRICE_ID` and `STRIPE_AGENCY_PRICE_ID`
+retain their original `legacy-v1` allowances of 100, 500 and 2,000. Existing
+Checkout parameters and UI behavior remain unchanged. New offers require
+explicit server configuration; for example, this **illustrative fixture only**
+adds a different Builder price and selects it for future Checkout:
+
+```json
+{
+  "version": "offer-v2",
+  "prices": [
+    { "price_id": "price_example_builder_v2", "plan": "builder", "monthly_credits": 150 }
+  ],
+  "checkout": { "builder": "price_example_builder_v2" }
+}
+```
+
+Serialize that object into the environment variable only as part of a separately
+reviewed offer rollout. `checkout` is optional: adding a definition alone does
+not select it. Each selector must match a declared contract's tier. Duplicate
+IDs, legacy redefinitions, credit-pack/subscription price collisions, unknown
+fields, unsupported tiers, non-string IDs/versions and invalid quantities are
+rejected. Credits must be an integer from 1 to 1,000,000; this catalog supports
+monthly single-quantity subscriptions only. The top-level version defaults each
+new definition. To evolve another tier while retaining an earlier active offer,
+preserve that offer's explicit `catalog_version`:
+
+```json
+{
+  "version": "offer-v3",
+  "prices": [
+    { "price_id": "price_example_builder_v2", "plan": "builder", "monthly_credits": 150, "catalog_version": "offer-v2" },
+    { "price_id": "price_example_pro_v3", "plan": "pro", "monthly_credits": 700 }
+  ],
+  "checkout": { "builder": "price_example_builder_v2", "pro": "price_example_pro_v3" }
+}
+```
+
+New Checkout attempts freeze the selected contract alongside the existing frozen
+provider parameters. Pre-registry legacy attempts can adopt their unchanged
+legacy contract without issuing another provider POST. Invoice grants resolve
+the signed invoice line's actual price against the persisted registry; paid
+entitlement allowances use the current verified subscription price. Tier or
+credit claims in metadata cannot replace those terms. A removed configuration
+entry remains in the registry, so a retired price's renewal keeps its original
+allowance. Other plan capabilities still come from the canonical tier defaults.
+
+Before initial registration, retain reviewed legacy price IDs and explicitly
+reconcile any older price IDs absent from configuration. The registry cannot
+reconstruct unknown historical terms; an unregistered paid price fails for
+reconciliation instead of borrowing the current tier allowance. Drain older
+API/worker writers before migration, as they do not honor the new contract.
+Verify the Stripe account, product, amount, currency and monthly interval
+separately: mode plus an opaque price ID does not bind account identity or
+validate the provider's price setup. UI pricing and customer disclosures need
+their own coordinated rollout before selecting new offers.
+
+`server/test/price-catalog.test.js` covers configuration validation, concurrent
+first definitions, atomic rejection, restart, independent tier versions,
+retired-price renewals, metadata tampering and frozen Checkout attribution with
+memory and disposable PostgreSQL repositories. This implementation does not
+activate the example offers or establish hosted billing acceptance.
+
+### Database billing-mode binding
+
+Candidate 286b99d adds migration `007_billing_environment.sql` and a private
+singleton binding for one Stripe mode per database. API and worker startup
+check the binding before initializing storage or providers. Checkout, portal and
+webhook entry points also check it before provider calls or event receipt
+writes. A conflicting mode fails closed; no environment variable or public
+entity endpoint resets or overrides the binding.
+
+On first initialization, the repository inspects durable Stripe receipts,
+fulfillment/Checkout records, grants and entitlements. Conflicting modes or
+unclassified Stripe-associated history require reconciliation. A legacy
+entitlement or subscription-sync row without an explicit mode needs durable
+allowance evidence for the **same owner and exact subscription ID**. An unrelated
+credit pack, another subscription, another owner's receipt or a newly prepared
+Checkout cannot classify it. A database without Stripe history binds to its
+first requested mode; ordinary starter credits do not imply Stripe provenance.
+New billing records preserve explicit mode provenance.
+
+Drain pre-binding API and worker binaries before first initialization. Older
+code does not honor this guard and must not keep writing while or after the
+initial history check. The binding protects test versus live mode; it does not
+verify which Stripe account owns the configured credentials, prices or webhook.
+That account-identity check remains a separate acceptance requirement.
+
+Owner-only entitlements and credit balances remain shared within that database.
+Live billing therefore requires separately reconciled data and a reviewed
+migration, not changing the test database's mode. Do not reinterpret test grants
+as live purchased credits or infer permission to reset balances. Complete local
+verification (381 checks, zero failed/skipped), exact-commit CI run 675 and both
+isolated deployments passed for 286b99d. Isolated readiness reports seven applied
+migrations and none pending. This replaces the earlier 78d1c82/six-migration
+baseline; it does not certify correct Stripe account wiring, hosted refund
+reconciliation, live billing or production migration.
+
+Subscribe the same-mode Stripe webhook destination to:
+
+- `checkout.session.completed` and `checkout.session.async_payment_succeeded`.
+- `invoice.paid`.
+- `customer.subscription.created`, `.updated`, `.deleted`, `.paused`, `.resumed`.
+- `refund.created`, `.updated`, `.failed` and `charge.refunded` for the operator
+  refund inbox. The older `charge.refund.updated` is also handled when delivered.
+
+The refund inbox requires migration `006_refund_observations.sql`. It preserves
+immutable, bounded provider observations and responds with explicit
+`refund_reconciliation_required`, including on duplicate delivery. Its receipt
+does not associate an account, revoke access, adjust IABT credits or return cash.
+Reconciliation and the full/partial/spent-credit policy remain unfinished; see
+the [refund acceptance boundary](BILLING_ACCEPTANCE.md#refunds-are-a-separate-unfinished-workflow).
+An operator can inspect `iabt_stripe_refund_observations` joined to
+`iabt_stripe_events` by event ID, using authorized database access. It is not an
+application-user or generic administrator entity and has no public read/write
+route. No dashboard configuration, webhook subscriptions or live data were
+changed by the local implementation.
+
+Configure one monthly, single-quantity price per paid plan. The bounded invoice
+handler supports old `subscription_details`/`price` fields and current
+`parent.subscription_details`/`pricing.price_details` fields. Truncated line
+lists, multiple eligible recurring lines, unknown prices, non-monthly periods,
+changed owners and mismatched customers require operator reconciliation; they
+do not guess a credit grant. Annual billing and prorated allowance adjustments
+are not implemented. A canceled subscription using a different Stripe customer
+also requires reconciliation instead of silently linking accounts.
+
+Prices and taxes are confirmed in Stripe; a local label or a syntactically valid
+price ID does not verify a configured product, funded account or paid invoice.
+Review applicable tax registrations and Stripe Tax setup before live billing;
+this change does not enable automatic tax or change registrations.
+
+Before production, demonstrate test-mode checkout, delayed payment, renewal,
+decline recovery, portal cancellation and retry on staging. Confirm credits
+arrive from webhooks even when the user never returns to the success page.
+Pre-upgrade standalone grants used event-ID keys but preserved the Checkout
+session ID in ledger metadata. Before funding a pack without a completed receipt,
+the handler reads at most two old grants matching that exact session. One grant
+with the same owner, quantity and valid provenance becomes a completed receipt
+without changing the balance. Multiple matches, changed quantities or owners,
+and malformed provenance stop for reconciliation without minting more credits.
+An unavailable legacy lookup also fails closed. This is a payment-specific bridge,
+not a historical ledger scan, invoice backfill or cash refund.
+
+Drain old webhook handlers before handing billing traffic to the new release:
+an older binary does not use session-level receipts and can still write another
+event-level grant. The bridge preserves committed historical grants; it cannot
+change a simultaneously running old binary. Historical invoices remain subject
+to deliberate reconciliation rather than automatic replay. None of these local
+checks certify live billing.
+
+Local regression evidence lives in `stripe-checkout.test.js`,
+`stripe-webhook.test.js`, `billing-view.test.js` and `billing-postgres.test.js`
+under `server/test/`. The PostgreSQL suite uses a disposable local schema, two
+repository instances and reopening; mocked Stripe events do not charge cards.

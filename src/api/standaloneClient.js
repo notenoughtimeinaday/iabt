@@ -240,7 +240,7 @@ export const standaloneClient = {
     readiness: () => request("/v1/providers/readiness"),
   },
   files: {
-    access: (id) => request(`/v1/files/${encodeURIComponent(id)}/access`),
+    access: (id, { download = false } = {}) => request(`/v1/files/${encodeURIComponent(id)}/access${download ? "?download=1" : ""}`),
   },
   integrations: {
     Core: {
@@ -269,20 +269,32 @@ export const standaloneClient = {
     subscribeToConversation: (id, callback) => {
       const key = String(id);
       if (conversationSubscriptions.has(key)) {
-        clearInterval(conversationSubscriptions.get(key));
+        conversationSubscriptions.get(key)();
       }
+      let inFlight = false, stopped = false, lastSnapshot;
       const timer = setInterval(async () => {
+        if (stopped || inFlight || globalThis.document?.hidden) return;
+        inFlight = true;
         try {
-          callback(await request(`/v1/agents/conversations/${encodeURIComponent(key)}`));
+          const conversation = await request(`/v1/agents/conversations/${encodeURIComponent(key)}`);
+          const snapshot = JSON.stringify(conversation);
+          if (!stopped && snapshot !== lastSnapshot) {
+            lastSnapshot = snapshot;
+            callback(conversation);
+          }
         } catch {
           // A transient polling error must not crash the Studio UI.
+        } finally {
+          inFlight = false;
         }
       }, 2500);
-      conversationSubscriptions.set(key, timer);
-      return () => {
+      const stop = () => {
+        stopped = true;
         clearInterval(timer);
-        conversationSubscriptions.delete(key);
+        if (conversationSubscriptions.get(key) === stop) conversationSubscriptions.delete(key);
       };
+      conversationSubscriptions.set(key, stop);
+      return stop;
     },
   },
 };

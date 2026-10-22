@@ -1,0 +1,78 @@
+{
+  "name": "Jericho Studio",
+  "publisher": "Insured Spending, LLC",
+  "version": "1.0.0-preview.5",
+  "channel": "private-preview",
+  "public_sale_approved": false,
+  "positioning": "Turn a clear idea into useful work you can keep.",
+  "audience": "Independent creators and small businesses",
+  "core": [
+    "Small browser apps and websites",
+    "Documents in Word, PDF and Markdown",
+    "Saved source, previews, downloads and revisions"
+  ],
+  "scope_note": "Scoped app, revision and document acceptance is preserved. Usage-based credit settlement and private live-offer safeguards are verified. Production hosting, restricted Stripe key, webhook and portal are installed; owner account, public operating budget and recovery schedule remain.",
+  "proposed_usd_offers": [
+    {
+      "name": "Meet Jericho",
+      "first_month_cents": 499,
+      "renewal_month_cents": 1200,
+      "monthly_credits": 100
+    },
+    {
+      "name": "Starter",
+      "monthly_cents": 1200,
+      "monthly_credits": 100
+    },
+    {
+      "name": "Builder",
+      "monthly_cents": 2900,
+      "monthly_credits": 300
+    },
+    {
+      "name": "Pro",
+      "monthly_cents": 5900,
+      "monthly_credits": 650
+    },
+    {
+      "name": "Extra credits",
+      "one_time_cents": 1000,
+      "credits": 100
+    }
+  ],
+  "offer_note": "The offer passed scoped Stripe test acceptance. Matching live products, prices and a Starter-only introductory coupon are prepared but inactive. This package does not activate sales. New Terra work reserves an approved maximum and returns unused credits after verified delivery; historical settled jobs retain their terms.",
+  "excluded_from_first_release": [
+    "Autonomous repository changes and deployment",
+    "App-store submission",
+    "Video generation",
+    "Unrestricted third-party integrations",
+    "Multi-user backends inside generated apps"
+  ],
+  "release_gates": [
+    {
+      "id": "hosted_availability",
+      "status": "passed_production_http_readiness",
+      "evidence": "Production API/frontend are live at application 9e71b33. All 563 local tests and CI 714 passed. Deployment and browser checks have separate external receipts."
+    },
+    {
+      "id": "custom_app_revision_document",
+      "status": "passed_scoped_acceptance",
+      "evidence": "The three preserved Terra jobs delivered an app, owned-source revision and original 781-word guide. Scoped app behavior, source hashes and Word/PDF visual checks are complete. A separately reviewed contrast correction is retained; no universal generated-app quality claim."
+    },
+    {
+      "id": "credit_pricing",
+      "status": "passed_and_deployed",
+      "evidence": "Signed usage policy terra-usage-2026-10-16.1 captures verified usage and returns the unused reservation atomically. Saved usage fixtures compute 4, 3 and 11 credits. No new paid runs or historical ledger changes."
+    },
+    {
+      "id": "live_commerce",
+      "status": "prepared_not_launched",
+      "evidence": "Live account, exact prices and coupon pass read verification. Restricted live key, dedicated webhook and portal are installed. Public sales remain disabled; production owner workflow and non-charging Checkout review remain. Real-card test charges are not a launch requirement."
+    },
+    {
+      "id": "recovery_and_isolation",
+      "status": "passed_staging_operational_schedule_pending",
+      "evidence": "Password reset/session invalidation, cross-account denial, all five support-address deliveries, 18-table database restore and all 130 current objects hash-verified. Separate live storage upload/readback/private-access check passed. Recurring off-device recovery and production-host recovery remain open."
+    }
+  ]
+}

@@ -1,6 +1,9 @@
 // Deterministic operational knowledge, grounded in the signed-in account's
 // persisted records and current configuration. This module never runs jobs,
 // calls providers, changes permissions, or updates model weights.
+import { loadLearningContext } from "../learning/service.js";
+import { capabilityRegistry, orchestrationConfigured } from "../autonomy/capabilities.js";
+import { readMaintenanceStatus } from "../maintenance/service.js";
 export const SUPPORTED_AGENT_NAMES = Object.freeze(["iabt_creator", "iabt_exchange"]);
 
 const FAILURE_GUIDES = [
@@ -80,21 +83,26 @@ export const buildJerichoKnowledge = async ({ repository, user, providers, stora
     return result;
   }, {}));
   const ready = providerSummary(providers?.readiness?.(), user.role);
+  const learning = await loadLearningContext({ repository, user });
+  const registry = await capabilityRegistry({ repository, config, providers, storage });
+  const maintenance = await readMaintenanceStatus({ repository, user, config });
   return {
     version: "jericho-operations-v1",
     runtime: "standalone",
     base44_required: false,
     evidence_scope: "signed_in_account_latest_50_jobs_and_incidents",
     observed_at: new Date().toISOString(),
+    capability_registry: registry,
+    maintenance,
     capabilities: {
       planning: "deterministic_intent_routing_with_server_signed_quotes",
-      interactive: "bounded_templates_with_html_preview_and_react_source_zip",
+      interactive: "named_starters_and_approved_html_app_creation_with_owned_source_revisions",
       documents: "markdown_docx_pdf_exports",
       code: "bounded_javascript_scaffolds_with_limitation_reports",
       design: "tokens_and_svg_review_boards",
       gcode: "simulation_only_no_machine_execution",
       automation: "disabled_dry_run_runbooks_no_scheduler",
-      files: "private_upload_and_authorized_download",
+      files: "private_upload_authorized_download_and_bounded_utf8_source_review",
       exchange: "authenticated_profiles_matching_mutual_introductions_and_private_rooms",
       integrations: "route_preferences_and_configuration_discovery_no_external_account_authorization",
       support: "read_only_capability_and_account_incident_diagnostics"
@@ -114,6 +122,7 @@ export const buildJerichoKnowledge = async ({ repository, user, providers, stora
     recurring_failure_patterns: patterns,
     active_incident_count: incidents.filter((item) => !item.resolved).length,
     learning: {
+      ...learning,
       source: "persisted_incidents_and_current_runtime_configuration",
       model_training: false,
       self_modification: false,
@@ -125,7 +134,7 @@ export const buildJerichoKnowledge = async ({ repository, user, providers, stora
       "Paid production requires a valid quote, explicit approval, credits, and provider gates; chat cannot bypass them.",
       "Provider outcomes must be reconciled before repeating an ambiguous paid submission.",
       "Credit restoration is reported only when the job records it; IABT credit restoration is not a supplier or cash refund.",
-      "Uploaded file storage does not imply document parsing or incorporation into a model context.",
+      "Attached UTF-8 text, Markdown, JSON, CSV, and common code files support bounded source reviews. One owned JPEG/PNG can provide the first frame for an approved paid Luma video. Image cleanup/editing, PDF/Office interpretation and uploaded-code execution are unsupported. Approved Responses orchestration may send verified attached text to OpenAI; the zero-provider-cost source-review path does not.",
       "External AI-client consent is unavailable. Exchange changes use authenticated Exchange workflows; this support responder does not perform them."
     ]
   };
@@ -142,12 +151,35 @@ export const respondToSupportRequest = async (context) => {
   const exchange = context.agentName === "iabt_exchange";
   if (!exchange && !isSupportRequest(context.requestText)) return null;
   const knowledge = await buildJerichoKnowledge(context);
+  if (!exchange && !(context.config.creation?.profile === "advanced" && context.user?.role === "admin")) {
+    const mediaQuestion = /\b(?:video|animation|animate|photo|image|audio|music|manufacturing|automation)\b/i.test(context.requestText);
+    const recent = knowledge.recent_jobs[0];
+    const content = [
+      mediaQuestion ? "Media generation and advanced automation are paused while Jericho focuses on useful apps and websites. Your saved work is still available."
+        : orchestrationConfigured(context.config) ? "Describe the app or website you want. You can try the result, request changes and download its source. I'll show the cost before custom creation."
+          : "You can try a task-list starter, piano, or storefront demo and download the result. Custom app creation is not available right now.",
+      ...knowledge.recurring_failure_patterns.slice(0, 1).map((failure) => describeFailure(failure.code).category === "provider_balance" ? "The recorded failure was a supplier balance problem." : "There is an unresolved failure in your saved work; its details are available in account diagnostics."),
+      ...(recent ? ["Your latest task is " + recent.status.replace(/_/g, " ") + (recent.released_credits !== null ? "; " + recent.released_credits + " credits were restored." : ".")] : []),
+      "This answer did not start a task or use credits."
+    ].join("\n\n");
+    return { content, metadata: { response_kind: "operational_support", knowledge_version: knowledge.version, knowledge } };
+  }
   const content = [
     exchange
       ? "I can explain the standalone runtime and review your account's recorded failures. Use the authenticated Exchange workflows to manage your profile, find matches, approve mutual introductions, and enter private rooms. This chat response is read-only and has not contacted anyone or changed your Exchange records."
       : "I can inspect my implemented features and your account's recorded job outcomes. These are read-only observations; no production job or provider charge was started.",
     "Available creation paths include bounded app/website templates, document exports, code scaffolds, design boards, simulation-only G-code, and disabled automation runbooks. Media production depends on provider configuration, commercial gates, and an approved quote.",
+    ...(/\b(?:video|animation|animate|photo|image)\b/i.test(context.requestText) ? [
+      !knowledge.providers.luma.technically_configured
+        ? "Video generation is not ready: the Luma provider setup, billing authorization and cost settings must be completed before a video can run. Buying IABT credits alone does not complete that setup."
+        : !knowledge.providers.luma.commercial_ready && !knowledge.providers.luma.owner_demo_available
+          ? "Video generation is blocked for this account until commercial provider approval is configured. No video has been submitted."
+          : "Video generation is configured for an approved quote. Attach one JPEG or PNG (up to 5 MiB) and ask to animate it. The image is sent to Luma only after paid-quote approval; provider balance and output quality still require live verification.",
+      "Image cleanup and photo editing are not implemented. Uploading an image stores it; it does not by itself edit or animate it."
+    ] : []),
     "Latest account evidence: " + knowledge.recent_jobs.length + " job(s), " + knowledge.active_incident_count + " unresolved incident(s) in the latest 50 records.",
+    "Learning curriculum: " + knowledge.learning.curriculum.version + "; " + knowledge.learning.lessons.length + " retained lesson(s), " + knowledge.learning.successful_recoveries.length + " verified recovery record(s). User corrections remain candidates until accepted against verified delivery. These records guide future work without changing permissions or model weights.",
+    "Scheduled maintenance can reconcile completed job records, retain missing outcome lessons and check stored artifacts while the server is running. Inspect or pause it in Studio under Jericho maintenance. Its saved checks do not authorize paid jobs, code changes or deployment, and do not certify launch readiness.",
     ...knowledge.recent_jobs.slice(0, 5).map((job) =>
       "Job " + job.job_id + ": " + job.status +
       (job.verified_output ? "; verified output recorded" : "; no verified delivery established by this snapshot") +

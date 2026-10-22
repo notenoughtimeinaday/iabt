@@ -1,0 +1,13 @@
+.workspace-connection{min-height:100dvh;display:grid;place-items:center;padding:32px 20px;background:radial-gradient(ellipse at 15% 10%,#192d4a 0,transparent 55%),#0b1020;color:#edf3ff}
+.workspace-connection section{width:min(100%,520px);padding:40px;border:1px solid #30425d;border-radius:24px;background:#131d30;box-shadow:0 28px 80px #0005}
+.workspace-connection-brand{display:block;margin:22px 0 30px;font-size:15px;letter-spacing:.14em;font-weight:700;color:#82e5ef}
+.workspace-connection-brand span{font-size:12px;letter-spacing:normal;font-weight:400;color:#c7d3e6}
+.workspace-connection h1{font-size:clamp(26px,5vw,36px);line-height:1.15;letter-spacing:-.035em;font-weight:650;margin:0 0 18px}
+.workspace-connection p{color:#c7d3e6;font-size:16px;line-height:1.7;margin:0 0 28px}
+.workspace-connection button{display:inline-flex;align-items:center;gap:10px;background:#82e5ef;color:#0b1020;border:0;border-radius:10px;padding:13px 20px;font-weight:700;cursor:pointer}
+.workspace-connection a{display:block;width:fit-content;color:#c7d3e6;text-decoration:underline;text-underline-offset:4px;margin-top:24px;font-size:14px}
+.workspace-connection :is(a,button):focus-visible{outline:3px solid #d5baff;outline-offset:5px}
+.workspace-connection-spinner{color:#82e5ef;animation:workspace-spin 1.5s linear infinite}
+@keyframes workspace-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.workspace-connection-spinner{animation:none}}
+@media(max-width:480px){.workspace-connection section{padding:28px 24px}}

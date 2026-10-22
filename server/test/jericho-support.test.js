@@ -3,17 +3,23 @@ import { test } from "node:test";
 import { loadConfig } from "../src/config.js";
 import { buildJerichoKnowledge, describeFailure, respondToSupportRequest } from "../src/operations/jericho-support.js";
 
-const user = { id: "owner-1", role: "admin" };
+const user = { id: "owner-1", role: "admin", email_verified: true };
 const secret = "THIS_SHOULD_NEVER_APPEAR_IN_DIAGNOSTICS";
-const context = ({ jobs = [], incidents = [], readiness = {} } = {}) => ({
+const context = ({ jobs = [], incidents = [], readiness = {}, profile = "core" } = {}) => ({
   user,
-  config: loadConfig({ NODE_ENV: "test", OPENAI_API_KEY: secret, RESEND_API_KEY: secret }),
+  config: loadConfig({ NODE_ENV: "test", IABT_CREATION_PROFILE: profile, OPENAI_API_KEY: secret, RESEND_API_KEY: secret }),
   storage: { kind: "local" },
   providers: {
     readiness: () => readiness,
     execute: () => { throw new Error("Diagnostics cannot execute providers"); }
   },
   repository: {
+    getMaintenance: async (ownerId) => { assert.equal(ownerId, user.id); return null; },
+    listRecordsExact: async (_entity, account) => {
+      assert.equal(account.id, user.id);
+      assert.equal(account.role, "user");
+      return [];
+    },
     listJobs: async (account, options) => {
       assert.equal(account.role, "user");
       assert.equal(account.id, user.id);
@@ -50,6 +56,7 @@ test("operational knowledge scopes owners, omits raw prompts and secrets, and di
   assert.equal(knowledge.providers.luma.live_probe_performed, false);
   assert.equal(knowledge.infrastructure.deployment_verified, false);
   assert.equal(knowledge.infrastructure.worker_liveness, "not_probed");
+  assert.equal(knowledge.maintenance.status, "not_enrolled");
   assert.equal(knowledge.learning.model_training, false);
   assert.equal(knowledge.learning.self_modification, false);
   assert.equal(knowledge.healthy, undefined);
@@ -92,4 +99,25 @@ test("unknown provider text is never echoed as operational advice", () => {
   assert.equal(result.code, "unclassified_failure");
   assert.equal(result.category, "needs_investigation");
   assert.match(result.next_action, /outcome is reconciled/);
+});
+
+test("public video support explains the pause; explicitly enabled administrator diagnostics retain provider evidence", async () => {
+  const request = { requestText: "Why does my image not become a video?", agentName: "iabt_creator" };
+  const missing = await respondToSupportRequest({ ...context(), ...request });
+  assert.match(missing.content, /generation and advanced automation are paused/);
+  assert.doesNotMatch(missing.content, /buy|configure|Luma/i);
+  const advanced = await respondToSupportRequest({ ...context({ profile: "advanced" }), ...request });
+  assert.match(advanced.content, /Video generation is not ready/);
+  const blocked = await respondToSupportRequest({
+    ...context({ profile: "advanced", readiness: { luma: { configured: true, commercial_ready: false } } }),
+    user: { ...user, role: "user" }, ...request
+  });
+  assert.match(blocked.content, /generation and advanced automation are paused/);
+  const configured = await respondToSupportRequest({
+    ...context({ profile: "advanced", readiness: { luma: { configured: true, commercial_ready: true } } }), ...request
+  });
+  assert.match(configured.content, /sent to Luma only after paid-quote approval/);
+  assert.match(configured.content, /provider balance and output quality still require live verification/);
+  assert.equal(configured.metadata.knowledge.providers.luma.live_probe_performed, false);
+  assert.equal(JSON.stringify(configured).includes(secret), false);
 });

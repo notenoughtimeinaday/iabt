@@ -9,14 +9,21 @@ submit paid provider work.
 ### Existing Render target
 
 The independent frontend is `https://iabt-staging-web.onrender.com`; its API is
-`https://iabt-api-insured-spending.onrender.com`. Both deploy the GitHub `main`
-branch automatically. The API uses Neon PostgreSQL, private S3-compatible
+`https://iabt-api-insured-spending.onrender.com`. The services retain `main` as
+their configured branch, but automatic deploys were disabled during the autonomy
+upgrade. Deploy the verified exact feature-branch commit explicitly for staging;
+do not deploy the configured branch's latest commit by accident. The API uses Neon PostgreSQL, private S3-compatible
 storage, Resend, and an embedded worker (`IABT_JOB_WORKER_ENABLED=true`).
 
 The current API service is on Render's free plan. Idle suspension can delay
 requests and pause background processing; this is not an always-on production
 worker. Moving to an always-on API/worker requires a separately approved
 hosting plan. Preserve the current paid-provider gates during release checks.
+
+The independent API currently uses the Neon project named `IABT Production`.
+Do not assume that a frontend staging label means the underlying database is
+disposable. Use a disposable local PostgreSQL database for regression tests and
+identify the connected branch before any live data reconciliation.
 
 Build the web service with `VITE_IABT_BACKEND=standalone`, the API origin above,
 and `VITE_IABT_ROUTING=hash` when no SPA rewrite is configured. Hash links such

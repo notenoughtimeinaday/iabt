@@ -10,6 +10,7 @@ import { LogIn, Mail, Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 import { safeReturnTo } from "@/lib/authReturnTo";
+import { isValidAccountEmail } from "../../shared/auth-email.js";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -49,6 +50,10 @@ export default function Login() {
     setVerificationMessage("");
     if (!email.trim()) {
       setError("Enter the email address you registered with first.");
+      return;
+    }
+    if (!isValidAccountEmail(email)) {
+      setError("Enter a valid email address without list markers or spaces.");
       return;
     }
     setLoading(true);

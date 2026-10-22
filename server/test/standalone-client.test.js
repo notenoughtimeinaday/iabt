@@ -86,3 +86,35 @@ test("standalone redirects preserve hash deep links and reject off-origin logout
   await client.auth.logout("https://attacker.example.test/");
   assert.equal(destinations.pop(), "/#/");
 });
+
+test("conversation polling suppresses duplicate refreshes, overlap, hidden tabs and stale callbacks", async (t) => {
+  const previousInterval = globalThis.setInterval, previousClear = globalThis.clearInterval, previousDocument = globalThis.document;
+  const timers = new Map();
+  let nextTimer = 0, requests = 0, resolveRequest;
+  globalThis.document = { hidden: false };
+  globalThis.setInterval = (callback) => { timers.set(++nextTimer, callback); return nextTimer; };
+  globalThis.clearInterval = (id) => timers.delete(id);
+  t.after(() => { globalThis.setInterval = previousInterval; globalThis.clearInterval = previousClear; globalThis.document = previousDocument; });
+  const { client } = await loadClient(t, { fetchImpl: async () => {
+    requests++;
+    return new Promise((resolve) => { resolveRequest = (body) => resolve(Response.json(body)); });
+  } });
+  const received = [];
+  const stop = client.agents.subscribeToConversation("one", (body) => received.push(body));
+  const tick = [...timers.values()][0];
+  const first = tick();
+  await tick();
+  assert.equal(requests, 1, "a slow poll cannot overlap another");
+  const original = { id: "one", updated_date: "date1", messages: [{ content: "Original" }] };
+  resolveRequest(original); await first;
+  const unchanged = tick(); resolveRequest(original); await unchanged;
+  assert.equal(received.length, 1, "unchanged data must not trigger resource and history refetches");
+  const changed = tick(); resolveRequest({ ...original, messages: [{ content: "Updated" }] }); await changed;
+  assert.equal(received.length, 2, "message changes remain observable even when the timestamp is unchanged");
+  document.hidden = true; await tick();
+  assert.equal(requests, 3);
+  document.hidden = false;
+  const pending = tick(); stop(); resolveRequest({ ...original, updated_date: "late" }); await pending;
+  assert.equal(received.length, 2, "a disposed conversation cannot publish a late response");
+  assert.equal(timers.size, 0);
+});

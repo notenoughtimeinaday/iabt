@@ -6,6 +6,7 @@ import { routingMode } from '@/lib/routing';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import WorkspaceConnection from '@/components/WorkspaceConnection';
 import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import Login from '@/pages/Login';
@@ -31,8 +32,14 @@ import { platformRuntime } from '@/api/iabtClient';
 import { Navigate, useLocation } from 'react-router-dom';
 const Router = routingMode === "hash" ? HashRouter : BrowserRouter;
 
+const WorkspaceEnvironmentBadge = () => {
+  const { appPublicSettings } = useAuth();
+  if (platformRuntime.backend !== 'standalone' || appPublicSettings?.public_settings?.billing_mode !== 'test') return null;
+  return <div className="fixed bottom-2 right-2 z-[40] pointer-events-none rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-900">Test workspace</div>;
+};
+
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, checkAppState } = useAuth();
   const { pathname, search, hash } = useLocation();
   const publicPaths = new Set([
     "/login",
@@ -48,12 +55,8 @@ const AuthenticatedApp = () => {
   const isPublicPath = publicPaths.has(pathname);
 
   // Public policy pages stay available even when account authentication is required.
-  if (isLoadingPublicSettings || (isLoadingAuth && !isPublicPath)) {
-    return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
-      </div>
-    );
+  if (!isPublicPath && (isLoadingPublicSettings || isLoadingAuth)) {
+    return <WorkspaceConnection loading />;
   }
 
   // Handle authentication errors
@@ -64,6 +67,7 @@ const AuthenticatedApp = () => {
       const returnTo = pathname + search + hash;
       return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />;
     }
+    return <WorkspaceConnection onRetry={checkAppState} />;
   }
 
   // Render the main app
@@ -107,11 +111,7 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <ScrollToTop />
-          {platformRuntime.backend === 'standalone' && (
-            <div className="fixed top-2 right-2 z-[9999] rounded-full bg-amber-400 px-3 py-1 text-xs font-bold text-black shadow-lg">
-              STANDALONE STAGING
-            </div>
-          )}
+          <WorkspaceEnvironmentBadge />
           <AuthenticatedApp />
         </Router>
         <Toaster />
