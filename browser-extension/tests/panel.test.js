@@ -1,0 +1,28 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {JSDOM} from 'jsdom';
+import {createController} from '../worker.js';
+const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('complete panel saves a goal, runs a command and installs an interactive tool',async()=>{
+  const dom=new JSDOM(await readFile(new URL('../panel.html',import.meta.url),'utf8'),{url:'https://fixture.test/'});
+  globalThis.window=dom.window;globalThis.document=dom.window.document;
+  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
+  dom.window.HTMLDialogElement.prototype.close=function(){this.open=false;};
+  let stored={};const api={runtime:{id:'test',getURL:p=>'chrome-extension://test/'+p,sendNativeMessage:async()=>{throw new Error('not installed');}},storage:{session:{get:async()=>structuredClone(stored),set:async value=>{stored=structuredClone(value);}}}};
+  const controller=createController(api);const sender={id:'test',url:api.runtime.getURL('panel.html')};
+  globalThis.chrome={runtime:{sendMessage:async message=>{try{return {ok:true,...await controller.handle(message,sender)};}catch(error){return {ok:false,error:error.message};}}}};
+  await import('../panel.js');
+  const $=id=>document.getElementById(id);
+  assert.match($('vaultStatus').textContent,/Temporary session/);
+  $('goal').value='Finish the nursery catalog';$('goalForm').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));await tick();
+  assert.equal(stored.workspace.goal,'Finish the nursery catalog');
+  $('command').value='use light mode';$('commandForm').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));await tick();
+  assert.equal(document.body.dataset.theme,'day');
+  $('command').value='build a checklist';$('commandForm').dispatchEvent(new dom.window.Event('submit',{cancelable:true}));await tick();
+  const install=[...$('modalBody').querySelectorAll('button')].find(button=>button.textContent==='Install tool');assert.ok(install);install.click();await tick();
+  assert.equal(stored.workspace.tools.length,1);assert.equal($('tools').hidden,false);
+  const form=$('toolList').querySelector('form');form.querySelector('input').value='Confirm the price';form.dispatchEvent(new dom.window.Event('submit',{cancelable:true}));await tick();
+  assert.equal(stored.workspace.tools[0].data.items.at(-1).text,'Confirm the price');
+  assert.equal(document.querySelector('script:not([src])'),null);
+});

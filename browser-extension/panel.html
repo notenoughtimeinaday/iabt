@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IABT Master Control</title><link rel="stylesheet" href="panel.css"></head>
+<body>
+  <header class="top"><a class="brand" href="#workspace" aria-label="IABT Master Control workspace"><span class="mark">J</span><span>IABT<small>MASTER CONTROL · JERICHO</small></span></a><button id="settingsButton" class="icon" title="Appearance and backup" aria-label="Open settings">⚙</button></header>
+  <main>
+    <section class="intro"><span class="eyebrow"><i></i> COMPANION PREVIEW · 0.1</span><h1>Keep the goal.<br><em>Move the work forward.</em></h1><p>A workspace beside the web. Your goals, your tools, your next step.</p></section>
+    <div id="vaultStatus" class="vaultStatus">Connecting to your computer folder…</div>
+    <nav class="tabs" aria-label="Workspace views"><button data-view="workspace" aria-pressed="true">Goal</button><button data-view="page" aria-pressed="false">Page</button><button data-view="tools" aria-pressed="false">Tools</button><button data-view="control" aria-pressed="false">Control</button></nav>
+    <section id="workspace" class="view">
+      <div class="sectionLabel"><h2>My goal</h2><span id="saveMode" class="quiet">Temporary until folder connected</span></div>
+      <form id="goalForm" class="card goalCard"><label class="sr" for="goal">What are you working toward?</label><textarea id="goal" maxlength="2000" rows="3" placeholder="What would you like to accomplish?"></textarea><div class="row between"><span class="hint">Jericho remembers what you explicitly save.</span><button class="textButton" type="submit">Save goal ↗</button></div></form>
+      <div class="sectionLabel"><h2>Next steps</h2><span id="stepCount" class="quiet">0 complete</span></div><div id="steps" class="stack"></div>
+      <form id="stepForm" class="inline"><label class="sr" for="step">Add a next step</label><input id="step" maxlength="500" placeholder="Add a next step…" required><button class="icon" aria-label="Add step">＋</button></form>
+      <details class="card"><summary>Workspace notes <span class="quiet">Private & local</span></summary><form id="notesForm"><label class="sr" for="notes">Workspace notes</label><textarea id="notes" maxlength="12000" rows="5" placeholder="Decisions, constraints, ideas to remember…"></textarea><button class="secondary">Save notes</button></form></details>
+      <button id="studioButton" class="studioCard"><span class="toolIcon">✧</span><span><strong>Build with Jericho</strong><small>Review a request, then open Studio</small></span><span>↗</span></button>
+      <p class="footnote">Page reading and local tools make no Jericho AI calls. Studio availability and credits are handled by your existing account.</p>
+    </section>
+    <section id="page" class="view" hidden>
+      <div class="sectionLabel"><h2>Page context</h2><button id="inspectButton" class="secondary">Inspect page</button></div>
+      <p class="hint">Click Jericho’s toolbar icon on the page you want to use. This grants temporary access to that site.</p>
+      <div id="pageEmpty" class="empty"><span>◎</span><h3>Bring this page into focus</h3><p>Inspect visible text and controls. Nothing is read in the background or sent to an AI provider.</p></div>
+      <div id="pageResult" hidden><div class="card"><h3 id="pageTitle"></h3><p id="pageUrl" class="url"></p><p id="pageText" class="pageText"></p><button id="captureButton" class="secondary">Save page snapshot</button></div><div class="sectionLabel"><h2>Page controls</h2><span class="quiet">Review before action</span></div><div id="pageControls" class="stack"></div></div>
+      <details class="card"><summary>Saved page snapshots</summary><div id="captures" class="stack"></div></details>
+    </section>
+    <section id="tools" class="view" hidden>
+      <div class="sectionLabel"><h2>Your browser toolkit</h2><button id="newToolButton" class="textButton">＋ New tool</button></div><p class="hint">Build configurable local tools. Connect the encrypted folder to keep them between browser sessions.</p><div id="toolList" class="stack"></div>
+      <button id="importToolButton" class="secondary wide">Import a tool definition</button><p class="footnote">Tool definitions are JSON data. They cannot request new permissions, run scripts, access another tab or change the extension.</p>
+    </section>
+    <section id="control" class="view" hidden>
+      <div class="sectionLabel"><h2>Computer control</h2><span class="quiet">Windows companion</span></div>
+      <p class="hint">Move the actual cursor and send input to ordinary applications. Each action requires a separate Windows permission confirmation. Elevated apps and protected system prompts remain manual.</p>
+      <button id="connectFolder" class="secondary wide">Connect encrypted folder</button>
+      <div class="card"><h3>Pointer</h3><div class="row"><label class="fieldLabel">X<input id="cursorX" type="number" step="1" value="0"></label><label class="fieldLabel">Y<input id="cursorY" type="number" step="1" value="0"></label></div><button id="readCursor" class="textButton">Read current position</button><div class="controlGrid"><button data-pointer="move" class="secondary">Move</button><button data-pointer="click" class="secondary">Click</button><button data-pointer="doubleClick" class="secondary">Double-click</button><button data-pointer="rightClick" class="secondary">Right-click</button></div><p class="footnote">Coordinates are physical pixels across your desktop, including negative positions on additional monitors.</p></div>
+      <div class="card"><h3>Keyboard</h3><button id="listWindows" class="textButton">Choose a target window</button><label class="fieldLabel">Target window<select id="targetWindow"><option value="">Load windows first</option></select></label><label class="fieldLabel">Text to enter<textarea id="nativeText" rows="3" maxlength="2000" placeholder="Review the target window before typing…"></textarea></label><button id="typeNative" class="secondary">Review typing</button><label class="fieldLabel">Shortcut<select id="nativeKey"><option>ENTER</option><option>TAB</option><option>ESC</option><option>BACKSPACE</option><option>CTRL+A</option><option>CTRL+C</option><option>CTRL+V</option><option>CTRL+Z</option><option>CTRL+L</option></select></label><button id="keyNative" class="secondary">Review shortcut</button></div>
+      <button id="historyButton" class="secondary wide">Search encrypted history</button>
+      <p class="footnote">The companion is installed separately. It has no network listener and accepts requests only from your registered extension. History covers work done through Master Control; it does not secretly record other activity.</p>
+    </section>
+    <details class="activity"><summary>Recent activity</summary><ol id="activityList"></ol></details>
+  </main>
+  <footer class="composer"><div id="status" role="status" aria-live="polite">Ready. Start with a goal or a command.</div><form id="commandForm"><label class="sr" for="command">Command for Jericho</label><textarea id="command" maxlength="12000" rows="2" placeholder="Try “use light mode” or “build a checklist”…"></textarea><div class="row between"><div class="row"><button id="micButton" type="button" class="icon" aria-label="Dictate command" title="Dictate a command">🎙</button><button id="readButton" type="button" class="textButton">Read result</button></div><button type="submit" class="primary">Run command ↗</button></div></form><div class="row between"><span id="voiceState" class="quiet">Keyboard ready · voice is opt-in</span><button id="helpButton" class="textButton">Commands</button></div></footer>
+  <dialog id="modal"><div class="dialogTop"><h2 id="modalTitle"></h2><button id="closeModal" class="icon" aria-label="Close dialog">×</button></div><div id="modalBody"></div></dialog>
+  <script type="module" src="panel.js"></script>
+</body></html>
