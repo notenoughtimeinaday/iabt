@@ -1,0 +1,41 @@
+name: IABT Master Control checks
+on:
+  pull_request:
+    paths: ['browser-extension/**', 'native-companion/**', '.github/workflows/master-control.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  extension:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: browser-extension/package-lock.json
+      - run: npm ci --prefix browser-extension
+      - run: npm test --prefix browser-extension
+      - run: npm run package --prefix browser-extension
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IABT-Master-Control-source-package
+          path: browser-extension/dist/IABT-Master-Control-0.1.0.zip
+  windows-vault:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile Windows companion and test encrypted persistence without computer input
+        shell: powershell
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP 'IABTMasterControlHost.exe'
+          Add-Type -TypeDefinition (Get-Content -Raw native-companion/windows/NativeHost.cs) -ReferencedAssemblies @('System.dll','System.Core.dll','System.Security.dll','System.Web.Extensions.dll') -OutputAssembly $output -OutputType ConsoleApplication
+          & $output --self-test
+          if ($LASTEXITCODE -ne 0) { throw 'Native companion self-test failed' }
