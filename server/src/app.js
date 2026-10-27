@@ -35,6 +35,7 @@ import { recordPolicyAcceptance } from "./operations/policy-acceptance.js";
 import { SUPPORTED_AGENT_NAMES, respondToSupportRequest, buildJerichoKnowledge } from "./operations/jericho-support.js";
 import { handleExchangeFunction } from "./functions/exchange.js";
 import { handleIntegrationFunction } from "./functions/integrations.js";
+import { handleWorkspaceSources } from "./functions/workspace-sources.js";
 import { fileIdsFromRequest } from "./files/text-sources.js";
 import { readStoredTextPreview } from "./files/text-preview.js";
 import { prepareWebAppHtml, readRevisionSource } from "./creation/web-app.js";
@@ -47,7 +48,7 @@ const WORKFLOW_ENTITIES = new Set([
   "IntroductionRequest", "CollaborationRoom", "RoomMessage", "CredentialClaim",
   "ExchangeBlock", "ExchangeSafetyReport", "ExchangeAuditEvent",
   "IntegrationConnection", "ConnectionAdapter", "CommercialPolicy", "ProviderAgreement",
-  "JerichoLesson", "JerichoImprovementProposal"
+  "JerichoLesson", "JerichoImprovementProposal", "WorkspaceSource"
 ]);
 
 class HttpError extends Error {
@@ -917,7 +918,7 @@ const handleFunction = async ({
     const record = await repository.withRecordTransaction((transaction) => recordPolicyAcceptance({ repository: transaction, user, input: body }));
     return { status: 200, payload: { data: record } };
   }
-  for (const handler of [handleExchangeFunction, handleIntegrationFunction]) {
+  for (const handler of [handleExchangeFunction, handleIntegrationFunction, handleWorkspaceSources]) {
     const result = await handler({ name, body, user, repository, config, providers });
     if (result) return result;
   }

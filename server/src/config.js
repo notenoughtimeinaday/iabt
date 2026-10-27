@@ -47,6 +47,7 @@ export const ALLOWED_ENTITIES = Object.freeze([
   "RoomMessage",
   "SystemIncident",
   "UsageLedger",
+  "WorkspaceSource",
   "AgentConversation"
 ]);
 

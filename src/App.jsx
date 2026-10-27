@@ -14,6 +14,8 @@ import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 import Home from '@/pages/Home';
+import PersonalWorkbench from '@/pages/PersonalWorkbench';
+import { isPersonalWorkspaceOwner } from '../shared/workspace-sources';
 import Studio from '@/pages/Studio';
 import ProjectDetail from '@/pages/ProjectDetail';
 import Deliverables from '@/pages/Deliverables';
@@ -31,6 +33,10 @@ import OAuthConsent from '@/pages/OAuthConsent';
 import { platformRuntime } from '@/api/iabtClient';
 import { Navigate, useLocation } from 'react-router-dom';
 const Router = routingMode === "hash" ? HashRouter : BrowserRouter;
+const WorkspaceHome = () => {
+  const { user } = useAuth();
+  return isPersonalWorkspaceOwner(user) ? <PersonalWorkbench /> : <Home />;
+};
 
 const WorkspaceEnvironmentBadge = () => {
   const { appPublicSettings } = useAuth();
@@ -85,7 +91,9 @@ const AuthenticatedApp = () => {
       <Route path="/oauth/consent" element={<OAuthConsent />} />
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to={`/login?returnTo=${encodeURIComponent(pathname + search + hash)}`} replace />} />}>
         <Route element={<LegalAcceptanceGate />}>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<WorkspaceHome />} />
+          <Route path="/workbench" element={<PersonalWorkbench />} />
+          <Route path="/projects-library" element={<Home />} />
           <Route path="/studio" element={<Studio />} />
           <Route path="/deliverables" element={<Deliverables />} />
           <Route path="/integrations" element={<Integrations />} />

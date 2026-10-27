@@ -1,4 +1,23 @@
-# Current IABT release status — October 15, 2026 (UTC)
+# Current IABT release status — October 27, 2026 (UTC)
+
+## October 27: personal workbench candidate
+
+Derik has changed the product objective to a personal app-building workspace,
+using his verified business account. The candidate adds a responsive personal
+overview, Studio prompt handoff, recent work and an account-private source catalog.
+The catalog records repository links and preserved archive checksums; it does not
+provide GitHub authentication, sync, archive execution or automatic source upload.
+Existing authentication, saved projects, provider gates and quote approvals remain.
+See `docs/PERSONAL_WORKSPACE.md` for scope and recovery limits.
+
+The complete local verification passes with a local API build origin. PostgreSQL
+checks are skipped here because no disposable test database is configured; CI must
+verify them. A Chromium check with synthetic account/API fixtures passed desktop
+and 390px phone layout, repository saves, search and Studio handoff with no provider
+calls or browser errors. This is local UI evidence, not hosted account acceptance.
+Production is unchanged; the external Windows drive is not mounted or updated.
+The commercial history below is retained as historical evidence, not the current
+product objective or new authority to spend or open sales.
 
 ## October 19 UTC: production starter delivery and R&D reconciliation
 

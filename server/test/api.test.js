@@ -83,6 +83,18 @@ const register = async (email) => {
   return verification.payload;
 };
 
+test("workspace catalog stays behind authenticated workflow rather than generic entity access", async () => {
+  const account = await register("workspace-catalog@example.test");
+  const token = account.access_token;
+  const save = await api("/v1/functions/save-workspace-sources", { method: "POST", token, body: { sources: [{ kind: "repository", title: "Example", repository_url: "https://github.com/example/repository" }] } });
+  assert.equal(save.response.status, 200);
+  assert.equal(save.payload.data.sources.length, 1);
+  for (const [path, body] of [["/v1/entities/WorkspaceSource/list", {}], ["/v1/entities/WorkspaceSource", { title: "Forged" }]]) {
+    assert.equal((await api(path, { method: "POST", token, body })).response.status, 403);
+  }
+  assert.equal((await api("/v1/functions/get-workspace-sources", { method: "POST", body: {} })).response.status, 401);
+});
+
 test("production refuses non-durable in-memory storage", async () => {
   const productionConfig = loadConfig({
     NODE_ENV: "production",
