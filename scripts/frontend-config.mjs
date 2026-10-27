@@ -24,7 +24,11 @@ export const standaloneBoundary = () => ({
 });
 
 export const createFrontendConfig = async ({ root, env }) => {
-  const backend = String(env.VITE_IABT_BACKEND || "standalone").trim().toLowerCase();
+  const explicitBackend = String(env.VITE_IABT_BACKEND || "").trim().toLowerCase();
+  // The Base44 hosted build provides no backend switch, while standalone
+  // builds (Docker/CI) always supply the independent API origin.
+  const backend = explicitBackend ||
+    (String(env.VITE_IABT_API_URL || "").trim() ? "standalone" : "base44");
   if (!["standalone", "base44"].includes(backend)) {
     throw new Error(`Unsupported VITE_IABT_BACKEND: ${backend}`);
   }

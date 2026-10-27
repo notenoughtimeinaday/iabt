@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConfirmActionDialog, NameDialog } from "@/components/ActionDialogs";
 import BillingDialog from "@/components/BillingDialog";
+import GitHubReposPanel from "@/components/GitHubReposPanel";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import {
@@ -334,6 +335,8 @@ export default function Home() {
             <article><ShieldCheck /><div><strong>Mutual consent</strong><span>Identity and selected contact details remain concealed until an introduction is accepted by both members.</span></div></article>
           </div>
         </section>
+
+        <GitHubReposPanel />
 
         <section className="iabt-projects">
           {legacyProjects.length > 0 && (
