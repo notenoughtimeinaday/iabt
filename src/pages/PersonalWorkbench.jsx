@@ -13,6 +13,10 @@ const actions = [
   { id: "document", title: "Export my text", icon: FileText, placeholder: "Paste your complete text. Jericho will preserve your wording…" }
 ];
 const sizeLabel = (count) => String(count).padStart(2, "0");
+const scrollToSection = (event, id) => {
+  event.preventDefault();
+  document.getElementById(id)?.scrollIntoView({ behavior: "instant", block: "start" });
+};
 
 export default function PersonalWorkbench() {
   const navigate = useNavigate(), { user, logout } = useAuth();
@@ -93,7 +97,7 @@ export default function PersonalWorkbench() {
       <nav aria-label="Workspace navigation">
         <button className="is-current" type="button" aria-current="page" onClick={() => window.scrollTo({ top: 0, behavior: "instant" })}><Layers3 /> Overview <span>01</span></button>
         <button type="button" onClick={() => navigate("/studio")}><Braces /> Creation studio <ChevronRight /></button>
-        <a href="#pw-sources"><FolderGit2 /> Source library <span>{sources.length}</span></a>
+        <a href="#pw-sources" onClick={(event) => scrollToSection(event, "pw-sources")}><FolderGit2 /> Source library <span>{sources.length}</span></a>
         <button type="button" onClick={() => navigate("/deliverables")}><FolderOpen /> Saved files <ChevronRight /></button>
         <button type="button" onClick={() => navigate("/integrations")}><Settings2 /> Providers & connections</button>
       </nav>
@@ -104,7 +108,7 @@ export default function PersonalWorkbench() {
     <main className="pw-main">
       <header className="pw-topbar"><span>Workspace <ChevronRight /> <strong>Overview</strong></span><div><span className="pw-personal-pill"><span /> Personal workspace</span><button type="button" onClick={() => navigate("/support")} aria-label="Open help">Help <ArrowUpRight /></button></div></header>
       <section className="pw-hero">
-        <div className="pw-hero-copy"><span className="pw-eyebrow"><span /> A SPACE TO MAKE IT REAL</span><h1>Your ideas.<br /><em>Without the clutter.</em></h1><p>Welcome back, {name}. Build something useful, bring your code together, and pick up exactly where you left off.</p><div className="pw-hero-links"><a href="#pw-create">Start creating <ArrowRight /></a><a href="#pw-sources">Explore your source library <ArrowUpRight /></a></div></div>
+        <div className="pw-hero-copy"><span className="pw-eyebrow"><span /> A SPACE TO MAKE IT REAL</span><h1>Your ideas.<br /><em>Without the clutter.</em></h1><p>Welcome back, {name}. Build something useful, bring your code together, and pick up exactly where you left off.</p><div className="pw-hero-links"><a href="#pw-create" onClick={(event) => scrollToSection(event, "pw-create")}>Start creating <ArrowRight /></a><a href="#pw-sources" onClick={(event) => scrollToSection(event, "pw-sources")}>Explore your source library <ArrowUpRight /></a></div></div>
         <div className="pw-orbit" aria-hidden="true"><div className="pw-orbit-grid" /><div className="pw-orbit-ring pw-ring-one" /><div className="pw-orbit-ring pw-ring-two" /><div className="pw-orbit-core"><Braces /><span>IDEA → CREATION</span></div><span className="pw-float pw-float-code"><Code2 /> Your code</span><span className="pw-float pw-float-files"><FolderOpen /> Your files</span><span className="pw-float pw-float-ideas"><Sparkles /> Your next idea</span></div>
       </section>
 

@@ -13,3 +13,5 @@ The consolidated recovery package inventories accessible repository snapshots an
 The primary local workspace remains `E:\Jericho-Master\workspace\iabt`, with instructions at `E:\Jericho-Master\START-HERE.md`. That Windows drive is not mounted in this environment. No claim is made that it has been updated. Preserve the separate `iabt-mcp-local-v1` candidate and all recovery archives. Never reset, clean or overwrite local changes to install this workbench.
 
 Local checks and a draft branch do not establish hosted availability, provider acceptance or production release. No production service, account identity, DNS, subscription or spending authority is changed by this work.
+
+Static previews use `/#/workbench` when hash routing is configured. Section links scroll in place and preserve the application route. Browser-mode local URLs alone do not verify static-host navigation.
