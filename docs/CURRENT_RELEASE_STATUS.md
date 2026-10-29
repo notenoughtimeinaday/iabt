@@ -1,4 +1,29 @@
-# Current IABT release status — October 27, 2026 (UTC)
+# Current IABT release status — October 29, 2026 (UTC)
+
+## October 29: personal Android local-model candidate
+
+Phone 1.1 adds explicit local-model app creation and source-bound revision copies.
+It requires Ollama and an installed local model on the owner's trusted computer;
+no model is bundled on the phone and no paid provider is activated. The native
+client restricts numeric private IPv4 origins, rejects redirects/cloud metadata,
+bounds input/output and makes one generation POST with no automatic retry.
+Original projects survive failures and revisions. Imported previews remain
+network-blocked and isolated despite the optional native network permission.
+
+Local HTTP-contract and browser-fixture checks pass, including saved projects,
+model selection, generated draft import and original-source preservation. Android
+compilation, package signature/alignment and the existing signing identity pass.
+Real Ollama 0.40.13 with qwen2.5-coder:1.5b generated a counter and revised it
+to add subtraction. Offline browser checks confirmed increment, reset and
+subtraction, with original actions preserved in this example. Unchanged revision
+output is now rejected. Evidence lives in phone/test/evidence. A smaller model
+failed completeness validation; this is not arbitrary-app quality certification.
+The full local verification passes with 57 database-dependent skips; an attempt
+to start disposable PostgreSQL was blocked by this environment refusing a
+non-root UID, so no all-database-tests-passed claim is made.
+Physical-phone acceptance and activation on the owner's computer remain separate.
+The external drive is not mounted here. Existing hosted services are unchanged.
+
 
 ## October 27: personal workbench candidate
 

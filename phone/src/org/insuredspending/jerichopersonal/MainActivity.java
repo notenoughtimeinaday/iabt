@@ -13,13 +13,15 @@ import android.view.WindowInsets;
 import java.io.OutputStream;
 import org.json.JSONObject;
 
-/** Personal offline app. No network permission, account, or JavaScript interface. */
+/** Personal offline app. Optional explicit local-model network access; no account or JavaScript interface. */
 public final class MainActivity extends Activity {
   private static final String HOME = "file:///android_asset/index.html";
   private WebView web;
   private ValueCallback<Uri[]> fileCallback;
   private byte[] pendingExport;
   private boolean choosingExport;
+  private volatile boolean modelBusy;
+  private volatile boolean destroyed;
 
   @Override public void onCreate(Bundle saved) {
     super.onCreate(saved);
@@ -38,7 +40,7 @@ public final class MainActivity extends Activity {
     settings.setAllowFileAccessFromFileURLs(false); settings.setAllowUniversalAccessFromFileURLs(false);
     settings.setBlockNetworkLoads(true); settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
     settings.setSupportMultipleWindows(false);settings.setJavaScriptCanOpenWindowsAutomatically(false);
-    settings.setUserAgentString(settings.getUserAgentString()+" JerichoPersonal/1.0");
+    settings.setUserAgentString(settings.getUserAgentString()+" JerichoPersonal/1.1");
     WebView.setWebContentsDebuggingEnabled(false);
     web.setBackgroundColor(Color.rgb(16,18,28));
     web.setWebViewClient(new WebViewClient(){
@@ -56,6 +58,24 @@ public final class MainActivity extends Activity {
       }
       @Override public boolean onJsPrompt(WebView view,String url,String message,String value,JsPromptResult result){
         if(!HOME.equals(url)){result.cancel();return true;}
+        if("JERICHO_LOCAL_AI".equals(message)){
+          if(modelBusy||value==null||value.length()>100000){result.cancel();return true;}
+          try {
+            JSONObject request=new JSONObject(value);String id=request.getString("id"),action=request.getString("action");
+            if(!id.matches("[A-Za-z0-9_-]{1,100}")||!(action.equals("models")||action.equals("generate"))||!request.optBoolean("consent",false))throw new IllegalArgumentException();
+            LocalModelClient client=new LocalModelClient(request.getString("origin"));
+            final String model=request.optString("model",""),instruction=request.optString("instruction",""),source=request.optString("source","");
+            modelBusy=true;result.confirm("accepted");
+            new Thread(()->{
+              JSONObject response=new JSONObject();
+              try {response.put("id",id).put("ok",true);if(action.equals("models"))response.put("models",client.models());else response.put("html",client.generate(model,instruction,source));}
+              catch(Exception ignored){try{response=new JSONObject().put("id",id).put("ok",false).put("message","Local model did not return a complete app. Check the computer connection, installed model and available memory. No request was retried; existing projects are unchanged.");}catch(Exception impossible){}}
+              final String payload=response.toString();modelBusy=false;
+              runOnUiThread(()->{if(!destroyed&&web!=null)web.evaluateJavascript("window.jerichoLocalResult&&window.jerichoLocalResult("+payload+")",null);});
+            }).start();
+          }catch(Exception ignored){result.cancel();}
+          return true;
+        }
         if(!"JERICHO_SAVE".equals(message)){
           final android.widget.EditText input=new android.widget.EditText(MainActivity.this);input.setText(value);
           new AlertDialog.Builder(MainActivity.this).setTitle(message).setView(input).setPositiveButton("Save",(d,w)->result.confirm(input.getText().toString())).setNegativeButton("Cancel",(d,w)->result.cancel()).setOnCancelListener(d->result.cancel()).show();return true;
@@ -94,7 +114,7 @@ public final class MainActivity extends Activity {
   }
   private void reportExport(boolean ok){if(web!=null)web.evaluateJavascript("window.jerichoExportResult&&window.jerichoExportResult("+ok+")",null);}
   @Override public void onBackPressed(){
-    web.evaluateJavascript("typeof persisted!=='undefined'&&persisted",value->{String message="true".equals(value)?"Close Jericho? Your projects are saved on this device.":"Your latest changes are NOT saved. Export a backup before closing, or they may be lost.";new AlertDialog.Builder(this).setMessage(message).setPositiveButton("Close",(d,w)->finish()).setNegativeButton("Stay",null).show();});
+    web.evaluateJavascript("typeof persisted!=='undefined'&&persisted",value->{String message=modelBusy?"A local model request is still running. Closing loses its unsaved result; the computer may continue working. Stay to receive it.":"true".equals(value)?"Close Jericho? Your projects are saved on this device.":"Your latest changes are NOT saved. Export a backup before closing, or they may be lost.";new AlertDialog.Builder(this).setMessage(message).setPositiveButton("Close",(d,w)->finish()).setNegativeButton("Stay",null).show();});
   }
-  @Override protected void onDestroy(){if(fileCallback!=null)fileCallback.onReceiveValue(null);if(web!=null){web.destroy();web=null;}super.onDestroy();}
+  @Override protected void onDestroy(){destroyed=true;if(fileCallback!=null)fileCallback.onReceiveValue(null);if(web!=null){web.destroy();web=null;}super.onDestroy();}
 }

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Counter App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 50px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>Counter App</h1>
+  <p id="counter">0</p>
+  <button onclick="incrementCounter()">Add 1</button>
+  <button onclick="resetCounter()">Reset</button>
+  <script>
+    let counter = document.getElementById('counter').innerText;
+
+    function incrementCounter() {
+      counter = parseInt(counter) + 1;
+      document.getElementById('counter').innerText = counter;
+    }
+
+    function resetCounter() {
+      counter = 0;
+      document.getElementById('counter').innerText = counter;
+    }
+  </script>
+</body>
+</html>

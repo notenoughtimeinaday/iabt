@@ -1,0 +1,16 @@
+{
+  "model": "qwen2.5-coder:1.5b",
+  "real_local_generation": true,
+  "add_twice": true,
+  "reset": true,
+  "browser_errors": [],
+  "limits": "One simple app; no proof of arbitrary app quality or owner-phone acceptance.",
+  "real_local_revision": true,
+  "subtract": true,
+  "original_behaviors_preserved_in_this_example": true,
+  "unchanged_revision_rejected": true,
+  "date": "2026-10-29",
+  "ollama_version": "0.40.13",
+  "original_sha256": "dcfa546b0793046955fcc9b8eaf21f5f5ffed2a67a79627d0a85fef6e1ffd3bd",
+  "revised_sha256": "542dd3f10bb42cdb1f6e887dc7d423619af8ec0ea55918e9f2f033d30834e55f"
+}

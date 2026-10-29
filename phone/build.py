@@ -12,7 +12,7 @@ def run(*cmd):subprocess.run([str(x)for x in cmd],check=True,cwd=root)
 if not os.environ.get('JERICHO_PHONE_SIGNING_PASSWORD'):raise SystemExit('Set the private signing password in JERICHO_PHONE_SIGNING_PASSWORD.')
 run(tools/'aapt2','compile','--dir',root/'res','-o',build/'resources.zip')
 run(tools/'aapt2','link','-I',android,'--manifest',root/'AndroidManifest.xml','--min-sdk-version','26','--target-sdk-version','35','--java',build/'generated','-A',root/'assets','-o',build/'unsigned.apk',build/'resources.zip')
-run('java','-jar',pathlib.Path(args.ecj).resolve(),'-8','-warn:none','-classpath',android,'-d',build/'classes',root/'src/org/insuredspending/jerichopersonal/MainActivity.java')
+run('java','-jar',pathlib.Path(args.ecj).resolve(),'-8','-warn:none','-classpath',android,'-d',build/'classes',*sorted((root/'src').rglob('*.java')))
 run(tools/'d8','--min-api','26','--lib',android,'--output',build/'dex',*sorted((build/'classes').rglob('*.class')))
 with zipfile.ZipFile(build/'unsigned.apk','a')as z:
  for f in (build/'dex').glob('*.dex'):z.write(f,f.name)
