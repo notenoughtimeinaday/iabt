@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { base44 } from "@/api/iabtClient";
+import { base44, platformRuntime } from "@/api/iabtClient";
+import { storedFileId, resolveFileDownload, openFileDownload } from "@/lib/stored-files";
+import { createAttachmentTracker } from "@/lib/upload-batch";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
@@ -152,6 +154,7 @@ function formatFileSize(bytes) {
 function assetForContext(asset) {
   return {
     id: asset.id,
+    file_id: storedFileId(asset),
     name: asset.name,
     kind: asset.kind || "other",
     mime_type: asset.mime_type || "application/octet-stream",
@@ -257,6 +260,8 @@ export default function Studio() {
   const reduceMotion = useReducedMotion();
   const messageEndRef = useRef(null);
   const artifactAccessRef = useRef({});
+  const attachmentTracker = useRef(createAttachmentTracker());
+  const switchingConversationRef = useRef(false);
   const [prompt, setPrompt] = useState(() => setupProvider
     ? "Help me connect " + readable(setupProvider) + " to my IABT projects. Use the safest authorization method, keep credentials out of prompts and generated code, explain who pays provider costs, and verify the connection before using it."
     : "");
@@ -267,6 +272,12 @@ export default function Studio() {
   const [jobs, setJobs] = useState([]);
   const [artifacts, setArtifacts] = useState([]);
   const [assets, setAssets] = useState([]);
+  const [attachmentStatus, setAttachmentStatus] = useState(() => attachmentTracker.current.snapshot());
+  const publishAttachments = useCallback(() => {
+    const snapshot = attachmentTracker.current.snapshot();
+    setAssets(snapshot.rows);
+    setAttachmentStatus(snapshot);
+  }, []);
   const [artifactAccessUrls, setArtifactAccessUrls] = useState({});
   const [capabilities, setCapabilities] = useState([]);
   const [connectionFabric, setConnectionFabric] = useState(null);
@@ -307,7 +318,7 @@ export default function Studio() {
   const bonusCredits = Number(entitlement?.bonus_ai_credits || 0);
   const remainingCredits = Math.max(0, monthlyLimit - monthlyUsed) + bonusCredits;
   const assetScopeId = assetScopeFor(conversation?.id, targetProjectId);
-  const attachedAssets = assets.slice(0, ATTACHED_ASSET_LIMIT);
+  const attachedAssets = platformRuntime.backend === "standalone" ? assets : assets.slice(0, ATTACHED_ASSET_LIMIT);
 
   const resolvePrivateArtifacts = useCallback(async (rows = []) => {
     const refreshBefore = Date.now() + 45_000;
@@ -347,19 +358,24 @@ export default function Studio() {
 
   const loadResources = useCallback(async (conversationId, quiet = false) => {
     if (!conversationId) return;
+    const scopeId = assetScopeFor(conversationId, targetProjectId);
+    const token = attachmentTracker.current.beginLoad(scopeId, conversationId);
+    if (!token) return;
+    publishAttachments();
     try {
-      const scopeId = assetScopeFor(conversationId, targetProjectId);
       const [planRows, jobRows, artifactRows, assetRows, entitlementResponse] = await Promise.all([
         base44.entities.CreationPlan.filter({ conversation_id: conversationId }, "-created_date", 25),
         base44.entities.GenerationJob.filter({ conversation_id: conversationId }, "-created_date", 50),
         base44.entities.CreationArtifact.filter({ conversation_id: conversationId }, "-created_date", 100),
-        scopeId ? base44.entities.Asset.filter({ project_id: scopeId }, "-created_date", 100).catch(() => []) : Promise.resolve([]),
+        scopeId ? base44.entities.Asset.filter({ project_id: scopeId }, "-created_date", 100) : Promise.resolve([]),
         base44.functions.invoke("get-account-entitlement", {}).catch(() => null),
       ]);
+      const accepted = attachmentTracker.current.finishLoad(token, assetRows || []);
+      publishAttachments();
+      if (!accepted) return;
       setPlans(planRows || []);
       setJobs(jobRows || []);
       setArtifacts(artifactRows || []);
-      setAssets(assetRows || []);
       const entitlementPayload = entitlementResponse?.data || entitlementResponse;
       if (entitlementPayload?.entitlement) {
         setEntitlement(entitlementPayload.entitlement);
@@ -367,17 +383,32 @@ export default function Studio() {
       }
       void resolvePrivateArtifacts(artifactRows || []);
     } catch (error) {
-      if (!quiet) {
+      const accepted = attachmentTracker.current.finishLoad(token, [], errorMessage(error));
+      publishAttachments();
+      if (accepted && !quiet) {
         toast({ title: "Could not refresh this creation", description: errorMessage(error), variant: "destructive" });
       }
     }
-  }, [resolvePrivateArtifacts, targetProjectId, toast]);
+  }, [publishAttachments, resolvePrivateArtifacts, targetProjectId, toast]);
+
+  const canSwitchConversation = useCallback(() => {
+    const status = attachmentTracker.current.snapshot();
+    if (status.busy || status.pending) {
+      toast({ title: "Finish your attachments first", description: "Wait for uploads to finish, then retry or discard any unfinished attachments before switching conversations.", variant: "destructive" });
+      return false;
+    }
+    return !switchingConversationRef.current;
+  }, [toast]);
 
   const openConversation = useCallback(async (conversationId, quiet = false) => {
-    if (!conversationId) return;
+    if (!conversationId || !canSwitchConversation()) return;
+    switchingConversationRef.current = true;
+    setConversationBusy(true);
     try {
       const full = await base44.agents.getConversation(conversationId);
       if (!full) throw new Error("That conversation is no longer available.");
+      attachmentTracker.current.switchScope(assetScopeFor(conversationId, targetProjectId), conversationId);
+      publishAttachments();
       setConversation(full);
       setMessages(full.messages || []);
       setQuoteAccepted(false);
@@ -387,8 +418,11 @@ export default function Studio() {
       if (!quiet) {
         toast({ title: "Could not open the conversation", description: errorMessage(error), variant: "destructive" });
       }
+    } finally {
+      switchingConversationRef.current = false;
+      setConversationBusy(false);
     }
-  }, [loadResources, toast]);
+  }, [canSwitchConversation, loadResources, publishAttachments, targetProjectId, toast]);
 
   const refreshConversationList = useCallback(async () => {
     const rows = await listCreatorConversations();
@@ -397,6 +431,8 @@ export default function Studio() {
   }, []);
 
   const createConversation = useCallback(async () => {
+    if (!canSwitchConversation()) return null;
+    switchingConversationRef.current = true;
     setConversationBusy(true);
     try {
       const created = await base44.agents.createConversation({
@@ -406,23 +442,26 @@ export default function Studio() {
           ...(targetProjectId ? { project_id: targetProjectId } : {}),
         },
       });
+      attachmentTracker.current.switchScope(assetScopeFor(created.id, targetProjectId), created.id, targetProjectId ? null : []);
+      publishAttachments();
       setConversation(created);
       setMessages(created.messages || []);
       setPlans([]);
       setJobs([]);
       setArtifacts([]);
-      setAssets([]);
       setQuoteAccepted(false);
       setMobileNavOpen(false);
       await refreshConversationList();
+      if (targetProjectId) await loadResources(created.id);
       return created;
     } catch (error) {
       toast({ title: "Could not start a new creation", description: errorMessage(error), variant: "destructive" });
       return null;
     } finally {
+      switchingConversationRef.current = false;
       setConversationBusy(false);
     }
-  }, [refreshConversationList, targetProjectId, toast]);
+  }, [canSwitchConversation, loadResources, publishAttachments, refreshConversationList, targetProjectId, toast]);
 
   useEffect(() => {
     let active = true;
@@ -465,10 +504,12 @@ export default function Studio() {
             },
           });
           if (!active) return;
+          attachmentTracker.current.switchScope(assetScopeFor(created.id, targetProjectId), created.id, targetProjectId ? null : []);
+          publishAttachments();
           setConversation(created);
           setMessages(created.messages || []);
           setConversations([created]);
-          setAssets([]);
+          if (targetProjectId) await loadResources(created.id);
         }
       } catch (error) {
         if (active) setLoadError(errorMessage(error, "The AI project operator could not start."));
@@ -479,12 +520,12 @@ export default function Studio() {
 
     void bootstrap();
     return () => { active = false; };
-  }, [openConversation, targetProjectId, user?.id]);
+  }, [loadResources, openConversation, publishAttachments, targetProjectId, user?.id]);
 
   useEffect(() => {
     if (!conversation?.id) return undefined;
     const unsubscribe = base44.agents.subscribeToConversation(conversation.id, (updated) => {
-      if (!updated) return;
+      if (!updated || updated.id !== attachmentTracker.current.snapshot().conversationId) return;
       setConversation(updated);
       setMessages(updated.messages || []);
       void loadResources(updated.id, true);
@@ -537,6 +578,11 @@ export default function Studio() {
     event?.preventDefault();
     const request = prompt.trim();
     if (!request || sending) return;
+    const attachmentError = attachmentTracker.current.planningError();
+    if (attachmentError || switchingConversationRef.current) {
+      toast({ title: "Attachments are not ready", description: attachmentError || "Wait for the conversation to finish loading.", variant: "destructive" });
+      return;
+    }
 
     setSending(true);
     try {
@@ -544,11 +590,21 @@ export default function Studio() {
       if (!target) return;
 
       const scopeId = assetScopeFor(target.id, targetProjectId);
-      const uploadedAssets = assets
-        .filter((asset) => !scopeId || asset.project_id === scopeId)
+      const attachmentSnapshot = attachmentTracker.current.snapshot();
+      if (attachmentSnapshot.scopeId !== scopeId || attachmentSnapshot.conversationId !== target.id || attachmentTracker.current.planningError()) {
+        throw new Error("Wait for this conversation and its saved attachments to finish loading.");
+      }
+      const scopedAssets = attachmentSnapshot.rows.filter((asset) => !scopeId || asset.project_id === scopeId);
+      if (platformRuntime.backend === "standalone" && scopedAssets.length > ATTACHED_ASSET_LIMIT) {
+        throw new Error(`A file report can use at most ${ATTACHED_ASSET_LIMIT} attachments. Remove the extra attachments before sending your request.`);
+      }
+      const uploadedAssets = scopedAssets
         .slice(0, ATTACHED_ASSET_LIMIT)
         .map(assetForContext);
       const autonomyPolicy = autonomyProfile?.policy || {};
+      if (platformRuntime.backend === "standalone" && uploadedAssets.some((asset) => !asset.file_id)) {
+        throw new Error("An older attachment has no permanent file reference. Remove it from this conversation and upload it again before requesting a file report.");
+      }
       const advancementContext = {
         enabled: softwareAdvancementEnabled,
         mode: autonomyPolicy.mode || "bounded_autonomous",
@@ -562,6 +618,7 @@ export default function Studio() {
       const sent = await base44.agents.addMessage(target, {
         role: "user",
         content: request,
+        ...(platformRuntime.backend === "standalone" ? { file_ids: uploadedAssets.map((asset) => asset.file_id) } : {}),
         custom_context: [{
           type: "iabt_creation_request",
           message: "Infer the correct output type and required integrations from the user's objective. Use this exact conversation_id when calling plan-creation: " + target.id + "." + (targetProjectId ? " This is an existing app revision: pass this exact top-level project_id to inspect-project and plan-creation: " + targetProjectId + ", and keep selected_mode as app for the revision." : " Do not invent or pass selected_mode; let the server infer intent from the full request.") + (uploadedAssets.length ? " Include the uploaded file IDs and asset_scope_id in plan-creation context so JERICHO can use those files as references." : "") + " Plan and quote first. Never execute without explicit approval.",
@@ -592,13 +649,23 @@ export default function Studio() {
     }
   }
 
+  async function downloadStoredArtifact(artifact) {
+    try {
+      const url = await resolveFileDownload(base44, artifact, true);
+      openFileDownload(url, artifact.name);
+    } catch (error) {
+      toast({ title: "File could not be downloaded", description: error.message, variant: "destructive" });
+    }
+  }
+
   async function removeAttachedAsset(asset) {
     if (!asset?.id) return;
     const confirmed = window.confirm(`Remove "${asset.name || "this file"}" from this JERICHO context?`);
     if (!confirmed) return;
     try {
       await base44.entities.Asset.delete(asset.id);
-      setAssets((current) => current.filter((item) => item.id !== asset.id));
+      attachmentTracker.current.remove(asset.project_id, conversation?.id || "", asset.id);
+      publishAttachments();
       toast({ title: "File removed from JERICHO context" });
     } catch (error) {
       toast({ title: "File was not removed", description: errorMessage(error), variant: "destructive" });
@@ -682,7 +749,7 @@ export default function Studio() {
           </button>
         </div>
 
-        <Button className="creator-new-button" onClick={createConversation} disabled={conversationBusy}>
+        <Button className="creator-new-button" onClick={createConversation} disabled={conversationBusy || attachmentStatus.busy || attachmentStatus.pending > 0}>
           {conversationBusy ? <Loader2 className="animate-spin" /> : <MessageSquarePlus />}
           New project conversation
         </Button>
@@ -878,12 +945,23 @@ export default function Studio() {
                   <small>{assets.length ? assets.length + " attached" : "Attach files before planning"}</small>
                 </div>
                 <FileUploader
+                  key={`${assetScopeId}:${conversation?.id || ""}`}
                   projectId={assetScopeId}
                   conversationId={conversation?.id || ""}
                   assetScope={targetProjectId ? "project" : "conversation"}
                   compact
-                  onUploaded={() => conversation?.id && loadResources(conversation.id, true)}
+                  disabled={sending || conversationBusy || !attachmentStatus.ready || Boolean(attachmentStatus.error)}
+                  onStatusChange={(status) => {
+                    if (attachmentTracker.current.setUploadStatus(assetScopeId, conversation?.id || "", status)) publishAttachments();
+                  }}
+                  onUploaded={(uploaded) => {
+                    if (attachmentTracker.current.mergeUploaded(assetScopeId, conversation?.id || "", uploaded)) publishAttachments();
+                  }}
                 />
+                {attachmentStatus.error && (
+                  <p role="alert">Saved attachments could not be checked. <button type="button" onClick={() => loadResources(conversation?.id)}>Retry loading attachments</button></p>
+                )}
+                {attachmentStatus.pending > 0 && !attachmentStatus.busy && <p role="alert">Retry or discard unfinished attachments before sending your request.</p>}
                 {assets.length > 0 && (
                   <div className="creator-upload-list" aria-label="Attached files for JERICHO">
                     {attachedAssets.map((asset) => {
@@ -929,7 +1007,7 @@ export default function Studio() {
             />
             <div className="creator-composer-foot">
               <span><Check /> Files, bounded autonomy, cost, and verification are included before approval.</span>
-              <Button type="submit" disabled={!prompt.trim() || sending || conversationBusy}>
+              <Button type="submit" disabled={!prompt.trim() || sending || conversationBusy || Boolean(attachmentTracker.current.planningError())}>
                 {sending ? <Loader2 className="animate-spin" /> : <Sparkles />}
                 Plan objective
               </Button>
@@ -1127,12 +1205,17 @@ export default function Studio() {
                       </p>
                     )}
                     <div>
-                      {deliveryUrl && (
+                      {platformRuntime.backend === "standalone" && storedFileId(artifact) && (
+                        <button type="button" onClick={() => downloadStoredArtifact(artifact)}>
+                          <Download /> Download
+                        </button>
+                      )}
+                      {deliveryUrl && platformRuntime.backend !== "standalone" && (
                         <a href={deliveryUrl} target="_blank" rel="noreferrer">
                           <ArrowUpRight /> Open
                         </a>
                       )}
-                      {deliveryUrl && (
+                      {deliveryUrl && platformRuntime.backend !== "standalone" && (
                         <a href={deliveryUrl} download>
                           <Download /> Download
                         </a>
