@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from "node:util";
+
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
 // Test three exact test-mode plans, or one separately enabled live owner plan.
@@ -47,9 +49,29 @@ export async function assertPrivateAcceptanceJob({ config, user, job, repository
   if (!config.orchestration?.privateAcceptance?.enabled) return;
   assertPrivateAcceptanceAccess(config, user, job.input.plan_id);
   const plan = await repository.getRecord("CreationPlan", job.input.plan_id, { ...user, role: "user" });
+  const canonicalKey = plan ? "plan:" + plan.id + ":" + plan.pricing_version : "";
+  let expectedKey = canonicalKey;
+  if (job.input.authorization_recovery_from_job_id) {
+    const previous = await repository.getJob(job.input.authorization_recovery_from_job_id, { ...user, role: "user" });
+    const state = previous?.output?.orchestration;
+    const { authorization_recovery_from_job_id: previousId, ...originalInput } = job.input;
+    // One operator-admitted replacement may reuse an approval only when the
+    // original stopped before the submission checkpoint. Preserve its ledger
+    // and failed record; uncertain, charged and chained attempts cannot recover.
+    if (!uuid.test(previousId) || !previous || previous.id === job.id || previous.owner_id !== user.id ||
+        previous.job_type !== "creation.orchestrated" || previous.status !== "failed" ||
+        previous.idempotency_key !== canonicalKey || previous.input?.authorization_recovery_from_job_id ||
+        previous.last_error_code !== "app_creation_incomplete" ||
+        state?.phase !== "fallback" || state.turn !== 0 || state.spent_cents !== 0 ||
+        state.response_id || state.response || state.calls?.length || state.artifacts?.length || state.response_usage?.length ||
+        !state.failures?.length || !state.failures.every(item => item.code === "ai_acceptance_not_authorized") ||
+        !isDeepStrictEqual(originalInput, previous.input) || !isDeepStrictEqual(job.approval, previous.approval) ||
+        job.credit_amount !== previous.credit_amount) throw denied();
+    expectedKey = canonicalKey + ":recover:" + previous.id;
+  }
   // A copied plan ID cannot obtain another set of paid turns under a new key.
   if (!plan || plan.job_type !== "creation.orchestrated" || plan.user_id !== user.id ||
-      job.idempotency_key !== "plan:" + plan.id + ":" + plan.pricing_version ||
+      job.idempotency_key !== expectedKey ||
       job.approval?.approval_id !== "plan:" + plan.id ||
       Number(job.input.orchestration_budget_cents) !== Number(plan.provider_cost_cents) ||
       Number(plan.provider_cost_cents) > config.orchestration.budgetCents ||

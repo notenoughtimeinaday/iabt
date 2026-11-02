@@ -189,3 +189,55 @@ test("a live owner window cannot waive an insufficient credit balance or grant c
   assert.equal((await c.repository.getCreditAccount(user.id)).available_credits, 0);
   assert.equal(c.requests.length, 0);
 });
+
+async function unsubmittedRecoveryFixture() {
+  const c = await fixture();
+  await executeCreationPlan({ ...c, body: approved(c.plan) });
+  const claimed = await c.repository.claimNextJob({ workerId: "old-scope" });
+  await c.repository.checkpointJob({ jobId: claimed.id, workerId: "old-scope", outputPatch: { orchestration: {
+    phase: "fallback", turn: 0, spent_cents: 0, calls: [], artifacts: [], failures: [{ code: "ai_acceptance_not_authorized" }]
+  } } });
+  await c.repository.failJob({ jobId: claimed.id, workerId: "old-scope", error: { code: "app_creation_incomplete" } });
+  const previous = await c.repository.getJob(claimed.id, c.user);
+  const enqueue = () => c.repository.enqueueJob({ ownerId: c.user.id, jobType: previous.job_type,
+    input: { ...previous.input, authorization_recovery_from_job_id: previous.id }, approval: previous.approval,
+    idempotencyKey: previous.idempotency_key + ":recover:" + previous.id, creditAmount: previous.credit_amount });
+  const next = await enqueue();
+  await c.repository.updateRecord("CreationPlan", c.plan.id, c.user, { status: "executing", execution_job_id: next.id });
+  const job = await c.repository.claimNextJob({ workerId: "current-scope" });
+  return { ...c, previous, job, enqueue };
+}
+
+test("one proven unsubmitted authorization failure recovers without rewriting history or repeating an allowance", async () => {
+  const c = await unsubmittedRecoveryFixture();
+  await assertPrivateAcceptanceJob(c);
+  assert.equal((await c.enqueue()).id, c.job.id);
+  assert.equal((await c.repository.getJob(c.previous.id, c.user)).status, "failed");
+  assert.equal(c.repository.creditEntries.filter(e => e.entry_type === "grant").length, 1);
+  assert.equal(c.repository.creditEntries.filter(e => e.entry_type === "reserve").length, 2);
+  assert.equal(c.repository.creditEntries.filter(e => e.entry_type === "release").length, 1);
+  c.replies.push({ id: "resp_recovered_once", status: "queued", output: [] });
+  await orchestrationStep({ ...c, workerId: "current-scope" });
+  assert.equal(c.requests.length, 1);
+});
+
+test("authorization recovery rejects uncertain, paid, changed and chained submissions", async () => {
+  const c = await unsubmittedRecoveryFixture();
+  const originalState = structuredClone(c.previous.output.orchestration);
+  const stored = c.repository.jobs.get(c.previous.id);
+  for (const change of [{ spent_cents: 20 }, { turn: 1 }, { phase: "submitting" }, { response_id: "resp_known" },
+    { response: {} }, { response_usage: [{}] }, { calls: [{}] }, { artifacts: [{}] },
+    { failures: [{ code: "openai_request_rejected" }] }]) {
+    stored.output.orchestration = { ...originalState, ...change };
+    await assert.rejects(assertPrivateAcceptanceJob(c), { code: "ai_acceptance_not_authorized" });
+  }
+  stored.output.orchestration = originalState;
+  for (const job of [
+    { ...c.job, input: { ...c.job.input, request_text: "A different objective" } },
+    { ...c.job, approval: { ...c.job.approval, max_cost_cents: 1000 } },
+    { ...c.job, credit_amount: 1 },
+    { ...c.job, input: { ...c.job.input, authorization_recovery_from_job_id: c.job.id } }
+  ]) await assert.rejects(assertPrivateAcceptanceJob({ ...c, job }), { code: "ai_acceptance_not_authorized" });
+  stored.idempotency_key += ":recover:another";
+  await assert.rejects(assertPrivateAcceptanceJob(c), { code: "ai_acceptance_not_authorized" });
+});

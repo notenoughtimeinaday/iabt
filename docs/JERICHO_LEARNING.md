@@ -1,5 +1,16 @@
 # Jericho learning and teamwork
 
+For a proven authorization rejection before submission, the operator-only
+private-ai-recovery library can atomically reserve credits, admit one
+deterministic replacement and move the same plan projection. It requires the
+original approval and exact inputs, zero turns/spend and no response/calls/
+usage/artifacts. It preserves the original failed row and release ledger,
+rejects chained or uncertain recovery and grants no allowance. No HTTP or model
+tool exposes it. Concurrent operator calls return one job. Drain old embedded
+workers after configuration changes before queueing acceptance work: Render
+retains an old instance for 60 seconds before SIGTERM, followed by shutdown
+delay. A new live deployment alone does not establish that old workers stopped.
+
 Private live-owner acceptance is a separate default-off extension of the existing
 scoped acceptance contract. It requires both IABT_AI_ACCEPTANCE_ONLY and
 IABT_AI_ACCEPTANCE_LIVE_OWNER_ENABLED, one exact verified owner ID, at most one

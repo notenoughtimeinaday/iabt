@@ -2,6 +2,23 @@
 
 ## Latest checkpoint - supersedes the historical blocker notes below
 
+After explicit approval, the single 44-credit operator allowance was recorded
+once with non-Stripe provenance. Initial execution stopped on private-scope
+authorization before any provider submission: turn 0, spend estimate 0, no
+response ID, calls, usage or artifacts, with all reserved credits restored.
+The current instance subsequently passed the exact authorization check. Timing
+is consistent with an old embedded worker during Render's documented 60-second
+drain interval. Do not repeat the allowance or an uncertain provider request.
+
+The recovery candidate validates one deterministic replacement for a proven
+unsubmitted authorization failure, with identical input, approval and credit
+amount under the same admitted plan. Its operator-only PostgreSQL library
+commits reservation, job and plan projection atomically, retaining the original
+failed job and reserve/release receipts. Concurrent calls deduplicate; changed,
+paid, uncertain and chained recoveries fail closed. Full local verification
+passes 585 reported tests with no failures/skips plus lint, types and build.
+CI/staging/rollout and the single authorized generation remain separate gates.
+
 The live business account is now registered and email-verified. Its quote-only
 garden-equipment request is retained in Studio, with no credits reserved or
 provider contacted: production rejected it with paid_creation_purchase_required.
