@@ -4,6 +4,7 @@ import { readTextSources, SOURCE_LIMITS } from "../files/text-sources.js";
 import { appReviewSteps } from "../../../shared/app-review.js";
 import { validateWebAppScripts } from "./web-app-script-checks.js";
 import { validateWebAppObjective } from "./web-app-objective.js";
+import { conceptRecord } from "./app-concept.js";
 export { requestedWebAppRequirements, validateWebAppObjective } from "./web-app-objective.js";
 
 const fail = (code, message, status = 422, details = {}) => Object.assign(new Error(message), { code, status, ...details });
@@ -41,7 +42,7 @@ export async function readRevisionSource({ repository, storage, user, fileId, ex
   return source;
 }
 
-export function buildWebAppArtifacts({ title, html, request = "", revision = null, revisionText = null, authoringContract = true }) {
+export function buildWebAppArtifacts({ title, html, request = "", revision = null, revisionText = null, authoringContract = true, concept = null }) {
   const name = String(title || "My app").replace(/[^a-zA-Z0-9 ._-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 100).replace(/[. ]+$/, "") || "My app";
   const content = prepareWebAppHtml(html);
   const scriptChecks = validateWebAppScripts(content, { authoringContract });
@@ -53,12 +54,15 @@ export function buildWebAppArtifacts({ title, html, request = "", revision = nul
   }
   const objectiveContract = validateWebAppObjective({ request, html: content });
   const bytes = Buffer.from(content, "utf8");
+  const sourceSha256 = createHash("sha256").update(bytes).digest("hex");
+  const design = concept ? JSON.stringify(conceptRecord({ concept, request, revision, sourceSha256 }), null, 2) + "\n" : null;
   const metadata = {
     preview_ready: true, interactive: true, delivery_mode: "web_app_source", runtime_tested: false,
     objective_contract: objectiveContract,
     script_checks: scriptChecks,
     ...(revision ? { revision_of_file_id: revision.file_id, revision_of_sha256: revision.sha256, revision_source_changed: true } : {}),
-    source_sha256: createHash("sha256").update(bytes).digest("hex"),
+    source_sha256: sourceSha256,
+    ...(design ? { concept_contract: "concept_brief_v1", concept_sha256: createHash("sha256").update(design).digest("hex") } : {}),
     limitations: ["Try the app before publishing. Cloud accounts, shared data and payments are not connected.", "The private preview is sandboxed; browser storage may be unavailable. Export is a standalone HTML app.", "Objective checks find bounded labels and code markers; they do not prove the interactions work."]
   };
   const readme = `# ${name}\n\nOpen index.html in a browser. No installation, build service or external libraries are required.\n\nThis file is identical to the saved preview. Test its actual interactions before publishing. Cloud accounts, shared data and payments are not connected. Local browser storage, when used, is device-specific and may be blocked in the private preview.\n\nGenerated code was not executed on the IABT server.\n`;
@@ -67,7 +71,7 @@ export function buildWebAppArtifacts({ title, html, request = "", revision = nul
     metadata,
     artifacts: [
       { filename: name + ".html", contentType: "text/html", kind: "app", bytes, metadata },
-      { filename: name + "-source.zip", contentType: "application/zip", kind: "archive", bytes: createZip({ "index.html": content, "README.md": readme, "REVIEW.md": review }), metadata: { ...metadata, preview_ready: false, interactive: false, source_format: "standalone_html" } }
+      { filename: name + "-source.zip", contentType: "application/zip", kind: "archive", bytes: createZip({ "index.html": content, "README.md": readme, "REVIEW.md": review + (design ? "\nDESIGN.json records the proposed concept, assumptions, workflows and untested acceptance checks. Compare each workflow with the app; no semantic coverage or behavior is certified.\n" : ""), ...(design ? { "DESIGN.json": design } : {}) }), metadata: { ...metadata, preview_ready: false, interactive: false, source_format: "standalone_html" } }
     ]
   };
 }

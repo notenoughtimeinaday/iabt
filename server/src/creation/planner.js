@@ -9,6 +9,7 @@ import { capabilityRegistry, orchestrationConfigured } from "../autonomy/capabil
 import { assertCreationProfile, coreStarter, CORE_STARTER_MESSAGE } from "./core-profile.js";
 import { readRevisionSource } from "./web-app.js";
 import { assertPrivateAcceptanceAccess } from "../autonomy/private-acceptance.js";
+import { APP_CONCEPT_CONTRACT } from "./app-concept.js";
 
 export const CREATION_PRICING_VERSION = "iabt-standalone-2026-10-09.1";
 const QUOTE_TTL_MS = 30 * 60 * 1000;
@@ -563,6 +564,7 @@ export const createCreationPlan = async ({
       ...(documentExport ? { document_output_contract: "supplied_text_v1", document_markdown: documentMarkdown } : {}),
       ...(intent === "document" && orchestrated ? { document_output_contract: "composed_document_v1" } : {}),
       ...(["app", "website"].includes(intent) ? { app_output_contract: "self_contained_html_v1" } : {}),
+      ...(orchestrated && ["app", "website"].includes(intent) ? { app_concept_contract: APP_CONCEPT_CONTRACT } : {}),
       ...(starter && !orchestrated ? { starter_id: starter } : {}),
       ...(revisionId ? { revision_source: references[0] } : {}),
       ...(orchestrated ? { orchestration_budget_cents: config.orchestration.budgetCents,

@@ -15,7 +15,12 @@ const html = (label = "Keep this behavior") => `<!doctype html><html lang="en"><
 const maintenanceRequest = "Build a polished, self-contained equipment maintenance tracker for a small shop. Users can add, edit, complete, and delete maintenance tasks; set equipment name, priority, due date, and notes; search and filter by status and priority; see overdue and upcoming summaries; persist data in browser storage; import and export JSON; and use it comfortably on phone or desktop. Include realistic sample data, clear empty states, accessible high-contrast styling, and no external services.";
 const partialMaintenanceHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Equipment Maintenance Tracker</title><style>body{font:16px system-ui}</style></head><body><h1>Equipment Maintenance Tracker</h1><label>Equipment Name<input></label><label>Priority<select></select></label><label>Due Date<input type="date"></label><label>Notes<textarea></textarea></label><table><tr><th>Status</th></tr></table><button>Add Task</button><button>Complete</button><button>Delete</button><script>const tasks=JSON.parse(localStorage.getItem('tasks')||'[]');localStorage.setItem('tasks',JSON.stringify(tasks));</script></body></html>`;
 const completeMaintenanceHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Equipment Maintenance Tracker</title><style>body{font:16px system-ui}@media(max-width:600px){body{font-size:14px}}</style></head><body><h1>Equipment Maintenance Tracker</h1><p>Realistic sample data</p><p class="empty">No tasks</p><label>Equipment Name<input></label><label>Priority<select></select></label><label>Due Date<input type="date"></label><label>Notes<textarea></textarea></label><label>Search<input></label><label>Status filter<select></select></label><section>Overdue summary</section><section>Upcoming summary</section><button>Add Task</button><button>Edit</button><button>Complete</button><button>Delete</button><button>Import JSON</button><button>Export JSON</button><script>const tasks=JSON.parse(localStorage.getItem('tasks')||'[]');localStorage.setItem('tasks',JSON.stringify(tasks));function importJson(text){return JSON.parse(text)}function exportJson(){return JSON.stringify(tasks)}</script></body></html>`;
-const toolCall = (name, args, id) => ({ type: "function_call", name, call_id: id, arguments: JSON.stringify(args) });
+const concept = {
+  purpose: "Keep a private count", intended_users: ["One person using a browser"],
+  workflows: [{ user_goal: "Increase the count", interaction: "Press Add one", resulting_state: "The count increases by one", acceptance_check: "Starting at zero, press twice and observe two", edge_case: "Starting at zero is valid" }],
+  data_and_rules: ["Count begins at zero"], assumptions: [], limitations: ["Browser interactions remain untested"]
+};
+const toolCall = (name, args, id) => ({ type: "function_call", name, call_id: id, arguments: JSON.stringify({ ...(name === "create_web_app" ? { concept } : {}), ...args }) });
 const response = (id, output = []) => ({ id, status: "completed", output });
 
 test("shift planning recognizes coordinated editing, searchable lists and hour totals", () => {
@@ -203,6 +208,33 @@ test("invalid JavaScript is repaired within the same app job before any artifact
   assert.match(rejected.message, /did not execute/);
   assert.doesNotMatch(rejected.message, /missing =|SyntaxError|\/workspace/);
   assert.equal(f.repository.creditEntries.filter((entry) => entry.entry_type === "capture").length, 1);
+});
+
+test("new signed concept contract repairs the same job and retains design without extra export calls", async () => {
+  const f = await fixture();
+  const { plan } = await f.plan();
+  assert.equal(plan.normalized_spec.app_concept_contract, "concept_brief_v1");
+  f.replies.push(
+    response("resp_plan", [toolCall("plan_execution", { objective: "Build a counter", nodes: [{ id: "build", tool: "create_web_app", objective: "Build a counter", depends_on: [] }] }, "plan")]),
+    response("resp_invalid", [toolCall("create_web_app", { node_id: "build", title: "Counter", concept: { ...concept, workflows: [] }, html: html() }, "invalid")]),
+    response("resp_fixed", [toolCall("create_web_app", { node_id: "build", title: "Counter", html: html() }, "fixed")]),
+    response("resp_complete")
+  );
+  await f.execute(plan);
+  const done = await f.drain();
+  assert.equal(done.job.status, "succeeded");
+  assert.equal(done.job.output.orchestration.execution_graph.nodes[0].attempts.length, 2);
+  assert.equal(done.job.output.orchestration.calls.find(item => item.call_id === "invalid").result.error, "invalid_tool_input");
+  assert.equal(done.artifacts.length, 2);
+  const archive = done.artifacts.find(item => item.original_name.endsWith(".zip"));
+  assert.match(f.objects.get(archive.storage_key).toString(), /DESIGN.json/);
+  assert.equal(f.calls.length, 4);
+  assert.match(f.calls[0].body.instructions, /Before writing HTML/);
+  assert.equal(f.calls[0].body.tools.find(tool => tool.name === "create_web_app").parameters.required.includes("concept"), true);
+  assert.equal(f.repository.creditEntries.filter(entry => entry.entry_type === "capture").length, 1);
+  const replay = await f.execute(plan);
+  assert.equal(replay.job.id, done.job.id);
+  assert.equal(f.calls.length, 4);
 });
 
 test("revision quotes bind the owner's actual HTML and reject changes before reserving credits", async () => {

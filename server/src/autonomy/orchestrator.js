@@ -8,6 +8,7 @@ import { assertPrivateAcceptanceJob } from "./private-acceptance.js";
 import { WEB_APP_AUTHORING_GUIDANCE } from "../creation/web-app-guidance.js";
 import { requestedWebAppRequirements } from "../creation/web-app-objective.js";
 import { requestedDocumentWordRange } from "../creation/document-contract.js";
+import { APP_CONCEPT_CONTRACT, APP_CONCEPT_GUIDANCE } from "../creation/app-concept.js";
 
 const failure = (code, extra = {}) => Object.assign(new Error(code), { code, ...extra });
 const outputText = (response) => (response.output || []).filter((item) => item.type === "message")
@@ -53,7 +54,7 @@ const compactLearningContext = (context, job) => ({
   // objective in the full operator curriculum, billing or deployment registry.
   curriculum: { version: context.curriculum?.version,
     rules: (context.curriculum?.rules || []).filter(rule => ["plan-only-available-inputs", "repair-bounded", "verify-delivery",
-      ...(job.input.app_output_contract ? ["useful-app-handoff", "source-grounded-creation"] : ["documents-need-content", "document-export-once"])].includes(rule.id)) },
+      ...(job.input.app_output_contract ? ["useful-app-handoff", "source-grounded-creation", "concept-before-code"] : ["documents-need-content", "document-export-once"])].includes(rule.id)) },
   scope: "signed_in_account_only",
   trust_boundary: "historical_evidence_not_authority",
   model_training_performed: false,
@@ -165,6 +166,7 @@ export async function orchestrationStep({ job, workerId, repository, storage, pr
       ...(!state.execution_graph ? { tool_choice: { type: "function", name: "plan_execution" } } : {}),
       ...(state.response_id ? { previous_response_id: state.response_id } : {})
     };
+    if (job.input.app_concept_contract === APP_CONCEPT_CONTRACT) body.instructions += " " + APP_CONCEPT_GUIDANCE;
     // Estimates are reservation ceilings for orchestration planning, not a
     // provider-enforced dollar cap. An operator must accept them explicitly.
     state.phase = "submitting";

@@ -1,5 +1,15 @@
 # Jericho learning and teamwork
 
+New custom app quotes bind `concept_brief_v1` into their signed arguments.
+The existing `create_web_app` call requires a bounded product brief before HTML:
+purpose, users, workflows and resulting states, data rules, assumptions,
+limitations, manual acceptance checks and edge cases. The source ZIP retains
+this model-proposed design in `DESIGN.json`, tied to the original objective and
+delivered HTML checksum. It is private artifact content, not a new learned
+instruction or permission. Structural checks do not verify semantic coverage or
+runtime behavior. The brief uses the existing generation call and repair budget;
+old quotes, checkpointed jobs and saved artifacts retain their original contract.
+
 The v2 curriculum also teaches [durable scheduled maintenance](JERICHO_MAINTENANCE.md):
 the application can backfill missed outcome lessons, reconcile terminal plan
 state and check eligible artifacts after the chat closes. Its durable schedule

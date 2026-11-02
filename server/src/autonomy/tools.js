@@ -6,6 +6,7 @@ import { evaluateAction } from "./policy.js";
 import { buildWebAppArtifacts, readRevisionSource } from "../creation/web-app.js";
 import { GRAPH_NODE_ID_PATTERN } from "./execution-graph.js";
 import { validateDocumentLength, priorDocumentExport } from "../creation/document-contract.js";
+import { APP_CONCEPT_CONTRACT, APP_CONCEPT_SCHEMA } from "../creation/app-concept.js";
 
 const objectSchema = (properties) => ({ type: "object", properties, required: Object.keys(properties), additionalProperties: false });
 const string = { type: "string" };
@@ -69,14 +70,15 @@ export function registeredTools({ job, repository, storage, user }) {
       ...common, name: "create_web_app",
       description: "Create a complete working browser app as self-contained HTML plus an identical standalone source ZIP and manual REVIEW.md checklist. Use inline CSS/classic JavaScript and local interactions, no module scripts, external dependencies, network requests, account services or payment promises. Implement every explicitly requested behavior, not labels or placeholders; bounded static omissions and syntax failures are rejected for repair. Inspect the prior HTML first when revising; preserve its useful behavior. Guard browser-storage reads and writes. This checks format, static markers and JavaScript compilation only, not runtime correctness.",
       input_schema: objectSchema({ node_id: nodeId, title: artifactTitle, html: string }),
-      execute: async ({ title, html }) => {
+      execute: async ({ title, html, concept }) => {
         if (!safeName(title)) throw fail("invalid_tool_input", "Use a simple app title.");
         const revision = job.input.revision_source || null;
         // Re-read the same approved owner-scoped source at artifact creation.
         // Neither the model nor a remembered inspection supplies the baseline.
         const original = revision ? await readRevisionSource({ repository, storage, user,
           fileId: revision.file_id, expectedReferences: job.input.file_references }) : null;
-        const result = buildWebAppArtifacts({ title, html, request: job.input.request_text, revision, revisionText: original?.text });
+        const result = buildWebAppArtifacts({ title, html, request: job.input.request_text, revision, revisionText: original?.text,
+          ...(job.input.app_concept_contract === APP_CONCEPT_CONTRACT ? { concept } : {}) });
         return { artifacts: result.artifacts.map(({ bytes, ...item }) => ({ ...item, content_base64: bytes.toString("base64") })) };
       }
     },
@@ -119,6 +121,12 @@ export function toolDefinitions(tools, user, job) {
     const parameters = structuredClone(tool.input_schema);
     if (tool.name === "plan_execution") parameters.properties.nodes.items.properties.tool.enum = executionTools;
     if (tool.name === "inspect_file") parameters.properties.file_id.enum = fileIds;
+    // Only new signed app quotes opt in. Existing quotes and checkpointed calls
+    // retain their original schema and can finish without another generation.
+    if (tool.name === "create_web_app" && appOnly && job.input.app_concept_contract === APP_CONCEPT_CONTRACT) {
+      parameters.properties = { node_id: nodeId, title: artifactTitle, concept: structuredClone(APP_CONCEPT_SCHEMA), html: string };
+      parameters.required = Object.keys(parameters.properties);
+    }
     return { type: "function", name: tool.name, description: tool.description, parameters, strict: true };
   });
 }
@@ -127,6 +135,7 @@ function validateInput(schema, value) {
   if (schema.type === "object") return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).every((key) => Object.hasOwn(schema.properties, key)) && schema.required.every((key) => Object.hasOwn(value, key) && validateInput(schema.properties[key], value[key]));
   if (schema.type === "array") return Array.isArray(value) && value.length >= (schema.minItems || 0) && value.length <= (schema.maxItems || 100) && value.every((item) => validateInput(schema.items, item));
   return typeof value === schema.type && (!schema.enum || schema.enum.includes(value)) &&
+    (schema.type !== "string" || !schema.pattern || value.trim().length > 0) &&
     (!schema.pattern || new RegExp(schema.pattern).test(value));
 }
 
