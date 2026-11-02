@@ -1,5 +1,16 @@
 # Current IABT release status — October 29, 2026 (UTC)
 
+## November 1: simpler Android personal workflow
+
+Phone 1.2 defaults to an explicit assistant-app share handoff and opening the
+returned HTML file or pasted code. It does not require model names or computer
+settings for that handoff, and does not silently provide an AI API. Optional
+computer AI remains separate. Apps open in Run mode; a bounded per-project
+localStorage shim preserves app data while retaining opaque sandbox isolation.
+Browser integration checks cover the new workflow and app-data isolation.
+Native share-sheet and physical-phone acceptance remain unverified. Production
+and the external Windows workspace were not changed.
+
 ## October 29: personal Android local-model candidate
 
 Phone 1.1 adds explicit local-model app creation and source-bound revision copies.

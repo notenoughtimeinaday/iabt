@@ -40,7 +40,7 @@ public final class MainActivity extends Activity {
     settings.setAllowFileAccessFromFileURLs(false); settings.setAllowUniversalAccessFromFileURLs(false);
     settings.setBlockNetworkLoads(true); settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
     settings.setSupportMultipleWindows(false);settings.setJavaScriptCanOpenWindowsAutomatically(false);
-    settings.setUserAgentString(settings.getUserAgentString()+" JerichoPersonal/1.1");
+    settings.setUserAgentString(settings.getUserAgentString()+" JerichoPersonal/1.2");
     WebView.setWebContentsDebuggingEnabled(false);
     web.setBackgroundColor(Color.rgb(16,18,28));
     web.setWebViewClient(new WebViewClient(){
@@ -58,6 +58,14 @@ public final class MainActivity extends Activity {
       }
       @Override public boolean onJsPrompt(WebView view,String url,String message,String value,JsPromptResult result){
         if(!HOME.equals(url)){result.cancel();return true;}
+        if("JERICHO_SHARE".equals(message)){
+          try {
+            if(value==null||value.length()>400000)throw new IllegalArgumentException();
+            String text=new JSONObject(value).getString("text");if(text.isEmpty()||text.length()>80000)throw new IllegalArgumentException();
+            Intent share=new Intent(Intent.ACTION_SEND);share.setType("text/plain");share.putExtra(Intent.EXTRA_TEXT,text);
+            startActivity(Intent.createChooser(share,"Send your request to an assistant"));result.confirm("accepted");
+          }catch(Exception ignored){result.cancel();}return true;
+        }
         if("JERICHO_LOCAL_AI".equals(message)){
           if(modelBusy||value==null||value.length()>100000){result.cancel();return true;}
           try {
