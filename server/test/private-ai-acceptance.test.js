@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { loadConfig } from "../src/config.js";
 import { MemoryRepository } from "../src/memory-repository.js";
-import { privateAcceptanceAccess, assertPrivateAcceptanceJob } from "../src/autonomy/private-acceptance.js";
+import { privateAcceptanceAccess, assertPrivateAcceptanceJob, privateOwnerCreationAccess } from "../src/autonomy/private-acceptance.js";
 import { capabilityRegistry, orchestrationConfigured } from "../src/autonomy/capabilities.js";
 import { orchestrationStep } from "../src/autonomy/orchestrator.js";
 import { createCreationPlan, executeCreationPlan } from "../src/creation/planner.js";
@@ -135,5 +135,57 @@ test("copied plan job and legacy adapter cannot escape the private request count
   await assert.rejects(c.providers.execute("openai", "response", { input: "bypass" }, {
     idempotencyKey: "legacy-test", approval: { approved: true, approval_id: "legacy", max_cost_cents: 24 }
   }), { code: "ai_acceptance_not_authorized" });
+  assert.equal(c.requests.length, 0);
+});
+
+test("live personal acceptance needs its separate switch, verified owner, one plan and short expiry", async () => {
+  const c = await fixture();
+  const env = { ...c.env, IABT_STRIPE_MODE: "live", IABT_AI_ACCEPTANCE_LIVE_OWNER_ENABLED: "true", IABT_AI_ACCEPTANCE_PLAN_IDS: c.plan.id };
+  const config = loadConfig(env);
+  assert.equal(privateOwnerCreationAccess(config, c.user), true);
+  assert.equal(privateOwnerCreationAccess(config, c.other), false);
+  assert.equal(privateOwnerCreationAccess(config, { ...c.user, email_verified: false }), false);
+  assert.equal(privateAcceptanceAccess(config, c.user, { planId: randomUUID() }), false);
+  for (const values of [
+    { IABT_AI_ACCEPTANCE_LIVE_OWNER_ENABLED: "false" },
+    { IABT_AI_ACCEPTANCE_EXPIRES_AT: new Date(Date.now() + 25 * 3600000).toISOString() },
+    { IABT_AI_ACCEPTANCE_EXPIRES_AT: "2000-01-01T00:00:00Z" },
+    { IABT_AI_ACCEPTANCE_PLAN_IDS: [c.plan.id, randomUUID()].join(",") }
+  ]) assert.equal(privateOwnerCreationAccess(loadConfig({ ...env, ...values }), c.user), false);
+  assert.equal(privateOwnerCreationAccess(loadConfig({ ...env, IABT_AI_ACCEPTANCE_ONLY: "false" }), c.user), false);
+});
+
+test("private live owner may quote without Stripe provenance but cannot execute an unadmitted plan", async () => {
+  const c = await fixture();
+  const env = { ...c.env, IABT_STRIPE_MODE: "live", IABT_REQUIRE_PAYMENT_FOR_PAID_CREATION: "true", IABT_AI_ACCEPTANCE_LIVE_OWNER_ENABLED: "true", IABT_AI_ACCEPTANCE_PLAN_IDS: "" };
+  const config = loadConfig(env);
+  assert.equal(await c.repository.hasPaidCreditGrant({ ownerId: c.user.id, billingMode: "live" }), false);
+  const { plan } = await createCreationPlan({ ...c, config, requestText: "Build a private garden equipment app" });
+  assert.equal(plan.status, "quoted");
+  assert.equal((await c.repository.getCreditAccount(c.user.id)).available_credits, 100);
+  await assert.rejects(executeCreationPlan({ ...c, config, body: approved(plan) }), { code: "ai_acceptance_not_authorized" });
+  assert.equal(c.repository.jobs.size, 0);
+  assert.equal(c.requests.length, 0);
+  const admitted = loadConfig({ ...env, IABT_AI_ACCEPTANCE_PLAN_IDS: plan.id });
+  await assert.rejects(executeCreationPlan({ ...c, config: admitted, body: { ...approved(plan), approved: false } }), { code: "explicit_approval_required" });
+  const first = await executeCreationPlan({ ...c, config: admitted, body: approved(plan) });
+  const replay = await executeCreationPlan({ ...c, config: admitted, body: approved(plan) });
+  assert.equal(first.job.id, replay.job.id);
+  assert.equal(c.repository.jobs.size, 1);
+  assert.equal(c.requests.length, 0);
+  assert.equal(await c.repository.hasPaidCreditGrant({ ownerId: c.user.id, billingMode: "live" }), false);
+  assert.equal((await c.repository.getUser(c.user.id)).role, "user");
+});
+
+test("a live owner window cannot waive an insufficient credit balance or grant credits", async () => {
+  const c = await fixture();
+  const env = { ...c.env, OPENAI_MODEL: "gpt-5.6-terra", IABT_OPENAI_RESPONSE_COST_CENTS: "20", IABT_ORCHESTRATION_BUDGET_CENTS: "160", IABT_STRIPE_MODE: "live", IABT_REQUIRE_PAYMENT_FOR_PAID_CREATION: "true", IABT_AI_ACCEPTANCE_LIVE_OWNER_ENABLED: "true", IABT_AI_ACCEPTANCE_PLAN_IDS: "" };
+  const user = await c.repository.createUser({ email: "empty-owner@example.test", passwordHash: "unused", emailVerified: true });
+  const config = loadConfig({ ...env, IABT_AI_ACCEPTANCE_OWNER_ID: user.id });
+  const { plan } = await createCreationPlan({ ...c, config, user, requestText: "Build a private garden app" });
+  const admitted = loadConfig({ ...env, IABT_AI_ACCEPTANCE_OWNER_ID: user.id, IABT_AI_ACCEPTANCE_PLAN_IDS: plan.id });
+  await assert.rejects(executeCreationPlan({ ...c, user, config: admitted, body: approved(plan) }), error => /credit/i.test(error.code || error.message));
+  assert.equal(c.repository.jobs.size, 0);
+  assert.equal((await c.repository.getCreditAccount(user.id)).available_credits, 0);
   assert.equal(c.requests.length, 0);
 });

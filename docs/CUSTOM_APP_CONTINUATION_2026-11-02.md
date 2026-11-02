@@ -2,6 +2,28 @@
 
 ## Latest checkpoint - supersedes the historical blocker notes below
 
+The live business account is now registered and email-verified. Its quote-only
+garden-equipment request is retained in Studio, with no credits reserved or
+provider contacted: production rejected it with paid_creation_purchase_required.
+The concept upgrade was published through the connected GitHub app at c75820b;
+ordinary Git push lacked repository permission. The existing draft PR is #4.
+
+A subsequent local candidate adds an explicitly enabled private live-owner
+window: one verified owner, one admitted plan, expiry within 24 hours, existing
+quote/credit/job/POST checks, no credit grant or role change. Its configuration
+requires IABT_AI_ACCEPTANCE_ONLY and IABT_AI_ACCEPTANCE_LIVE_OWNER_ENABLED.
+An empty plan list allows a quote but no execution. It preserves ordinary
+purchase requirements for all other accounts and default configurations.
+Full local verification of this candidate passes 581 reported tests with no
+failures or skips, plus lint, types and build. CI, staging and explicit operator
+activation remain separate. CI now also runs on pushes to the canonical
+jericho-autonomy-v1 branch: existing PR #4 has merge conflicts with its old base,
+which prevents pull-request CI from running. No merge into main is performed.
+The selected owner has 10 starter credits;
+Terra's current maximum reservation is 54. Any additional operator allowance
+must be explicitly authorized with truthful non-Stripe provenance. Do not
+change roles, fabricate payments or disable the purchase guard globally.
+
 The owner saved the key privately, first as a Secret File and then as an
 environment variable named OPEN_API_KEY. The agent corrected only that variable
 name to OPENAI_API_KEY while preserving its masked value. Deploy

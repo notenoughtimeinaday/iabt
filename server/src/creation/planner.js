@@ -8,7 +8,7 @@ import { creationPolicy } from "../autonomy/policy.js";
 import { capabilityRegistry, orchestrationConfigured } from "../autonomy/capabilities.js";
 import { assertCreationProfile, coreStarter, CORE_STARTER_MESSAGE } from "./core-profile.js";
 import { readRevisionSource } from "./web-app.js";
-import { assertPrivateAcceptanceAccess } from "../autonomy/private-acceptance.js";
+import { assertPrivateAcceptanceAccess, privateOwnerCreationAccess } from "../autonomy/private-acceptance.js";
 import { APP_CONCEPT_CONTRACT } from "./app-concept.js";
 
 export const CREATION_PRICING_VERSION = "iabt-standalone-2026-10-09.1";
@@ -488,7 +488,7 @@ export const createCreationPlan = async ({
     }
   }
   const orchestrated = !documentExport && !namedStarterRequested && (!references.length || revisionId || sourceApp) && ["app", "website", "document", "code", "design"].includes(intent) && aiReady;
-  if (orchestrated && config.creation.requirePaymentForPaidCreation && user.role !== "admin") {
+  if (orchestrated && config.creation.requirePaymentForPaidCreation && user.role !== "admin" && !privateOwnerCreationAccess(config, user)) {
     if (typeof repository.hasPaidCreditGrant !== "function") {
       throw Object.assign(new Error("Paid creation purchase verification is temporarily unavailable. No plan was created, no credits were reserved, and no provider was contacted."), { status: 503, code: "paid_creation_verification_unavailable" });
     }

@@ -125,6 +125,7 @@ export const loadConfig = (env = process.env) => {
       maxOutputTokens: Math.min(asPositiveInteger(env.IABT_ORCHESTRATION_MAX_OUTPUT_TOKENS, 6000), env.OPENAI_MODEL === "gpt-5.6-terra" ? 8000 : 6000),
       privateAcceptance: Object.freeze({
         enabled: asBoolean(env.IABT_AI_ACCEPTANCE_ONLY),
+        liveOwnerEnabled: asBoolean(env.IABT_AI_ACCEPTANCE_LIVE_OWNER_ENABLED),
         ownerId: String(env.IABT_AI_ACCEPTANCE_OWNER_ID || "").trim(),
         planIds: Object.freeze(String(env.IABT_AI_ACCEPTANCE_PLAN_IDS || "").split(",").map(id => id.trim()).filter(Boolean)),
         expiresAt: String(env.IABT_AI_ACCEPTANCE_EXPIRES_AT || "").trim()

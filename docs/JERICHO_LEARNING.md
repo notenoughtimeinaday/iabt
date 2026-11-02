@@ -1,5 +1,17 @@
 # Jericho learning and teamwork
 
+Private live-owner acceptance is a separate default-off extension of the existing
+scoped acceptance contract. It requires both IABT_AI_ACCEPTANCE_ONLY and
+IABT_AI_ACCEPTANCE_LIVE_OWNER_ENABLED, one exact verified owner ID, at most one
+exact plan ID, and expiry within 24 hours. An empty plan list permits quoting
+for that owner but no job admission. The scoped owner may quote without Stripe
+purchase provenance; execution still checks the signed quote, explicit approval,
+available credits and canonical plan/job identity. It grants no credits or role.
+Every new provider POST rechecks scope; known response polling may finish after
+expiry. Model, turn, output and estimate ceilings remain unchanged. Close the
+window after acceptance. These are application limits and estimates, not a
+provider-enforced invoice cap.
+
 New custom app quotes bind `concept_brief_v1` into their signed arguments.
 The existing `create_web_app` call requires a bounded product brief before HTML:
 purpose, users, workflows and resulting states, data rules, assumptions,

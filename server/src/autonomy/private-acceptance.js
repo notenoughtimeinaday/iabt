@@ -1,25 +1,39 @@
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
-// Test three exact plans without opening paid creation to the public. These
+// Test three exact test-mode plans, or one separately enabled live owner plan.
+// A live owner window lasts at most 24 hours and grants no credits or role.
+// These
 // restrict requests; they are not a provider-enforced dollar cap.
 export function privateAcceptanceAccess(config, user, { planId, now = Date.now() } = {}) {
   const settings = config.orchestration || {};
   const scope = settings.privateAcceptance || {};
   if (!scope.enabled) return true;
   const ids = scope.planIds;
+  const liveOwner = scope.liveOwnerEnabled === true && config.providers?.stripe?.mode === "live";
+  const remainingMs = Date.parse(scope.expiresAt) - now;
   const model = config.providers?.openai?.model;
   const limits = model === "gpt-4o-mini" ? { output: 6000, response: 3, budget: 24 } :
     model === "gpt-5.6-terra" ? { output: 8000, response: 20, budget: 160 } : null;
-  return Boolean(config.providers?.stripe?.mode === "test" &&
+  return Boolean((config.providers?.stripe?.mode === "test" || liveOwner) &&
     limits &&
     uuid.test(scope.ownerId || "") && user?.id === scope.ownerId &&
     Number.isFinite(Date.parse(scope.expiresAt)) && Date.parse(scope.expiresAt) > now &&
+    (!liveOwner || (user?.email_verified === true && remainingMs <= 24 * 60 * 60 * 1000 && ids?.length <= 1)) &&
     Array.isArray(ids) && ids.length <= 3 && ids.every(id => typeof id === "string" && uuid.test(id)) && new Set(ids).size === ids.length &&
     Number.isSafeInteger(settings.maxTurns) && settings.maxTurns > 0 && settings.maxTurns <= 8 &&
     Number.isSafeInteger(settings.maxOutputTokens) && settings.maxOutputTokens > 0 && settings.maxOutputTokens <= limits.output &&
     Number.isSafeInteger(settings.responseCostCents) && settings.responseCostCents >= limits.response &&
     Number.isSafeInteger(settings.budgetCents) && settings.budgetCents >= settings.responseCostCents && settings.budgetCents <= limits.budget &&
     (planId === undefined || ids.includes(planId)));
+}
+
+// A server-configured private owner window may quote one personal workflow
+// without manufacturing Stripe purchase provenance. Execution still requires
+// its exact admitted plan, original quote approval and ordinary credit ledger.
+export function privateOwnerCreationAccess(config, user) {
+  return Boolean(config.orchestration?.privateAcceptance?.enabled &&
+    config.orchestration.privateAcceptance.liveOwnerEnabled === true &&
+    config.providers?.stripe?.mode === "live" && privateAcceptanceAccess(config, user));
 }
 
 const denied = () => Object.assign(new Error("Custom creation is limited to the operator's current private test plans. Your files and credits are unchanged."),

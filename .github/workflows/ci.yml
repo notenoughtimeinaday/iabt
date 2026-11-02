@@ -2,7 +2,7 @@ name: IABT verification
 
 on:
   push:
-    branches: [main]
+    branches: [main, jericho-autonomy-v1]
   pull_request:
   workflow_dispatch:
   # GitHub activates scheduled workflows only from the default branch. This is
