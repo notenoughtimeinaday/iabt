@@ -83,6 +83,12 @@
         ],
         "description": null
       },
+      "GitHubRepository": {
+        "operations": [
+          "read"
+        ],
+        "description": "GitHub repositories synced from the owner's personal access token (name, description, URL, language, visibility, stars, forks, topics, timestamps). Read them when the user asks about their GitHub repositories."
+      },
       "IntegrationConnection": {
         "operations": [
           "read"

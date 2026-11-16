@@ -1,0 +1,143 @@
+{
+  "name": "GitHubRepository",
+  "type": "object",
+  "properties": {
+    "owner_login": {
+      "type": "string",
+      "title": "GitHub account"
+    },
+    "github_id": {
+      "type": "number",
+      "title": "GitHub repository ID"
+    },
+    "name": {
+      "type": "string",
+      "title": "Repository name"
+    },
+    "full_name": {
+      "type": "string",
+      "title": "Full name"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "html_url": {
+      "type": "string",
+      "title": "Repository URL"
+    },
+    "homepage": {
+      "type": "string",
+      "title": "Homepage"
+    },
+    "language": {
+      "type": "string",
+      "title": "Primary language"
+    },
+    "visibility": {
+      "type": "string",
+      "title": "Visibility",
+      "enum": [
+        "public",
+        "private"
+      ],
+      "enumColors": [
+        "green",
+        "gray"
+      ],
+      "default": "public"
+    },
+    "default_branch": {
+      "type": "string",
+      "title": "Default branch"
+    },
+    "stars": {
+      "type": "integer",
+      "title": "Stars",
+      "default": 0
+    },
+    "forks": {
+      "type": "integer",
+      "title": "Forks",
+      "default": 0
+    },
+    "open_issues": {
+      "type": "integer",
+      "title": "Open issues",
+      "default": 0
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "title": "Topics",
+      "default": []
+    },
+    "archived": {
+      "type": "boolean",
+      "title": "Archived",
+      "default": false
+    },
+    "pushed_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Last push"
+    },
+    "github_updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Last updated on GitHub"
+    },
+    "synced_at": {
+      "type": "string",
+      "format": "date-time",
+      "title": "Synced at"
+    }
+  },
+  "required": [
+    "owner_login",
+    "name",
+    "full_name",
+    "html_url",
+    "synced_at"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

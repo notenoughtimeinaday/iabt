@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { base44 } from "@/api/iabtClient";
 import {
   Github,
   KeyRound,
@@ -70,6 +72,52 @@ function repoPath(connection, page) {
     : `/users/${encodeURIComponent(connection.login)}/repos?per_page=${PAGE_SIZE}&sort=updated&page=${page}`;
 }
 
+const SYNC_PAGE_BATCH = 10;
+
+async function fetchRepoPages(connection, startPage) {
+  const collected = [];
+  let page = startPage;
+  for (let index = 0; index < SYNC_PAGE_BATCH; index += 1) {
+    const data = await githubFetch(repoPath(connection, page), connection.token);
+    const list = Array.isArray(data) ? data : [];
+    collected.push(...list);
+    if (list.length < PAGE_SIZE) return { repos: collected, nextPage: page + 1, hasMore: false };
+    page += 1;
+  }
+  return { repos: collected, nextPage: page, hasMore: true };
+}
+
+// The assistant reads synced repositories through the workspace MCP server,
+// so repository details are stored for the signed-in user (the token is not).
+async function persistRepos(login, list) {
+  const entity = base44?.entities?.GitHubRepository;
+  if (!entity) return;
+  await entity.deleteMany({ owner_login: login });
+  const records = list.map((repo) => ({
+    owner_login: login,
+    github_id: repo.id,
+    name: repo.name,
+    full_name: repo.full_name,
+    description: repo.description || "",
+    html_url: repo.html_url,
+    homepage: repo.homepage || "",
+    language: repo.language || "",
+    visibility: repo.private ? "private" : "public",
+    default_branch: repo.default_branch || "",
+    stars: repo.stargazers_count ?? 0,
+    forks: repo.forks_count ?? 0,
+    open_issues: repo.open_issues_count ?? 0,
+    topics: Array.isArray(repo.topics) ? repo.topics : [],
+    archived: Boolean(repo.archived),
+    pushed_at: repo.pushed_at || undefined,
+    github_updated_at: repo.updated_at || undefined,
+    synced_at: new Date().toISOString(),
+  }));
+  for (let index = 0; index < records.length; index += 200) {
+    await entity.bulkCreate(records.slice(index, index + 200));
+  }
+}
+
 export default function GitHubReposPanel() {
   const [connection, setConnection] = useState(null);
   const [repos, setRepos] = useState([]);
@@ -81,16 +129,17 @@ export default function GitHubReposPanel() {
   const [form, setForm] = useState({ username: "", token: "" });
   const [showToken, setShowToken] = useState(false);
 
-  async function loadRepos(conn, pageNumber = 1, append = false) {
+  async function loadRepos(conn, startPage = 1, append = false) {
     if (append) setLoadingMore(true);
     else setLoading(true);
     setError("");
     try {
-      const data = await githubFetch(repoPath(conn, pageNumber), conn.token);
-      const list = Array.isArray(data) ? data : [];
-      setRepos((current) => (append ? [...current, ...list] : list));
-      setPage(pageNumber);
-      setHasMore(list.length === PAGE_SIZE);
+      const { repos: fetched, nextPage, hasMore: more } = await fetchRepoPages(conn, startPage);
+      const list = append ? [...repos, ...fetched] : fetched;
+      setRepos(list);
+      setPage(nextPage);
+      setHasMore(more);
+      await persistRepos(conn.login, list);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -206,7 +255,10 @@ export default function GitHubReposPanel() {
                 placeholder="ghp_…"
                 autoComplete="off"
               />
-              <p className="text-xs text-muted-foreground">Stored only in this browser. A read-only token with repo scope is enough.</p>
+              <p className="text-xs text-muted-foreground">
+                The token stays in this browser; only repository details sync to your workspace. A read-only token with repo
+                scope is enough.
+              </p>
             </div>
           )}
 
@@ -241,6 +293,14 @@ export default function GitHubReposPanel() {
             <p className="mt-1 text-sm text-muted-foreground">
               {loading ? "Syncing repositories…" : `${repos.length} repositor${repos.length === 1 ? "y" : "ies"} synced`}
             </p>
+            {!loading && repos.length > 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Readable by your AI assistant —{" "}
+                <Link to="/connect" className="font-bold text-primary underline-offset-2 hover:underline">
+                  Connect AI
+                </Link>
+              </p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -310,7 +370,7 @@ export default function GitHubReposPanel() {
 
           {hasMore && (
             <div className="mt-4 flex justify-center">
-              <Button variant="outline" size="sm" onClick={() => loadRepos(connection, page + 1, true)} disabled={loadingMore}>
+              <Button variant="outline" size="sm" onClick={() => loadRepos(connection, page, true)} disabled={loadingMore}>
                 {loadingMore ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {loadingMore ? "Loading…" : "Load more repositories"}
               </Button>
