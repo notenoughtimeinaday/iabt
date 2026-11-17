@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ConfirmActionDialog, NameDialog } from "@/components/ActionDialogs";
 import BillingDialog from "@/components/BillingDialog";
 import GitHubReposPanel from "@/components/GitHubReposPanel";
+import CodeArchiveButton from "@/components/CodeArchiveButton";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import {
@@ -337,6 +338,8 @@ export default function Home() {
         </section>
 
         <GitHubReposPanel />
+
+        <CodeArchiveButton />
 
         <section className="iabt-projects">
           {legacyProjects.length > 0 && (
